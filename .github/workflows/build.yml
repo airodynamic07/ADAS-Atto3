@@ -1,0 +1,50 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Safety check (warnings only, never drive the car)
+        run: ./tools/safety-check.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build probe APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :probe:assembleRelease --no-daemon
+          mkdir -p out
+          cp probe/build/outputs/apk/release/probe-release.apk out/adas-probe.apk
+          ls -la out
+
+      - name: Upload APK (Actions artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: adas-probe-${{ github.run_number }}
+          path: out/adas-probe.apk
+
+      - name: Publish as GitHub Release (easy download on your phone)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: probe-${{ github.run_number }}
+          name: ADAS Probe build ${{ github.run_number }}
+          make_latest: true
+          files: out/adas-probe.apk
+          body: |
+            Phase 0 probe app, build ${{ github.run_number }} (commit ${{ github.sha }}).
+            Install: adb install -r adas-probe.apk
