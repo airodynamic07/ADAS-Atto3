@@ -46,6 +46,21 @@
 | USB stick | found at `/storage/0CC0-71F1` (KINGSTON); copied via the helper ✅ |
 | RAM | 7.6 GB total |
 
+## Round 2 (v0.0.11) — driver's report
+| Item | Result |
+|---|---|
+| Self-update | works: the car reached GitHub and compared builds ✅ |
+| Driver window | `setAllWindowState(1,0,0,0)` moved the **front-LEFT** window. Thailand is right-hand drive → **driver = RF = second value** |
+| Recirculation | `getAcCycleMode`: **1 = inside air (recirc), 0 = outside air**. Writing 0 switched to outside air ✅; the test then didn't switch back (it assumed 1 = on). |
+| Ambient light, defrost, sunroof | commands accepted; sunroof position read-back unchanged (driver's answers file was damaged in the archive) |
+| GBox in a window | **full screen** — other apps can't be shown in our windows on this car |
+| Engine Sound | fixed (`??` not supported by the car's old WebView) — Start and engine list work ✅ |
+| Ghost Race inside Engine Sound | does **not** open — likely the same old-WebView problem on the Ghost Race website |
+
+## Design consequences
+- App windows: other apps open **full screen** (with a way back to the launcher). Only our own panels live in the 3 windows.
+- Middle window: host **Engine Sound's own page** inside the launcher and feed it the car's real speed and accelerator pedal from the BYD data (better than the OBD dongle). Needs a newer WebView or ES2018-safe pages.
+
 ## Still to collect
 - `app_basic.txt`, `app_car_methods.txt`, `app_camera.txt` (camera FPS), `app_watch.txt` (turn signal / door / brake readings), `app_voice.txt`
 - Control tests in **APP** mode (the helper versions had no car context), plus what the user saw
