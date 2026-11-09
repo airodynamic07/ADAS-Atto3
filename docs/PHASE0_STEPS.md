@@ -1,5 +1,13 @@
 # Phase 0: testing the probe app in the car
 
+## Easiest way (v0.0.6 and newer)
+1. Car ON, in P, connected to Wi-Fi (e.g. your phone's hotspot), USB stick plugged in.
+2. Open **ADAS Probe** → tap **⟳ Update app from internet** (gets the newest version by itself).
+3. Tap **▶ RUN EVERYTHING** and follow the questions on screen. It copies the results to the USB stick at the end.
+4. At home: zip the `atto3_probe` folder from the USB stick and send it in the chat.
+
+The sections below are the manual way.
+
 Takes about 20 minutes. Park somewhere safe, **car in P**, car ON (ready).
 
 ## A. Install with a USB stick

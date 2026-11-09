@@ -68,6 +68,29 @@ public final class HelperLauncher {
         }
     }
 
+    /** Installs an APK over this app through the car's own ADB (no prompt; data is kept). */
+    public static boolean install(Context ctx, File apk, Report r) {
+        if (!portOpen("127.0.0.1", 5555, 3000)) {
+            r.fail("install", "the car's ADB port 5555 is closed");
+            return false;
+        }
+        Dadb dadb = null;
+        try {
+            dadb = Dadb.create("127.0.0.1", 5555, keys(ctx), 5000, 120000);
+            r.info("Installing... the app will close and reopen by itself in a few seconds.");
+            // Reopen the app after the install replaces it.
+            dadb.shell("setsid sh -c 'sleep 15; am start -n " + ShellMain.PKG + "/.ProbeActivity' "
+                    + "</dev/null >/dev/null 2>&1 &");
+            dadb.install(apk, "-r");
+            return true;
+        } catch (Throwable t) {
+            r.error("install", t);
+            return false;
+        } finally {
+            if (dadb != null) try { dadb.close(); } catch (Throwable ignored) {}
+        }
+    }
+
     public static String run(Context ctx, String task, int timeoutSec, Report r) throws Exception {
         r.info("Checking the car's ADB port 5555 ...");
         boolean p5555 = portOpen("127.0.0.1", 5555, 3000);

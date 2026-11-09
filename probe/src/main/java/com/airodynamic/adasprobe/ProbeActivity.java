@@ -68,6 +68,10 @@ public class ProbeActivity extends Activity {
         left.addView(title);
         status = text("Ready.", 13, TEAL, false);
         left.addView(status);
+        Button all = button(left, "▶  RUN EVERYTHING  (about 10 min)", v -> runTask("answers", this::runAll));
+        all.setTextColor(ACCENT);
+        all.setTypeface(Typeface.DEFAULT_BOLD);
+        button(left, "⟳  Update app from internet", v -> runTask("app_update", rep -> Updater.update(this, rep)));
         Button stop = button(left, "■  Stop current test", v -> stopTask());
         stop.setTextColor(AMBER);
 
@@ -229,6 +233,112 @@ public class ProbeActivity extends Activity {
                 busy = false;
             }
         });
+    }
+
+    // ------------------------------------------------------------------ Run everything
+
+    /** Shows a question on screen and waits for the answer (called from the worker thread). */
+    private String ask(final String title, final String msg, final String... options) throws InterruptedException {
+        final String[] res = {null};
+        final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+        ui.post(() -> {
+            AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setCancelable(false);
+            b.setPositiveButton(options[0], (d, w) -> { res[0] = options[0]; done.countDown(); });
+            if (options.length > 1) b.setNegativeButton(options[1], (d, w) -> { res[0] = options[1]; done.countDown(); });
+            if (options.length > 2) b.setNeutralButton(options[2], (d, w) -> { res[0] = options[2]; done.countDown(); });
+            AlertDialog dlg = b.create();
+            dlg.show();
+            for (int id : new int[]{AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL}) {
+                Button btn = dlg.getButton(id);
+                if (btn != null) { btn.setTextSize(18); btn.setAllCaps(false); }
+            }
+            TextView m = dlg.findViewById(android.R.id.message);
+            if (m != null) m.setTextSize(18);
+        });
+        done.await();
+        return res[0];
+    }
+
+    /** Runs one test into its own report file (same names as the single buttons). */
+    private void step(String name, Task t) {
+        setStatus("Run everything: " + name + " ...");
+        Report rep = new Report(name, this::append);
+        try {
+            t.run(rep);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        } catch (Throwable e) {
+            rep.line("ERROR: " + Report.stack(e));
+        }
+        rep.save();
+    }
+
+    private void bringBack() {
+        try {
+            startActivity(new android.content.Intent(this, ProbeActivity.class)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                            | android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Throwable ignored) {}
+    }
+
+    private void runAll(Report answers) throws Exception {
+        String go = ask("Run everything",
+                "Before you start:\n\n• Car ON and in P\n• Close OverDrive and the 360 camera view\n"
+                        + "• USB stick plugged in\n\nThe app tells you what to do and asks simple questions. "
+                        + "About 10 minutes.", "Start", "Cancel");
+        if (!"Start".equals(go)) return;
+        answers.info("Answers from the driver, " + Report.now());
+
+        step("app_basic", this::basicCheck);
+        step("app_camera", this::appCamera);
+
+        step("app_voice", this::voiceTest);
+        answers.info("Voice heard: " + ask("Voice", "Did you hear English, then Thai, from the car speakers?",
+                "Both", "No", "Only English"));
+
+        ask("Signals", "When you press OK you have 30 seconds to:\n\n1. Flick the LEFT indicator (3 s)\n"
+                + "2. Flick the RIGHT indicator (3 s)\n3. Open and close a door\n4. Press the brake pedal", "OK");
+        step("app_watch", rep -> new CarProbe(new BypassContext(getApplicationContext()), rep).watch(30));
+
+        String[][] controls = {
+                {"fan", "Fan +1, then back", "Did the FAN level change on the car screen, then go back?"},
+                {"temp", "Temperature +1, then back", "Did the TEMPERATURE change, then go back?"},
+                {"recirc", "Recirculation on, then off", "Did RECIRCULATION turn on, then off?"},
+                {"airdir", "Air direction: tries each, then back", "Did the AIR DIRECTION change several times?"},
+                {"defrost", "Front defrost on, then off", "Did FRONT DEFROST turn on, then off?"},
+                {"purify", "Air purify on, then off", "Did AIR PURIFY turn on, then off?"},
+                {"window", "Driver window 5% down, then up", "Did the DRIVER WINDOW go down a little, then up?"},
+                {"sunroof", "Sunroof small nudge", "Did the SUNROOF move? (If it is open now, close it with the car's button.)"},
+        };
+        for (String[] c : controls) {
+            String run = ask("Next: " + c[1], "Watch the car while it runs.", "Run", "Skip");
+            if (!"Run".equals(run)) { answers.info(c[0] + ": skipped"); continue; }
+            final String task = c[0];
+            step("app_" + task, rep -> ShellMain.runTask(task, new BypassContext(getApplicationContext()), rep));
+            answers.info(c[0] + ": " + ask(c[1], c[2], "Yes", "No", "Not sure"));
+        }
+
+        String[][] apps = {
+                {"com.google.android.apps.maps", "Google Maps", "0"},
+                {"com.google.android.youtube", "YouTube", "1"},
+                {"com.netflix.mediaclient", "Netflix", "2"},
+        };
+        for (String[] a : apps) {
+            ask("Window test: " + a[1], "The app will open for about 8 seconds, then ADAS Probe comes back. "
+                    + "If it doesn't come back, open ADAS Probe yourself.", "OK");
+            String msg = SystemProbe.openInWindow(this, a[0], Integer.parseInt(a[2]));
+            answers.info(a[1] + " open: " + msg);
+            if (msg.contains("not installed")) { answers.info(a[1] + ": not installed"); continue; }
+            Thread.sleep(8000);
+            bringBack();
+            Thread.sleep(1500);
+            answers.info(a[1] + " shown as: " + ask(a[1], "How did " + a[1] + " open?", "In a window", "Full screen", "Didn't open"));
+        }
+
+        answers.save();
+        step("app_usb_copy", this::copyToUsb);
+        ask("All done 🎉", "Take the USB stick home, open the folder atto3_probe on it, zip it and send it in the chat.\n\n"
+                + "If the copy failed, take a photo of the screen instead.", "OK");
     }
 
     private void stopTask() {
