@@ -18,6 +18,7 @@ android {
         targetSdk = 25
         versionCode = ciRun
         versionName = "0.0.$ciRun"
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -46,6 +47,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
+    androidResources {
+        noCompress += "tflite"   // the AI model is memory-mapped, so it must not be compressed
+    }
+
     lint {
         abortOnError = false
         checkReleaseBuilds = false
@@ -57,6 +62,10 @@ android {
 }
 
 dependencies {
+    // On-device AI (Apache 2.0)
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.16.1")
     // Small ADB client (Apache 2.0) used to start our shell helper through the car's own ADB.
     implementation("dev.mobile:dadb:1.2.8") {
         // dadb 1.2.8 leaks its JUnit test tools as runtime dependencies; we don't need them.

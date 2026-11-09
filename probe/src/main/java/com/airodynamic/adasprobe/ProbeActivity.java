@@ -71,6 +71,10 @@ public class ProbeActivity extends Activity {
         Button all = button(left, "▶  RUN EVERYTHING  (about 10 min)", v -> runTask("answers", this::runAll));
         all.setTextColor(ACCENT);
         all.setTypeface(Typeface.DEFAULT_BOLD);
+        Button p1 = button(left, "▶  PHASE 1: Front camera + AI", v ->
+                startActivity(new android.content.Intent(this, AdasCameraActivity.class)));
+        p1.setTextColor(TEAL);
+        p1.setTypeface(Typeface.DEFAULT_BOLD);
         Button r2 = button(left, "▶  ROUND 2  (about 5 min)", v -> runTask("answers2", this::round2));
         r2.setTextColor(ACCENT);
         r2.setTypeface(Typeface.DEFAULT_BOLD);
