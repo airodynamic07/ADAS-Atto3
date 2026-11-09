@@ -97,6 +97,7 @@ public class ProbeActivity extends Activity {
         others.setTextColor(AMBER);
 
         header(left, "REPORT");
+        button(left, "Copy all results to USB stick", v -> runTask("app_usb_copy", this::copyToUsb));
         button(left, "Show where reports are saved", v -> append("\nReports folder: " + Report.DIR
                 + "\nFiles: " + listReports()
                 + "\nOn your phone (Termux):\n  adb pull " + Report.DIR + "\n"));
@@ -251,6 +252,42 @@ public class ProbeActivity extends Activity {
         new CameraProbe(r).listCameras();
         r.info("");
         r.info("Full method lists: app_car_methods.txt, feature ids: app_feature_ids.txt");
+    }
+
+    /** Copies Download/atto3_probe to every removable drive (USB stick / SD card). */
+    private void copyToUsb(Report r) throws Exception {
+        File[] src = Report.DIR.listFiles();
+        if (src == null || src.length == 0) {
+            r.fail("copy", "no results yet — run the tests first");
+            return;
+        }
+        File[] dirs = getExternalFilesDirs(null);
+        int copied = 0;
+        for (int i = 1; i < dirs.length; i++) {          // index 0 is the car's own storage
+            if (dirs[i] == null) continue;
+            File dest = new File(dirs[i], "atto3_probe");
+            dest.mkdirs();
+            for (File f : src) {
+                if (f.isFile()) {
+                    copyFile(f, new File(dest, f.getName()));
+                    copied++;
+                }
+            }
+            r.ok("copied " + src.length + " files to", dest.getAbsolutePath());
+            r.info("On the USB stick, open: Android > data > " + getPackageName() + " > files > atto3_probe");
+        }
+        if (copied == 0) {
+            r.fail("copy", "no USB stick found — plug it in, wait 10 s, and press the button again");
+        }
+    }
+
+    private static void copyFile(File a, File b) throws Exception {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(a);
+             java.io.FileOutputStream out = new java.io.FileOutputStream(b)) {
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        }
     }
 
     private void appCamera(Report r) {

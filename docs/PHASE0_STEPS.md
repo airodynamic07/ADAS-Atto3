@@ -2,23 +2,14 @@
 
 Takes about 20 minutes. Park somewhere safe, **car in P**, car ON (ready).
 
-## A. Install (phone, Termux)
+## A. Install with a USB stick
 
-1. On the phone, download the newest `adas-probe.apk` from the repo's **Releases** page
-   (or Actions → newest run → Artifacts, then unzip). Save it to Downloads.
-2. In Termux, go to Downloads (run `termux-setup-storage` once if you never did):
-   ```
-   cd ~/storage/downloads
-   ```
-3. Connect to the car (same as always):
-   ```
-   adb connect <car_ip>:5555
-   ```
-4. Install (the `-r` keeps data when updating):
-   ```
-   adb install -r adas-probe.apk
-   ```
-5. On the car screen, open the app **ADAS Probe** from the app list.
+1. On your phone or PC, download the newest **`adas-probe.apk`** from the repo's
+   **Releases** page: https://github.com/airodynamic07/ADAS-Atto3/releases
+2. Copy `adas-probe.apk` onto your USB stick (same way you did for OverDrive / Engine Sound).
+3. Plug the USB stick into the car. Open the car's file manager, go to the USB stick,
+   tap **`adas-probe.apk`** and tap **Install**. (Updating later: same steps; your data is kept.)
+4. Open the app **ADAS Probe** from the car's app list.
 
 ## B. Read-only tests (safe)
 
@@ -46,20 +37,15 @@ Leave the top button at **"HELPER (shell)"**.
 
 If button 2 never connects, try control tests with the top button switched to **APP**.
 
-## D. Send me the results (phone, Termux)
+## D. Send me the results
 
-1. Copy the reports and pictures to your phone:
-   ```
-   adb pull /sdcard/Download/atto3_probe ~/storage/downloads/atto3_probe
-   ```
-2. Zip them:
-   ```
-   cd ~/storage/downloads && zip -r atto3_probe.zip atto3_probe
-   ```
-3. Upload `atto3_probe.zip` in our chat, and add a few words on what you saw
+1. With the USB stick plugged into the car, press **"Copy all results to USB stick"** (bottom of the list).
+2. Take the USB stick to your phone or PC. Open the folder
+   **Android → data → com.airodynamic.adasprobe → files → atto3_probe**.
+3. Zip that `atto3_probe` folder and upload it in our chat, with a few words on what you saw
    (fan changed? window moved? which way the sunroof went? apps in windows?).
 
-## If button 2 fails: run the helper from Termux
+## Only if button 2 fails AND you have Termux on your phone
 
 ```
 adb shell 'CLASSPATH=$(pm path com.airodynamic.adasprobe | cut -d: -f2) app_process /system/bin com.airodynamic.adasprobe.ShellMain read'
