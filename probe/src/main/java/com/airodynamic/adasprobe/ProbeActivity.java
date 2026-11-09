@@ -71,6 +71,11 @@ public class ProbeActivity extends Activity {
         Button all = button(left, "▶  RUN EVERYTHING  (about 10 min)", v -> runTask("answers", this::runAll));
         all.setTextColor(ACCENT);
         all.setTypeface(Typeface.DEFAULT_BOLD);
+        Button r2 = button(left, "▶  ROUND 2  (about 5 min)", v -> runTask("answers2", this::round2));
+        r2.setTextColor(ACCENT);
+        r2.setTypeface(Typeface.DEFAULT_BOLD);
+        Button r2b = button(left, "▶  ROUND 2 — after restart", v -> runTask("answers3", this::round2AfterRestart));
+        r2b.setTextColor(ACCENT);
         button(left, "⟳  Update app from internet", v -> runTask("app_update", rep -> Updater.update(this, rep)));
         Button stop = button(left, "■  Stop current test", v -> stopTask());
         stop.setTextColor(AMBER);
@@ -348,6 +353,68 @@ public class ProbeActivity extends Activity {
         step("app_usb_copy", this::copyToUsb);
         ask("All done 🎉", "Take the USB stick home, open the folder atto3_probe on it, zip it and send it in the chat.\n\n"
                 + "If the copy failed, take a photo of the screen instead.", "OK");
+    }
+
+    /** Re-tests only what was unclear in run 1, then switches on app windows (needs a restart). */
+    private void round2(Report answers) throws Exception {
+        if (!"Start".equals(ask("Round 2", "Car ON and in P. Watch the car during each test and answer the question.\n\n"
+                + "At the end the car needs ONE restart.", "Start", "Cancel"))) return;
+        String[][] controls = {
+                {"fan", "Fan +1, then back", "Did the FAN level change on the car screen, then go back?"},
+                {"recirc", "Recirculation on, then off", "Did the RECIRCULATION icon turn on, then off?"},
+                {"airdir", "Air direction: 5 changes, then back", "Did the AIR DIRECTION icon change several times?"},
+                {"defrost", "Front defrost on, then off", "Did FRONT DEFROST turn on, then off?"},
+                {"purify", "Air purify on, then off", "Did AIR PURIFY turn on, then off?"},
+                {"ambient", "Ambient light colour, then brightness", "Did the AMBIENT LIGHT change colour, then get dimmer, then go back?"},
+                {"window", "Driver window down a little, then up", "Did the DRIVER WINDOW go down a little, then back up?"},
+                {"sunroof", "Sunroof small nudge", "Did the SUNROOF (or its sunshade) move at all?"},
+        };
+        for (String[] c : controls) {
+            if (!"Run".equals(ask("Next: " + c[1], "Watch the car while it runs.", "Run", "Skip"))) {
+                answers.info(c[0] + ": skipped");
+                continue;
+            }
+            final String task = c[0];
+            step("app_" + task, rep -> ShellMain.runTask(task, new BypassContext(getApplicationContext()), rep));
+            answers.info(c[0] + ": " + ask(c[1], c[2], "Yes", "No", "Not sure"));
+            answers.save();
+        }
+        step("app_enable_windows", rep -> {
+            String out = HelperLauncher.shell(this, "settings put global enable_freeform_support 1; "
+                    + "settings put global force_resizable_activities 1; "
+                    + "settings get global enable_freeform_support; settings get global force_resizable_activities", rep);
+            rep.info("result: " + out);
+        });
+        answers.save();
+        step("app_usb_copy", this::copyToUsb);
+        ask("Restart the car screen", "App windows are now switched on, but the screen must restart:\n\n"
+                + "Hold the VOLUME DOWN button (or the volume knob) for about 5 seconds until the screen restarts.\n\n"
+                + "Then open ADAS Probe and tap  ▶ ROUND 2 — after restart.", "OK");
+    }
+
+    private void round2AfterRestart(Report answers) throws Exception {
+        android.content.pm.PackageManager pm = getPackageManager();
+        answers.info("freeform feature after restart: " + pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_FREEFORM_WINDOW_MANAGEMENT)
+                + ", enable_freeform_support=" + android.provider.Settings.Global.getString(getContentResolver(), "enable_freeform_support"));
+        String[][] apps = {
+                {"com.gbox.com.google.android.apps.maps", "Google Maps (GBox)", "0"},
+                {"com.gbox.com.google.android.youtube", "YouTube (GBox)", "1"},
+                {"com.air.atto3sound", "Engine Sound", "2"},
+        };
+        for (String[] a : apps) {
+            ask("Window test: " + a[1], a[1] + " opens for about 10 seconds. Look: is it in a WINDOW or FULL SCREEN? "
+                    + "Then ADAS Probe comes back (if not, open it yourself).", "OK");
+            String msg = SystemProbe.openInWindow(this, a[0], Integer.parseInt(a[2]));
+            answers.info(a[1] + " open: " + msg);
+            if (msg.contains("not installed")) continue;
+            Thread.sleep(10000);
+            bringBack();
+            Thread.sleep(1500);
+            answers.info(a[1] + " shown as: " + ask(a[1], "How did " + a[1] + " open?", "In a window", "Full screen", "Didn't open"));
+            answers.save();
+        }
+        step("app_usb_copy", this::copyToUsb);
+        ask("All done 🎉", "Take the USB stick home and send the atto3_probe folder in the chat.", "OK");
     }
 
     private void stopTask() {

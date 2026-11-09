@@ -561,15 +561,22 @@ public final class CarProbe {
         step("setAutoCleanAirState(2) = off", () -> command(AC, "setAutoCleanAirState", 2));
     }
 
+    /**
+     * Driver window: this car has no setWindowOpenPercent, so use OverDrive's
+     * setAllWindowState(LF, RF, LR, RR) with 1 = open, 2 = close, 3 = stop, 0 = leave alone.
+     */
     public void testWindow() {
-        if (!requireParked("Driver window 5% down then up")) return;
-        r.info("before: area1 = " + fmt(read(BODY, "getWindowOpenPercent", 1)));
-        step("setWindowOpenPercent(1, 5)", () -> command(BODY, "setWindowOpenPercent", 1, 5));
+        if (!requireParked("Driver window: down a little, then up")) return;
+        r.info("before: " + fmt(read(BODY, "getWindowOpenPercent", 1)) + " / state " + fmt(read(BODY, "getWindowState", 1)));
+        step("setAllWindowState(1,0,0,0) = driver OPEN", () -> command(BODY, "setAllWindowState", 1, 0, 0, 0));
+        pause(700);
+        step("setAllWindowState(3,0,0,0) = STOP", () -> command(BODY, "setAllWindowState", 3, 0, 0, 0));
+        pause(1500);
+        r.info("after down: " + fmt(read(BODY, "getWindowOpenPercent", 1)) + "   <- did the driver window go down a little?");
+        step("setAllWindowState(2,0,0,0) = driver CLOSE", () -> command(BODY, "setAllWindowState", 2, 0, 0, 0));
         pause(4000);
-        r.info("after: area1 = " + fmt(read(BODY, "getWindowOpenPercent", 1)) + "   <- did the driver window move?");
-        step("setWindowOpenPercent(1, 0)", () -> command(BODY, "setWindowOpenPercent", 1, 0));
-        pause(4000);
-        r.info("end: area1 = " + fmt(read(BODY, "getWindowOpenPercent", 1)));
+        step("setAllWindowState(3,0,0,0) = STOP", () -> command(BODY, "setAllWindowState", 3, 0, 0, 0));
+        r.info("end: " + fmt(read(BODY, "getWindowOpenPercent", 1)) + " (if it is not fully closed, use the window switch)");
     }
 
     /**

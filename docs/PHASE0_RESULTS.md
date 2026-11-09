@@ -30,6 +30,22 @@
 | Engine Sound | installed v1.0.56 (= old GitHub build; the user's newer build is lost for now) |
 | Widevine | L3 |
 
+## Run 2 ("Run everything", v0.0.10)
+| Item | Result |
+|---|---|
+| **Turn signals** | `Light.getTurnLightFlashState()` 1 = off, **2 = left**, **4 = right** (getTurnLightState 3/4/5 too) ✅ |
+| **Doors** | `Bodywork.getDoorState(1)` 0 → 1 → 0 (driver door) ✅ |
+| **Brake** | `Gearbox.getBrakePedalState()` 0/1 and `Speed.getBrakeDeepness()` 0–62 ✅ |
+| Beep through speakers | heard ✅ (no TTS engine → use recorded voice clips) |
+| Temperature +1 | driver saw it change ✅ |
+| Fan, air direction, purify, ambient colour/brightness, defrost, sunroof | car **accepted** every command (result 0) and read-backs changed (fan 3→4, wind mode 1→6, purify 2→1, IAL colour 20→10, brightness 5→1); sunroof position unchanged — need the driver's eyes (round 2) |
+| Driver window | `setWindowOpenPercent` **does not exist** on this firmware → use `setAllWindowState(LF,RF,LR,RR)` 1=open 2=close 3=stop (round 2) |
+| Windows for other apps | `FEATURE_FREEFORM_WINDOW_MANAGEMENT = false`, freeform setting off → round 2 switches it on via ADB and re-tests after a restart |
+| GBox | each Google app is its own package: `com.gbox.com.google.android.apps.maps`, `…youtube`, `…googlequicksearchbox`, `com.gbox.com.spotify.music`, plus `com.gbox.android`. Native Maps/YouTube/Gemini are also installed (without Play services). |
+| Home screen now | Kinex (`com.lexwah.kinex`); Dudu Launcher Pro also installed |
+| USB stick | found at `/storage/0CC0-71F1` (KINGSTON); copied via the helper ✅ |
+| RAM | 7.6 GB total |
+
 ## Still to collect
 - `app_basic.txt`, `app_car_methods.txt`, `app_camera.txt` (camera FPS), `app_watch.txt` (turn signal / door / brake readings), `app_voice.txt`
 - Control tests in **APP** mode (the helper versions had no car context), plus what the user saw

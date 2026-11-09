@@ -24,7 +24,7 @@ public final class Safety {
     /** Only these write methods are allowed at all (comfort features only). */
     private static final Pattern ALLOWED_WRITES = Pattern.compile(
             "set(AcTemperature|AcWindLevel|AcWindMode|AcCycleMode|AutoCleanAirState|AcDefrostState"
-            + "|WindowOpenPercent|IALColor|IALBrightness|MoonRoofAndSunshadeStop)|voiceCtlMoonRoof|set");
+            + "|WindowOpenPercent|AllWindowState|IALColor|IALBrightness|MoonRoofAndSunshadeStop)|voiceCtlMoonRoof|set");
 
     /** The Setting device is read-only except for the interior ambient light (IAL). */
     private static final Pattern SETTING_EXCEPTIONS = Pattern.compile("setIAL(Color|Brightness)");
