@@ -84,6 +84,26 @@ public final class SystemProbe {
                 r.fail(a[0], "not installed");
             }
         }
+        r.section("GBox (Google apps inside a box) and all apps with an icon");
+        for (String g : findGbox(ctx)) {
+            try {
+                PackageInfo pi = pm.getPackageInfo(g, PackageManager.GET_ACTIVITIES);
+                r.ok("GBox app", g + " v" + pi.versionName);
+                if (pi.activities != null) for (android.content.pm.ActivityInfo ai : pi.activities) {
+                    if (ai.exported) r.info("   exported activity: " + ai.name);
+                }
+                Intent li = pm.getLaunchIntentForPackage(g);
+                r.info("   launch intent: " + (li == null ? "none" : li.getComponent()));
+            } catch (Exception e) {
+                r.error("GBox " + g, e);
+            }
+        }
+        if (findGbox(ctx).isEmpty()) r.info("No app with 'gbox' in its name was found.");
+        Intent icons = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        for (ResolveInfo ri : pm.queryIntentActivities(icons, 0)) {
+            r.info("   app: " + ri.loadLabel(pm) + "  [" + ri.activityInfo.packageName + "]");
+        }
+
         Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
         ResolveInfo def = pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY);
         r.info("Current home screen app: " + (def == null ? "?" : def.activityInfo.packageName));
@@ -115,6 +135,19 @@ public final class SystemProbe {
         } catch (Throwable t) {
             r.error("Widevine", t);
         }
+    }
+
+    /** Packages whose name or label contains "gbox". */
+    public static java.util.List<String> findGbox(Context ctx) {
+        PackageManager pm = ctx.getPackageManager();
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (ApplicationInfo ai : pm.getInstalledApplications(0)) {
+            String label = String.valueOf(pm.getApplicationLabel(ai)).toLowerCase(java.util.Locale.US);
+            if (ai.packageName.toLowerCase(java.util.Locale.US).contains("gbox") || label.contains("gbox")) {
+                out.add(ai.packageName);
+            }
+        }
+        return out;
     }
 
     /**

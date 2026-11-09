@@ -82,7 +82,10 @@ public class ProbeActivity extends Activity {
         button(left, "4  Camera picture from app (no helper)", v -> runTask("app_camera", this::appCamera));
         button(left, "5  Watch signals 30 s  (flick indicators!)", v -> watch());
         button(left, "6  Voice test (Thai + English)", v -> runTask("app_voice", this::voiceTest));
-        button(left, "7  Open Google Maps in left window", v -> openWindow("com.google.android.apps.maps", 0));
+        button(left, "7  Open GBox in left window", v -> {
+            java.util.List<String> g = SystemProbe.findGbox(this);
+            if (g.isEmpty()) append("GBox not found."); else openWindow(g.get(0), 0);
+        });
         button(left, "8  Open Engine Sound in middle window", v -> openWindow("com.air.atto3sound", 1));
         button(left, "8b Open YouTube in middle window", v -> openWindow("com.google.android.youtube", 1));
         button(left, "9  Open Netflix in right window", v -> openWindow("com.netflix.mediaclient", 2));
@@ -318,21 +321,25 @@ public class ProbeActivity extends Activity {
             answers.info(c[0] + ": " + ask(c[1], c[2], "Yes", "No", "Not sure"));
         }
 
-        String[][] apps = {
-                {"com.google.android.apps.maps", "Google Maps", "0"},
-                {"com.google.android.youtube", "YouTube", "1"},
-                {"com.netflix.mediaclient", "Netflix", "2"},
-        };
+        java.util.List<String[]> apps = new java.util.ArrayList<>();
+        for (String g : SystemProbe.findGbox(this)) apps.add(new String[]{g, "GBox", "0"});
+        apps.add(new String[]{"com.netflix.mediaclient", "Netflix", "2"});
         for (String[] a : apps) {
-            ask("Window test: " + a[1], "The app will open for about 8 seconds, then ADAS Probe comes back. "
-                    + "If it doesn't come back, open ADAS Probe yourself.", "OK");
+            boolean gbox = a[1].equals("GBox");
+            ask("Window test: " + a[1], gbox
+                    ? "GBox will open for about 25 seconds. Inside GBox, open GOOGLE MAPS and watch whether it "
+                      + "stays in the window. Then ADAS Probe comes back (if not, open it yourself)."
+                    : "The app will open for about 8 seconds, then ADAS Probe comes back. "
+                      + "If it doesn't come back, open ADAS Probe yourself.", "OK");
             String msg = SystemProbe.openInWindow(this, a[0], Integer.parseInt(a[2]));
             answers.info(a[1] + " open: " + msg);
             if (msg.contains("not installed")) { answers.info(a[1] + ": not installed"); continue; }
-            Thread.sleep(8000);
+            Thread.sleep(gbox ? 25000 : 8000);
             bringBack();
             Thread.sleep(1500);
             answers.info(a[1] + " shown as: " + ask(a[1], "How did " + a[1] + " open?", "In a window", "Full screen", "Didn't open"));
+            if (gbox) answers.info("Maps inside GBox: " + ask("Google Maps in GBox",
+                    "When you opened Google Maps inside GBox, where did it show?", "In the window", "Full screen", "Didn't try"));
         }
 
         answers.save();
