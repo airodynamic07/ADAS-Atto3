@@ -50,7 +50,7 @@ Source: https://github.com/yash-srivastava/Overdrive-release
     - **choose apps**: opens a picker with 3 slots plus a grid of installed apps (names only, no icons)
     - **⤢ full screen**
     - **×**: closes the open app and returns the window to its default
-  - **Defaults:** left = **ADAS**, middle = **Ghost Race**, right = **Info**.
+  - **Defaults:** left = **ADAS**, middle = **Engine Sound**, right = **Info**.
   - Other apps (Google Maps, YouTube, Netflix…) open inside a window using Android multi-window / freeform. Check this works on DiLink in Phase 0.
 - **Left (ADAS):**
   - speed (large) and battery % / range with a bar
@@ -61,7 +61,7 @@ Source: https://github.com/yash-srivastava/Overdrive-release
     - **Front / Rear / Left / Right** = live camera with AI boxes
     - **Top** = stitched bird's-eye view
   - alert bar
-- **Middle:** Ghost Race (my web app, ghostrace.airodynamic.workers.dev) by default.
+- **Middle:** Engine Sound (my `atto3-engine-sound` app) by default. Ghost Race (ghostrace.airodynamic.workers.dev) stays available as a quick-app choice.
 - **Right (Info), top to bottom:**
   - the window bar
   - a **Gemini card**: last reply, **Ask** (voice) and **⤢ Open** (full chat in the middle window)
