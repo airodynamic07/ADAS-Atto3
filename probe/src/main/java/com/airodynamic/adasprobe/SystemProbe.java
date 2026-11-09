@@ -34,6 +34,7 @@ public final class SystemProbe {
             {"Chrome", "com.android.chrome"},
             {"Android System WebView", "com.google.android.webview"},
             {"OverDrive", "com.overdrive.app"},
+            {"Atto 3 Engine Sound (has Ghost Race)", "com.air.atto3sound"},
             {"BYD 360 (apa)", "com.byd.apa"},
             {"BYD 360 (avm)", "com.byd.avm"},
             {"Google TTS", "com.google.android.tts"},

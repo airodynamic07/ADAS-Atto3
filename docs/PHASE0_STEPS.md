@@ -32,7 +32,7 @@ Press the buttons in order and wait for **"Done"** at the top left after each on
 | **4 Camera picture from app** | Same as 3, but without the helper. It's fine if this one fails. |
 | **5 Watch signals 30 s** | After you press it, wait 5 s, then: flick **LEFT** indicator for 3 s, **RIGHT** for 3 s, open and close a door, press the brake. |
 | **6 Voice test** | Listen: do you hear English, then Thai, from the car speakers? |
-| **7 / 8 / 9 Open in a window** | Look: does the app open in a **window** or **full screen**? Note it, then go back to ADAS Probe. |
+| **7 / 8 / 8b / 9 Open in a window** | Look: does the app open in a **window** or **full screen**? For **8 (Engine Sound)**, also tap the purple ghost button: does Ghost Race open inside the window? Then go back to ADAS Probe. |
 
 ## C. Control tests (car in P, watch the car)
 

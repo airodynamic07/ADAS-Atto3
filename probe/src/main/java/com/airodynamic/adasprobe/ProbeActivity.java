@@ -72,7 +72,8 @@ public class ProbeActivity extends Activity {
         button(left, "5  Watch signals 30 s  (flick indicators!)", v -> watch());
         button(left, "6  Voice test (Thai + English)", v -> runTask("app_voice", this::voiceTest));
         button(left, "7  Open Google Maps in left window", v -> openWindow("com.google.android.apps.maps", 0));
-        button(left, "8  Open YouTube in middle window", v -> openWindow("com.google.android.youtube", 1));
+        button(left, "8  Open Engine Sound in middle window", v -> openWindow("com.air.atto3sound", 1));
+        button(left, "8b Open YouTube in middle window", v -> openWindow("com.google.android.youtube", 1));
         button(left, "9  Open Netflix in right window", v -> openWindow("com.netflix.mediaclient", 2));
 
         header(left, "CONTROL TESTS  (car must be in P)");

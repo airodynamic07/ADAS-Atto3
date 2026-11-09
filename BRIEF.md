@@ -61,7 +61,7 @@ Source: https://github.com/yash-srivastava/Overdrive-release
     - **Front / Rear / Left / Right** = live camera with AI boxes
     - **Top** = stitched bird's-eye view
   - alert bar
-- **Middle:** Engine Sound (my `atto3-engine-sound` app) by default. Ghost Race (ghostrace.airodynamic.workers.dev) stays available as a quick-app choice.
+- **Middle:** Engine Sound by default: my `atto3-engine-sound` app, package `com.air.atto3sound`. **Ghost Race lives inside it** (purple ghost button), so it doesn't need its own slot.
 - **Right (Info), top to bottom:**
   - the window bar
   - a **Gemini card**: last reply, **Ask** (voice) and **⤢ Open** (full chat in the middle window)
