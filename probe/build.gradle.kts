@@ -52,11 +52,17 @@ android {
     }
 
     packaging {
-        resources.excludes += setOf("META-INF/*.kotlin_module", "META-INF/versions/**")
+        resources.excludes += setOf("META-INF/*.kotlin_module", "META-INF/versions/**", "META-INF/LICENSE*", "META-INF/NOTICE*")
     }
 }
 
 dependencies {
     // Small ADB client (Apache 2.0) used to start our shell helper through the car's own ADB.
-    implementation("dev.mobile:dadb:1.2.8")
+    implementation("dev.mobile:dadb:1.2.8") {
+        // dadb 1.2.8 leaks its JUnit test tools as runtime dependencies; we don't need them.
+        exclude(group = "org.junit.platform")
+        exclude(group = "org.junit.jupiter")
+        exclude(group = "org.opentest4j")
+        exclude(group = "org.apiguardian")
+    }
 }
