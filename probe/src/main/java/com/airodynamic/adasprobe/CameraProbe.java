@@ -43,25 +43,74 @@ public final class CameraProbe {
 
     public CameraProbe(Report r) { this.r = r; }
 
+    public static final String BMM_JAR = "/system/framework/bmmcamera.jar";
+    private static ClassLoader bmmLoader;
+
+    /**
+     * AVMCamera and BmmCameraInfo live in /system/framework/bmmcamera.jar, which is
+     * not on a normal app's class path. The shell helper puts it on CLASSPATH (as
+     * OverDrive does); the app tries a class loader for it as well.
+     */
+    static synchronized Class<?> hidden(String name, Report r) throws ClassNotFoundException {
+        try {
+            return Class.forName(name);
+        } catch (ClassNotFoundException e) {
+            if (!new File(BMM_JAR).isFile()) throw e;
+            if (bmmLoader == null) {
+                bmmLoader = new dalvik.system.PathClassLoader(BMM_JAR,
+                        "/system/lib64:/system/lib:/vendor/lib64:/vendor/lib", CameraProbe.class.getClassLoader());
+                if (r != null) r.info("loading camera classes from " + BMM_JAR);
+            }
+            return Class.forName(name, true, bmmLoader);
+        }
+    }
+
+    /** Native camera libraries (OverDrive loads these before using AVMCamera). */
+    public static void loadNativeLibs(Report r) {
+        for (String lib : new String[]{"nativehelper", "cutils", "utils", "binder", "gui", "bmmcamera"}) {
+            try {
+                System.loadLibrary(lib);
+            } catch (Throwable t) {
+                r.info("loadLibrary(" + lib + "): " + t.getClass().getSimpleName());
+            }
+        }
+    }
+
+    /** Parses vehicle.config.cam_sort, e.g. "rear:0;pano_h:1;". */
+    static Map<String, Integer> parseCamSort(String v) {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        if (v == null) return out;
+        for (String part : v.split(";")) {
+            String[] kv = part.split(":");
+            if (kv.length == 2) {
+                try { out.put(kv[0].trim(), Integer.parseInt(kv[1].trim())); } catch (NumberFormatException ignored) {}
+            }
+        }
+        return out;
+    }
+
     /** tag -> camera id (only ids >= 0). */
     public Map<String, Integer> listCameras() {
         r.section("Camera list (BmmCameraInfo)");
         Map<String, Integer> out = new LinkedHashMap<>();
+        String camSort = null;
         try {
             Class<?> sp = Class.forName("android.os.SystemProperties");
             Method get = sp.getMethod("get", String.class);
-            r.info("vehicle.config.cam_sort = '" + get.invoke(null, "vehicle.config.cam_sort") + "'");
+            camSort = (String) get.invoke(null, "vehicle.config.cam_sort");
+            r.info("vehicle.config.cam_sort = '" + camSort + "'");
         } catch (Throwable t) {
             r.error("cam_sort", t);
         }
+        r.info(BMM_JAR + (new File(BMM_JAR).isFile() ? " exists" : " NOT found"));
         try {
-            Class.forName("android.hardware.AVMCamera");
+            hidden("android.hardware.AVMCamera", r);
             r.ok("android.hardware.AVMCamera", "present");
         } catch (Throwable t) {
             r.fail("android.hardware.AVMCamera", "missing — " + t);
         }
         try {
-            Class<?> bmm = Class.forName("android.hardware.BmmCameraInfo");
+            Class<?> bmm = hidden("android.hardware.BmmCameraInfo", r);
             Method getId = bmm.getDeclaredMethod("getCameraId", String.class);
             getId.setAccessible(true);
             for (String tag : TAGS) {
@@ -82,6 +131,10 @@ public final class CameraProbe {
                     + "(" + m.getParameterTypes().length + " args)");
         } catch (Throwable t) {
             r.error("BmmCameraInfo", t);
+        }
+        if (out.isEmpty()) {
+            out.putAll(parseCamSort(camSort));
+            if (!out.isEmpty()) r.info("Using the camera list from cam_sort instead: " + out);
         }
         Integer pano = panoId(out);
         r.info("360 strip camera id = " + pano);
@@ -165,7 +218,7 @@ public final class CameraProbe {
         Thread opener = new Thread(new Runnable() {
             @Override public void run() {
                 try {
-                    Class<?> avm = Class.forName("android.hardware.AVMCamera");
+                    Class<?> avm = hidden("android.hardware.AVMCamera", r);
                     Constructor<?> ctor = avm.getDeclaredConstructor(int.class);
                     ctor.setAccessible(true);
                     Object cam = ctor.newInstance(cameraId);

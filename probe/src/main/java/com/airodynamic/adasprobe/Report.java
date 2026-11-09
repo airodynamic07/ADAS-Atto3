@@ -18,7 +18,8 @@ public final class Report {
 
     public interface Listener { void onLine(String line); }
 
-    public static final File DIR = new File("/sdcard/Download/atto3_probe");
+    /** App: its own files folder. Helper (shell): /data/local/tmp/atto3_probe, pulled by the app afterwards. */
+    public static File DIR = new File("/data/local/tmp/atto3_probe");
 
     private final String name;
     private final StringBuilder sb = new StringBuilder();
@@ -68,6 +69,8 @@ public final class Report {
     public synchronized File save() {
         try {
             DIR.mkdirs();
+            DIR.setReadable(true, false);
+            DIR.setExecutable(true, false);
             File f = new File(DIR, name + ".txt");
             try (OutputStreamWriter w = new OutputStreamWriter(
                     new FileOutputStream(f), StandardCharsets.UTF_8)) {

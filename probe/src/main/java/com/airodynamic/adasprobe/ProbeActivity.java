@@ -26,7 +26,7 @@ import java.util.concurrent.Executors;
 
 /**
  * Phase 0 probe: one screen, buttons on the left, live report on the right.
- * Every test saves a text file in Download/atto3_probe/.
+ * Every test saves a text file in the app's own folder; a button copies them to a USB stick.
  */
 public class ProbeActivity extends Activity {
 
@@ -36,17 +36,22 @@ public class ProbeActivity extends Activity {
     private static final int AMBER = Color.parseColor("#FFB020");
 
     private final Handler ui = new Handler(Looper.getMainLooper());
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService worker = Executors.newCachedThreadPool();
+    private java.util.concurrent.Future<?> current;
     private TextView log;
     private ScrollView logScroll;
     private TextView status;
     private Button modeButton;
-    private boolean carTestsViaHelper = true;
+    private boolean carTestsViaHelper = false;  // Phase 0 run 1: car data works from the app
     private volatile boolean busy;
+    private volatile int generation;
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        File ext = getExternalFilesDir(null);
+        Report.DIR = new File(ext != null ? ext : getFilesDir(), "atto3_probe");
+        Report.DIR.mkdirs();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.HORIZONTAL);
         root.setBackgroundColor(BG);
@@ -63,6 +68,8 @@ public class ProbeActivity extends Activity {
         left.addView(title);
         status = text("Ready.", 13, TEAL, false);
         left.addView(status);
+        Button stop = button(left, "■  Stop current test", v -> stopTask());
+        stop.setTextColor(AMBER);
 
         header(left, "READ-ONLY  (safe any time)");
         button(left, "1  Basic check (app)", v -> runTask("app_basic", this::basicCheck));
@@ -100,9 +107,9 @@ public class ProbeActivity extends Activity {
         button(left, "Copy all results to USB stick", v -> runTask("app_usb_copy", this::copyToUsb));
         button(left, "Show where reports are saved", v -> append("\nReports folder: " + Report.DIR
                 + "\nFiles: " + listReports()
-                + "\nOn your phone (Termux):\n  adb pull " + Report.DIR + "\n"));
-        TextView hint = text("If button 2 fails, run this in Termux instead:\n"
-                + HelperLauncher.termuxCommand("read"), 11, Color.LTGRAY, false);
+                + "\nTo take them home: plug in a USB stick and press 'Copy all results to USB stick'.\n"));
+        TextView hint = text("If button 2 says port 5555 is CLOSED, wireless ADB is off. "
+                + "Car data still works from the app (button 1, control tests in APP mode).", 11, Color.LTGRAY, false);
         hint.setTextIsSelectable(true);
         left.addView(hint);
 
@@ -116,7 +123,8 @@ public class ProbeActivity extends Activity {
         root.addView(logScroll, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
         setContentView(root);
-        append("Welcome. Start with button 1, then 2 and 3. Every result is saved to " + Report.DIR + "\n"
+        append("Welcome. Start with button 1, then 2 and 3. Every result is saved in the app's folder;\n"
+                + "press 'Copy all results to USB stick' at the end.\n"
                 + "Control tests only run when the car is in P.\n");
     }
 
@@ -205,8 +213,9 @@ public class ProbeActivity extends Activity {
             return;
         }
         busy = true;
-        setStatus("Running: " + name + " ...");
-        worker.execute(() -> {
+        setStatus("Running: " + name + " ...  (Stop button cancels)");
+        final int gen = ++generation;
+        current = worker.submit(() -> {
             Report r = new Report(name, this::append);
             try {
                 task.run(r);
@@ -215,9 +224,23 @@ public class ProbeActivity extends Activity {
             }
             File f = r.save();
             append("Saved: " + (f == null ? "(failed)" : f.getAbsolutePath()) + "\n");
-            setStatus("Done: " + name);
-            busy = false;
+            if (gen == generation) {
+                setStatus("Done: " + name);
+                busy = false;
+            }
         });
+    }
+
+    private void stopTask() {
+        if (!busy) {
+            append("(Nothing is running.)");
+            return;
+        }
+        if (current != null) current.cancel(true);
+        generation++;
+        busy = false;
+        setStatus("Stopped. Ready.");
+        append("Stopped by you. You can run another test now.\n");
     }
 
     private void helper(final String task, final int timeoutSec) {
@@ -254,7 +277,7 @@ public class ProbeActivity extends Activity {
         r.info("Full method lists: app_car_methods.txt, feature ids: app_feature_ids.txt");
     }
 
-    /** Copies Download/atto3_probe to every removable drive (USB stick / SD card). */
+    /** Copies the results folder to every removable drive (USB stick / SD card). */
     private void copyToUsb(Report r) throws Exception {
         File[] src = Report.DIR.listFiles();
         if (src == null || src.length == 0) {

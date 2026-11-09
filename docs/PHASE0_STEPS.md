@@ -18,7 +18,7 @@ Press the buttons in order and wait for **"Done"** at the top left after each on
 | Button | What to do |
 |---|---|
 | **1 Basic check (app)** | Just wait (about 1 minute). |
-| **2 Car data via helper** | The first time, the car may show **"Allow USB debugging?"** → tick **Always allow** → **OK**, then press button 2 again. |
+| **2 Car data via helper** | **Watch the car screen**: it may show **"Allow USB debugging?"** → tick **Always allow** → **OK**. It gives up by itself after about 1 minute; you can also press **■ Stop**. |
 | **3 Camera picture via helper** | **Close OverDrive's live view and the car's 360 view first.** Wait up to 1 minute. |
 | **4 Camera picture from app** | Same as 3, but without the helper. It's fine if this one fails. |
 | **5 Watch signals 30 s** | After you press it, wait 5 s, then: flick **LEFT** indicator for 3 s, **RIGHT** for 3 s, open and close a door, press the brake. |
@@ -28,14 +28,14 @@ Press the buttons in order and wait for **"Done"** at the top left after each on
 ## C. Control tests (car in P, watch the car)
 
 Each one does a small change and undoes it. Note what you **see** happen.
-Leave the top button at **"HELPER (shell)"**.
+Leave the top button at **"APP"** (the default).
 
 - Fan · Temperature · Recirculation · Air direction · Defrost · Purify · Driver window
 - **Sunroof nudge:** moves it a little one way, then the other. If it isn't fully
   closed afterwards, close it with the car's own button.
 - **Other cameras** (amber): only if you have time. It may briefly restart the 360 view.
 
-If button 2 never connects, try control tests with the top button switched to **APP**.
+If button 2 connects, you can also try the control tests with the top button switched to **HELPER**.
 
 ## D. Send me the results
 

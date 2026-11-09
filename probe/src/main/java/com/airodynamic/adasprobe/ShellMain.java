@@ -20,6 +20,7 @@ public final class ShellMain {
 
     public static void main(final String[] args) {
         final String task = args.length > 0 ? args[0] : "read";
+        Report.DIR = new java.io.File(args.length > 1 ? args[1] : "/data/local/tmp/atto3_probe");
         try { Looper.prepareMainLooper(); } catch (Throwable ignored) {}
 
         Thread worker = new Thread(new Runnable() {
@@ -28,6 +29,7 @@ public final class ShellMain {
                 Report r = new Report("helper_" + task, null);
                 try {
                     r.info("running as uid " + android.os.Process.myUid() + " (shell is 2000)");
+                    if (task.startsWith("camera")) CameraProbe.loadNativeLibs(r);
                     Context ctx = createContext(r);
                     runTask(task, ctx, r);
                 } catch (Throwable t) {
