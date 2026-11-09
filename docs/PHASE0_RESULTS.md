@@ -12,6 +12,24 @@
 | USB stick | Not at the standard Android location → v0.0.5 searches more places / copies via helper. |
 | SDK feature ids seen | PM2.5 inside **and outside** (`PM2P5_VALUE_IN/OUT`), turn signals, tyres, A/C recirc/defrost/purify, ambient (`SET_ATMOSPHERE_LAMP_*`), sunroof position/state (read). No sunroof open/close feature id; `voiceCtlMoonRoof` still to test. These are SDK constants, not yet proof the car supports them. |
 
+## Run 1 app files (read)
+| Item | Result |
+|---|---|
+| Camera speed | open 584 ms, first frame 639 ms, **~11.6 fps** for the 5120×960 strip (`setCameraFps(15)` refused) |
+| Readings | speed 0.0, gear 1 (P), battery **55 %**, range **245 km**, outside **35 °C**, A/C set **24 °C**, fan 2, recirc state 1, purify 2 (off) |
+| Tyres | `getTyrePressureValue(1..4)` = 275/275/275/277 (kPa → 2.75 bar) |
+| PM2.5 | `getPM2p5Value()` = [inside, outside] e.g. [9, 19] — **both available from the car** |
+| Radar | `getAllRadarDistance()` = 9 values, 150 = nothing near |
+| Turn signal | `getTurnLightFlashState()` (OverDrive: 2/3 left, 4/5 right, 6/7 hazard). Stayed 1 in the watch — signals probably not flicked; re-test |
+| Doors / brake | no change seen in the watch — re-test |
+| Cabin temperature | **no reading found** (`getTemprature(3)` = 65535). Release heat needs another source |
+| Sunroof | reads position/state; commands **`setMoonRoofState(int)`, `setMoonRoofAndSunshadeStop()`, `voiceCtlMoonRoof(int)`** exist |
+| Ambient light | **`setIALColor`, `setIALBrightness`, `setIALArea`** exist on the Setting device (colour 25, brightness 5 now) |
+| Voice | **no text-to-speech engine** on the car → ship pre-recorded Thai/English clips |
+| Google apps | not installed natively; the user runs them in **GBox** |
+| Engine Sound | installed v1.0.56 (= old GitHub build; the user's newer build is lost for now) |
+| Widevine | L3 |
+
 ## Still to collect
 - `app_basic.txt`, `app_car_methods.txt`, `app_camera.txt` (camera FPS), `app_watch.txt` (turn signal / door / brake readings), `app_voice.txt`
 - Control tests in **APP** mode (the helper versions had no car context), plus what the user saw

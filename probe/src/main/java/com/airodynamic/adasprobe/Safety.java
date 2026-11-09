@@ -24,11 +24,15 @@ public final class Safety {
     /** Only these write methods are allowed at all (comfort features only). */
     private static final Pattern ALLOWED_WRITES = Pattern.compile(
             "set(AcTemperature|AcWindLevel|AcWindMode|AcCycleMode|AutoCleanAirState|AcDefrostState"
-            + "|WindowOpenPercent)|voiceCtlMoonRoof|set");
+            + "|WindowOpenPercent|IALColor|IALBrightness|MoonRoofAndSunshadeStop)|voiceCtlMoonRoof|set");
+
+    /** The Setting device is read-only except for the interior ambient light (IAL). */
+    private static final Pattern SETTING_EXCEPTIONS = Pattern.compile("setIAL(Color|Brightness)");
 
     public static void checkCommand(Object device, String method) {
         String cls = device == null ? "" : device.getClass().getName();
-        if (READ_ONLY_DEVICES.matcher(cls).matches()) {
+        boolean ambientOnSetting = cls.endsWith("BYDAutoSettingDevice") && SETTING_EXCEPTIONS.matcher(method).matches();
+        if (READ_ONLY_DEVICES.matcher(cls).matches() && !ambientOnSetting) {
             throw new SecurityException("Refused: " + cls + " is read-only in this app");
         }
         if (FORBIDDEN_METHODS.matcher(method).matches()) {

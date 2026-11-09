@@ -103,6 +103,7 @@ public class ProbeActivity extends Activity {
         control(left, "Front defrost on, then off", "defrost");
         control(left, "Air purify on, then off", "purify");
         control(left, "Driver window 5% down, then up", "window");
+        control(left, "Ambient light colour + brightness, then back", "ambient");
         control(left, "Sunroof small nudge (watch it!)", "sunroof");
         Button others = button(left, "Other cameras (may restart camera service)", v ->
                 confirm("Other cameras", "Opens any extra cameras in the car's list (e.g. windshield). "
@@ -296,8 +297,8 @@ public class ProbeActivity extends Activity {
         step("app_camera", this::appCamera);
 
         step("app_voice", this::voiceTest);
-        answers.info("Voice heard: " + ask("Voice", "Did you hear English, then Thai, from the car speakers?",
-                "Both", "No", "Only English"));
+        step("app_beep", this::beep);
+        answers.info("Beep heard: " + ask("Sound", "Did you hear three BEEPS from the car speakers?", "Yes", "No"));
 
         ask("Signals", "When you press OK you have 30 seconds to:\n\n1. Flick the LEFT indicator (3 s)\n"
                 + "2. Flick the RIGHT indicator (3 s)\n3. Open and close a door\n4. Press the brake pedal", "OK");
@@ -311,6 +312,7 @@ public class ProbeActivity extends Activity {
                 {"defrost", "Front defrost on, then off", "Did FRONT DEFROST turn on, then off?"},
                 {"purify", "Air purify on, then off", "Did AIR PURIFY turn on, then off?"},
                 {"window", "Driver window 5% down, then up", "Did the DRIVER WINDOW go down a little, then up?"},
+                {"ambient", "Ambient light colour + brightness, then back", "Did the AMBIENT LIGHT change colour, then brightness, then go back?"},
                 {"sunroof", "Sunroof small nudge", "Did the SUNROOF move? (If it is open now, close it with the car's button.)"},
         };
         for (String[] c : controls) {
@@ -551,6 +553,25 @@ public class ProbeActivity extends Activity {
         Thread.sleep(5000);
         r.info("Did you hear English, then Thai, through the car speakers?");
         tts.shutdown();
+    }
+
+    /** Three short beeps through the media speakers (the car has no text-to-speech engine). */
+    private void beep(Report r) throws Exception {
+        int rate = 44100;
+        short[] pcm = new short[rate / 4];
+        for (int i = 0; i < pcm.length; i++) pcm[i] = (short) (Math.sin(2 * Math.PI * 880 * i / rate) * 12000);
+        android.media.AudioTrack t = new android.media.AudioTrack(android.media.AudioManager.STREAM_MUSIC, rate,
+                android.media.AudioFormat.CHANNEL_OUT_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT,
+                pcm.length * 2, android.media.AudioTrack.MODE_STATIC);
+        t.write(pcm, 0, pcm.length);
+        for (int k = 0; k < 3; k++) {
+            t.stop();
+            t.reloadStaticData();
+            t.play();
+            Thread.sleep(500);
+        }
+        t.release();
+        r.ok("beep", "played 3 beeps on the media stream");
     }
 
     private static String describe(int lang) {

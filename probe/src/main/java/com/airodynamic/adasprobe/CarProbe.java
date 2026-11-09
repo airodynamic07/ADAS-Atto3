@@ -581,20 +581,49 @@ public final class CarProbe {
         if (!requireParked("Sunroof nudge")) return;
         r.info("before: position=" + fmt(read(BODY, "getSunroofPosition", null))
                 + " state=" + fmt(read(BODY, "getSunroofState", null))
-                + " windowPercent(5)=" + fmt(read(BODY, "getWindowOpenPercent", 5)));
+                + " windowPercent(5)=" + fmt(read(BODY, "getWindowOpenPercent", 5))
+                + " config=" + fmt(read(BODY, "getMoonRoofConfig", null)));
         step("voiceCtlMoonRoof(1)", () -> command(BODY, "voiceCtlMoonRoof", 1));
         pause(1000);
         step("STOP voiceCtlMoonRoof(4)", () -> command(BODY, "voiceCtlMoonRoof", 4));
+        step("STOP setMoonRoofAndSunshadeStop()", () -> command(BODY, "setMoonRoofAndSunshadeStop"));
         pause(1500);
         r.info("after cmd 1: position=" + fmt(read(BODY, "getSunroofPosition", null))
                 + " windowPercent(5)=" + fmt(read(BODY, "getWindowOpenPercent", 5)));
         step("voiceCtlMoonRoof(2)", () -> command(BODY, "voiceCtlMoonRoof", 2));
         pause(1500);
         step("STOP voiceCtlMoonRoof(4)", () -> command(BODY, "voiceCtlMoonRoof", 4));
+        step("STOP setMoonRoofAndSunshadeStop()", () -> command(BODY, "setMoonRoofAndSunshadeStop"));
         pause(1500);
         r.info("after cmd 2: position=" + fmt(read(BODY, "getSunroofPosition", null))
                 + " windowPercent(5)=" + fmt(read(BODY, "getWindowOpenPercent", 5)));
         r.info("If the sunroof is not fully closed now, close it with the car's own button.");
+    }
+
+    private static final String SETTING = "android.hardware.bydauto.setting.BYDAutoSettingDevice";
+
+    /** Ambient light (IAL): change colour, then brightness, then put both back. */
+    public void testAmbient() {
+        if (!requireParked("Ambient light colour + brightness, then back")) return;
+        Integer col = asInt(read(SETTING, "getIALColor", 1));
+        Integer bri = asInt(read(SETTING, "getIALBrightness", 1));
+        r.info("before: colour(1)=" + col + " brightness(1)=" + bri + " area=" + fmt(read(SETTING, "getIALArea", null)));
+        if (col == null || bri == null || col < 0 || bri < 0) {
+            r.fail("ambient", "cannot read the current colour/brightness, test skipped");
+            return;
+        }
+        final int oc = col, ob = bri;
+        final int nc = oc == 10 ? 20 : 10;
+        step("setIALColor(" + nc + ")", () -> command(SETTING, "setIALColor", nc));
+        pause(3000);
+        r.info("after colour: colour(1)=" + fmt(read(SETTING, "getIALColor", 1)) + "   <- did the ambient colour change?");
+        step("restore setIALColor(" + oc + ")", () -> command(SETTING, "setIALColor", oc));
+        pause(1500);
+        final int nb = ob <= 2 ? ob + 3 : 1;
+        step("setIALBrightness(" + nb + ")", () -> command(SETTING, "setIALBrightness", nb));
+        pause(3000);
+        r.info("after brightness: brightness(1)=" + fmt(read(SETTING, "getIALBrightness", 1)));
+        step("restore setIALBrightness(" + ob + ")", () -> command(SETTING, "setIALBrightness", ob));
     }
 
     /** Lists methods that look related to the Known unknowns, from every device. */

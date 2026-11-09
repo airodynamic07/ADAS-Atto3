@@ -104,6 +104,7 @@ public final class ShellMain {
             case "purify": car.testPurify(); break;
             case "window": car.testWindow(); break;
             case "sunroof": car.testSunroof(); break;
+            case "ambient": car.testAmbient(); break;
             default: r.fail("task", "unknown task '" + task + "'");
         }
     }
