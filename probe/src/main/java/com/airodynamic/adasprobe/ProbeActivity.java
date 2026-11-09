@@ -277,30 +277,84 @@ public class ProbeActivity extends Activity {
         r.info("Full method lists: app_car_methods.txt, feature ids: app_feature_ids.txt");
     }
 
-    /** Copies the results folder to every removable drive (USB stick / SD card). */
+    /** Every place DiLink / Android may mount a USB stick. */
+    private java.util.List<File> usbCandidates(Report r) {
+        java.util.LinkedHashSet<File> out = new java.util.LinkedHashSet<>();
+        File[] dirs = getExternalFilesDirs(null);
+        for (int i = 1; i < dirs.length; i++) if (dirs[i] != null) out.add(dirs[i]);
+        try {
+            android.os.storage.StorageManager sm = (android.os.storage.StorageManager) getSystemService(STORAGE_SERVICE);
+            for (android.os.storage.StorageVolume v : sm.getStorageVolumes()) {
+                String desc = v.getDescription(this);
+                String path = null;
+                try { path = (String) v.getClass().getMethod("getPath").invoke(v); } catch (Throwable ignored) {}
+                r.info("storage volume: " + desc + "  removable=" + v.isRemovable() + "  state=" + v.getState() + "  path=" + path);
+                if (path != null && v.isRemovable()) out.add(new File(path));
+            }
+        } catch (Throwable t) {
+            r.info("StorageManager: " + t);
+        }
+        for (String root : new String[]{"/storage", "/mnt/media_rw", "/mnt/usb", "/mnt/usb_storage", "/mnt/udisk"}) {
+            File[] kids = new File(root).listFiles();
+            r.info("ls " + root + " -> " + (kids == null ? "(not readable)" : java.util.Arrays.toString(kids)));
+            if (kids == null) continue;
+            for (File k : kids) {
+                String n = k.getName();
+                if (n.equals("emulated") || n.equals("self") || n.equals("sdcard0")) continue;
+                out.add(k);
+            }
+        }
+        for (String fixed : new String[]{"/storage/udisk", "/storage/usb0", "/storage/usbotg", "/mnt/usb_storage/USB_DISK0"}) {
+            if (new File(fixed).isDirectory()) out.add(new File(fixed));
+        }
+        return new java.util.ArrayList<>(out);
+    }
+
+    /** Copies the results folder to the USB stick: first as the app, then via the helper. */
     private void copyToUsb(Report r) throws Exception {
         File[] src = Report.DIR.listFiles();
         if (src == null || src.length == 0) {
             r.fail("copy", "no results yet — run the tests first");
             return;
         }
-        File[] dirs = getExternalFilesDirs(null);
-        int copied = 0;
-        for (int i = 1; i < dirs.length; i++) {          // index 0 is the car's own storage
-            if (dirs[i] == null) continue;
-            File dest = new File(dirs[i], "atto3_probe");
-            dest.mkdirs();
-            for (File f : src) {
-                if (f.isFile()) {
-                    copyFile(f, new File(dest, f.getName()));
-                    copied++;
-                }
+        java.util.List<File> cands = usbCandidates(r);
+        r.info("USB candidates: " + cands);
+        int ok = 0;
+        for (File root : cands) {
+            File dest = new File(root, "atto3_probe");
+            try {
+                dest.mkdirs();
+                int n = 0;
+                for (File f : src) if (f.isFile()) { copyFile(f, new File(dest, f.getName())); n++; }
+                r.ok("copied " + n + " files (app) to", dest.getAbsolutePath());
+                ok++;
+            } catch (Throwable t) {
+                r.info("app cannot write " + dest + ": " + t.getClass().getSimpleName());
             }
-            r.ok("copied " + src.length + " files to", dest.getAbsolutePath());
-            r.info("On the USB stick, open: Android > data > " + getPackageName() + " > files > atto3_probe");
         }
-        if (copied == 0) {
-            r.fail("copy", "no USB stick found — plug it in, wait 10 s, and press the button again");
+        if (ok > 0) {
+            r.info("On the USB stick, look for the folder atto3_probe (on the stick itself, or under Android > data > "
+                    + getPackageName() + " > files).");
+            return;
+        }
+        r.info("The app itself may not write to the USB stick — asking the helper (shell user) to copy...");
+        StringBuilder cmd = new StringBuilder();
+        for (File root : cands) {
+            String d = root.getAbsolutePath();
+            cmd.append("if [ -d '").append(d).append("' ] && mkdir -p '").append(d).append("/atto3_probe' 2>/dev/null")
+               .append(" && cp -r '").append(Report.DIR.getAbsolutePath()).append("/.' '").append(d).append("/atto3_probe/'")
+               .append("; then echo COPIED_TO ").append(d).append("/atto3_probe; fi; ");
+        }
+        // also any mounted vfat/exfat/fuse volume under /mnt/media_rw or /storage
+        cmd.append("for d in /mnt/media_rw/* /storage/*; do case \"$d\" in */emulated|*/self) continue;; esac; ")
+           .append("mkdir -p \"$d/atto3_probe\" 2>/dev/null && cp -r '").append(Report.DIR.getAbsolutePath())
+           .append("/.' \"$d/atto3_probe/\" && echo COPIED_TO $d/atto3_probe; done; mount | grep -iE 'vfat|exfat|fuse|media_rw|usb' | head -20");
+        String out = HelperLauncher.shell(this, cmd.toString(), r);
+        if (out != null) for (String line : out.split("\n")) r.info("  " + line);
+        if (out != null && out.contains("COPIED_TO")) {
+            r.ok("copy", "done via helper — look for the folder atto3_probe on the USB stick");
+        } else {
+            r.fail("copy", "could not write to the USB stick. Take a photo of this screen and send it to me.");
         }
     }
 

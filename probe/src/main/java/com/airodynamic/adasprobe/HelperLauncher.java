@@ -43,6 +43,31 @@ public final class HelperLauncher {
         }
     }
 
+    private static AdbKeyPair keys(Context ctx) throws Exception {
+        File priv = new File(ctx.getFilesDir(), "adbkey");
+        File pub = new File(ctx.getFilesDir(), "adbkey.pub");
+        if (!priv.exists() || !pub.exists()) AdbKeyPair.generate(priv, pub);
+        return AdbKeyPair.read(priv, pub);
+    }
+
+    /** Runs one shell command as the shell user (more file access than the app). Null if ADB is unavailable. */
+    public static String shell(Context ctx, String cmd, Report r) {
+        if (!portOpen("127.0.0.1", 5555, 3000)) {
+            r.info("ADB port 5555 closed, cannot use the helper for this.");
+            return null;
+        }
+        Dadb dadb = null;
+        try {
+            dadb = Dadb.create("127.0.0.1", 5555, keys(ctx), 5000, 60000);
+            return dadb.shell(cmd + " 2>&1").getAllOutput();
+        } catch (Throwable t) {
+            r.error("ADB shell", t);
+            return null;
+        } finally {
+            if (dadb != null) try { dadb.close(); } catch (Throwable ignored) {}
+        }
+    }
+
     public static String run(Context ctx, String task, int timeoutSec, Report r) throws Exception {
         r.info("Checking the car's ADB port 5555 ...");
         boolean p5555 = portOpen("127.0.0.1", 5555, 3000);
