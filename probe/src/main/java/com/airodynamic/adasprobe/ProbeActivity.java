@@ -83,6 +83,8 @@ public class ProbeActivity extends Activity {
         Button inst = button(left, "⬇  Install / update ADAS Launcher", v -> runTask("app_install_launcher", rep -> Updater.installLauncher(this, rep)));
         inst.setTextColor(ACCENT);
         inst.setTypeface(Typeface.DEFAULT_BOLD);
+        Button usbInst = button(left, "⬇  Install an APK from the USB stick", v -> pickUsbApk());
+        usbInst.setTextColor(ACCENT);
         button(left, "⟳  Update app from internet", v -> runTask("app_update", rep -> Updater.update(this, rep)));
         Button stop = button(left, "■  Stop current test", v -> stopTask());
         stop.setTextColor(AMBER);
@@ -422,6 +424,42 @@ public class ProbeActivity extends Activity {
         }
         step("app_usb_copy", this::copyToUsb);
         ask("All done 🎉", "Take the USB stick home and send the atto3_probe folder in the chat.", "OK");
+    }
+
+    /** Lists the .apk files on the USB stick(s) and installs the chosen one through the car's ADB. */
+    private void pickUsbApk() {
+        runTask("app_usb_install_list", rep -> {
+            java.util.List<File> apks = new java.util.ArrayList<>();
+            for (File root : usbCandidates(rep)) {
+                File[] fs = root.listFiles();
+                if (fs != null) for (File f : fs) if (f.isFile() && f.getName().toLowerCase(java.util.Locale.US).endsWith(".apk")) apks.add(f);
+            }
+            if (apks.isEmpty()) {
+                // the app may not be allowed to read the stick: ask the helper (shell) to list it
+                String out = HelperLauncher.shell(this, "ls /storage/*/*.apk /mnt/media_rw/*/*.apk 2>/dev/null", rep);
+                if (out != null) for (String line : out.split("\n")) if (line.trim().endsWith(".apk")) apks.add(new File(line.trim()));
+            }
+            if (apks.isEmpty()) { rep.fail("USB", "no .apk files found on the USB stick (put them at the top level)"); return; }
+            String[] names = new String[apks.size()];
+            for (int i = 0; i < names.length; i++) names[i] = apks.get(i).getName() + "  (" + (apks.get(i).length() / 1024) + " KB)";
+            ui.post(() -> new AlertDialog.Builder(this).setTitle("Install which APK?")
+                    .setItems(names, (d, which) -> runTask("app_usb_install", r2 -> installFromUsb(apks.get(which), r2)))
+                    .setNegativeButton("Cancel", null).show());
+        });
+    }
+
+    private void installFromUsb(File src, Report r) throws Exception {
+        File dst = new File(getExternalFilesDir(null), "usb_install.apk");
+        try {
+            copyFile(src, dst);
+        } catch (Exception e) {
+            // the app can't read the stick: the helper copies it instead
+            r.info("The app can't read the stick directly; copying through the car's ADB...");
+            String out = HelperLauncher.shell(this, "cp '" + src.getAbsolutePath() + "' '" + dst.getAbsolutePath() + "' && echo COPIED", r);
+            if (out == null || !out.contains("COPIED")) { r.fail("copy", "could not read " + src.getName()); return; }
+        }
+        r.ok("copied", src.getName() + " (" + (dst.length() / 1024) + " KB)");
+        HelperLauncher.installOther(this, dst, r);
     }
 
     private void stopTask() {

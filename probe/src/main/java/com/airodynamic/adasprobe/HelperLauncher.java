@@ -97,14 +97,33 @@ public final class HelperLauncher {
             r.fail("install", "the car's ADB port 5555 is closed — install the file from the USB stick instead");
             return false;
         }
-        try (Dadb dadb = Dadb.create("127.0.0.1", 5555, keys(ctx), 5000, 120000)) {
-            r.info("Installing...");
-            dadb.install(apk, "-r");
-            return true;
+        try (Dadb dadb = Dadb.create("127.0.0.1", 5555, keys(ctx), 5000, 180000)) {
+            r.info("Installing " + apk.getName() + " (" + (apk.length() / 1024) + " KB) through the car's ADB...");
+            // push + pm install so Android's exact answer (e.g. INSTALL_FAILED_...) is shown
+            String remote = "/data/local/tmp/adas_install.apk";
+            dadb.push(apk, remote, 0644, System.currentTimeMillis());
+            AdbShellResponse res = dadb.shell("pm install -r -d " + remote + " 2>&1; rm -f " + remote);
+            String out = res.getAllOutput().trim();
+            r.info("Android says: " + out);
+            boolean ok = out.contains("Success");
+            if (ok) r.ok("install", "done");
+            else r.fail("install", explain(out));
+            return ok;
         } catch (Throwable t) {
             r.error("install", t);
             return false;
         }
+    }
+
+    /** Plain-language meaning of the most common install errors. */
+    static String explain(String out) {
+        if (out.contains("UPDATE_INCOMPATIBLE") || out.contains("signatures do not match"))
+            return "the installed version was signed with a different key. Uninstall the old app first (your settings in it will be lost).";
+        if (out.contains("INSUFFICIENT_STORAGE")) return "the car's storage is full. Free some space (Settings > Storage).";
+        if (out.contains("VERSION_DOWNGRADE")) return "the car has a newer version than this file.";
+        if (out.contains("OLDER_SDK") || out.contains("NO_MATCHING_ABIS")) return "this file doesn't fit this car's Android version or chip.";
+        if (out.contains("INVALID_APK") || out.contains("PARSE")) return "the file is damaged or not a real APK. Download it again.";
+        return "see the message above and send me a photo.";
     }
 
     public static String run(Context ctx, String task, int timeoutSec, Report r) throws Exception {
