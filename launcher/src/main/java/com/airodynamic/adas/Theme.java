@@ -4,7 +4,7 @@ import android.graphics.Color;
 
 /** The three looks from the design canvas. Status colours are the same in every theme. */
 public enum Theme {
-    BLUE("#05080F", "#0D1422", "#16203A", "#1E2A40", "#EAF1FF", "#97A6C0", "#4DA3FF", "#04101F"),
+    BLUE("#000000", "#0E0F12", "#1A1C21", "#2A2D35", "#F4F6FA", "#9AA0AD", "#4DA3FF", "#04101F"),   // black-blue (user, 2026-11-10)
     WHITE("#F3F5F9", "#FFFFFF", "#EDF1F7", "#D5DCE8", "#0F1726", "#5B6577", "#1F6FEB", "#FFFFFF"),
     RED("#000000", "#0E0E10", "#1A1A1E", "#2A2A30", "#F4F4F6", "#9A9AA3", "#E5202E", "#FFFFFF");
 

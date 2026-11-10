@@ -28,7 +28,7 @@ public final class SettingsDialog {
         section(c, root, th, "Theme");
         LinearLayout themes = row(c);
         for (Theme t : Theme.values()) {
-            String n = t == Theme.BLUE ? "Dark blue" : t == Theme.WHITE ? "White minimal" : "Black red sport";
+            String n = t == Theme.BLUE ? "Black blue" : t == Theme.WHITE ? "White minimal" : "Black red sport";
             themes.addView(Ui.chip(c, n, prefs.theme() == t, th, v -> { prefs.setTheme(t); redo.run(); }), weight(c));
         }
         root.addView(themes);
