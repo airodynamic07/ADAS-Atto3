@@ -17,7 +17,7 @@ import java.nio.ByteBuffer;
 /**
  * Live 360 camera (hidden AVMCamera class, loaded from /system/framework/bmmcamera.jar).
  * On this car the four cameras arrive as one 5120x960 strip on camera id 1 (pano_h):
- * slice 0 rear, 1 left, 2 right, 3 front. Each slice is cut out at half size (640x480).
+ * slice 0 rear, 1 left, 2 right, 3 front. Each slice (or the chosen part of it) is scaled to 640x480.
  */
 public final class CameraFeed {
 
@@ -28,7 +28,11 @@ public final class CameraFeed {
 
     public interface Listener { void onFrame(Bitmap b); void onError(String msg); }
     /** Gets every converted frame on the camera thread (used by the AI, which copies it). */
-    public interface Sink { void onArgb(int[] argb, int w, int h, int slice); }
+    public interface Sink { void onArgb(int[] argb, int w, int h, int slice, float[] crop); }
+    /** Part of each camera's picture to show, as fractions {x0, y0, x1, y1}; whole picture by default. */
+    private final float[][] crops = {{0, 0, 1, 1}, {0, 0, 1, 1}, {0, 0, 1, 1}, {0, 0, 1, 1}};
+    public void setCrop(int s, float x0, float y0, float x1, float y1) { crops[s] = new float[]{x0, y0, x1, y1}; }
+    public float[] crop(int s) { return crops[s]; }
     private volatile Sink sink;
     public void setSink(Sink s) { sink = s; }
     public int slice() { return slice; }
@@ -129,11 +133,12 @@ public final class CameraFeed {
             img = rd.acquireLatestImage();
             if (img == null || listener == null) return;
             final int s = slice;
-            toArgb(img, s * (STRIP_W / 4));
+            final float[] cr = crops[s];
+            toArgb(img, s, cr);
             img.close();
             img = null;
             Sink k = sink;
-            if (k != null) k.onArgb(argb, W, H, s);
+            if (k != null) k.onArgb(argb, W, H, s, cr);
             final Bitmap b = bmps[idx];
             idx ^= 1;
             b.setPixels(argb, 0, W, 0, 0, W, H);
@@ -145,16 +150,25 @@ public final class CameraFeed {
         }
     }
 
-    private void toArgb(Image img, int x0) {
+    private int[] sx = new int[W];
+
+    /** Converts the chosen part of one camera (full resolution) to a W x H picture. */
+    private void toArgb(Image img, int slice, float[] cr) {
+        final int SW = STRIP_W / 4;
         Image.Plane[] p = img.getPlanes();
         ByteBuffer yb = p[0].getBuffer(), ub = p[1].getBuffer(), vb = p[2].getBuffer();
         int ys = p[0].getRowStride(), ypx = p[0].getPixelStride();
         int uvs = p[1].getRowStride(), uvp = p[1].getPixelStride();
-        int segY = (W * 2 - 1) * ypx + 1, segUV = (W - 1) * uvp + 1;
+        int x0 = (slice * SW + Math.round(cr[0] * SW)) & ~1;
+        int y0 = Math.round(cr[1] * STRIP_H);
+        float cw = (cr[2] - cr[0]) * SW, ch = (cr[3] - cr[1]) * STRIP_H;
+        int span = Math.min((int) Math.ceil(cw) + 2, slice * SW + SW - x0);
+        for (int ox = 0; ox < W; ox++) sx[ox] = Math.min(span - 1, (int) (ox * cw / W));
+        int segY = (span - 1) * ypx + 1, segUV = (span / 2) * uvp + 1;
         if (yRow == null || yRow.length < segY) yRow = new byte[segY];
         if (uRow == null || uRow.length < segUV) { uRow = new byte[segUV]; vRow = new byte[segUV]; }
         for (int oy = 0; oy < H; oy++) {
-            int sy = oy * 2;
+            int sy = Math.min(STRIP_H - 1, y0 + (int) (oy * ch / H));
             yb.position(sy * ys + x0 * ypx);
             yb.get(yRow, 0, Math.min(segY, yb.remaining()));
             int uvOff = (sy / 2) * uvs + (x0 / 2) * uvp;
@@ -162,9 +176,10 @@ public final class CameraFeed {
             vb.position(uvOff); vb.get(vRow, 0, Math.min(segUV, vb.remaining()));
             int o = oy * W;
             for (int ox = 0; ox < W; ox++) {
-                int Y = (yRow[ox * 2 * ypx] & 0xFF) - 16;
-                int U = (uRow[ox * uvp] & 0xFF) - 128;
-                int V = (vRow[ox * uvp] & 0xFF) - 128;
+                int k = sx[ox];
+                int Y = (yRow[k * ypx] & 0xFF) - 16;
+                int U = (uRow[(k / 2) * uvp] & 0xFF) - 128;
+                int V = (vRow[(k / 2) * uvp] & 0xFF) - 128;
                 if (Y < 0) Y = 0;
                 int c = 1192 * Y;
                 int r = (c + 1634 * V) >> 10, g = (c - 833 * V - 400 * U) >> 10, b = (c + 2066 * U) >> 10;

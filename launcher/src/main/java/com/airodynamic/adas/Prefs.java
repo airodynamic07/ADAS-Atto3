@@ -79,4 +79,7 @@ public final class Prefs {
     /** 0 Solid, 1 Breathe, 2 Flash */
     public int ambientStyle() { return p.getInt("ambStyle", 0); }
     public void setAmbientStyle(int v) { p.edit().putInt("ambStyle", v).apply(); }
+    /** Left/Right cameras: close-up of the side looking back (like Kinex) instead of the whole fisheye. */
+    public boolean sideCloseUp() { return p.getBoolean("sideCloseUp", true); }
+    public void setSideCloseUp(boolean on) { p.edit().putBoolean("sideCloseUp", on).apply(); }
 }

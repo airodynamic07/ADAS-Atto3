@@ -123,6 +123,7 @@ public final class AdasPanel implements Panel {
         vision = Vision.get(c);
         vision.setCallback(this::onAi);
         feed.setSink(vision::offer);
+        applySideCrop(feed, prefs.sideCloseUp());
         showView(MAP, false);
     }
 
@@ -161,8 +162,10 @@ public final class AdasPanel implements Panel {
                 @Override public void onFrame(Bitmap b) {
                     camError = null;
                     if (view < FRONT) return;
-                    if (view == LEFT || view == RIGHT) drawGuides(b);
-                    drawBoxes(b, feed.slice());
+                    int sl = feed.slice();
+                    float[] cr = feed.crop(sl);
+                    if (view == LEFT || view == RIGHT) drawGuides(b, cr);
+                    drawBoxes(b, sl, cr);
                     camera.setImageBitmap(b);
                 }
                 @Override public void onError(String msg) {
@@ -179,7 +182,7 @@ public final class AdasPanel implements Panel {
     }
 
     /** Simple distance guide lines on the side cameras (rough until calibrated in Phase 2). */
-    private void drawGuides(Bitmap b) {
+    private void drawGuides(Bitmap b, float[] cr) {
         Canvas cv = new Canvas(b);
         float w = b.getWidth(), h = b.getHeight();
         int[] cols = {Theme.DANGER, Theme.CAUTION, Theme.SAFE};
@@ -188,30 +191,47 @@ public final class AdasPanel implements Panel {
         guide.setTextSize(22);
         for (int i = 0; i < 3; i++) {
             guide.setColor(cols[i]);
-            float y = h * ys[i];
+            float y = h * (ys[i] - cr[1]) / (cr[3] - cr[1]);   // guide marks are in whole-picture terms
             cv.drawLine(w * 0.15f, y, w * 0.85f, y, guide);
             cv.drawText(lab[i], w * 0.86f, y + 8, guide);
         }
     }
 
     /** AI boxes from the latest result for this camera (up to 3 s old), with its age. */
-    private void drawBoxes(Bitmap b, int slice) {
+    /**
+     * Side cameras in close-up (like Kinex): the side of the car looking back, from the full-resolution
+     * picture. Right camera: rear is on the right of its picture; left camera: mirrored.
+     */
+    public static void applySideCrop(CameraFeed feed, boolean closeUp) {
+        if (closeUp) {
+            feed.setCrop(CameraFeed.RIGHT, 0.30f, 0.18f, 1.00f, 0.88f);
+            feed.setCrop(CameraFeed.LEFT, 0.00f, 0.18f, 0.70f, 0.88f);
+        } else {
+            feed.setCrop(CameraFeed.RIGHT, 0, 0, 1, 1);
+            feed.setCrop(CameraFeed.LEFT, 0, 0, 1, 1);
+        }
+    }
+
+    private void drawBoxes(Bitmap b, int slice, float[] cr) {
         long age = vision.age(slice);
         List<Vision.Obj> list = vision.objects(slice, 3000);
         if (list.isEmpty()) return;
         Canvas cv = new Canvas(b);
+        float W = b.getWidth(), H = b.getHeight(), cw = cr[2] - cr[0], ch = cr[3] - cr[1];
         for (Vision.Obj o : list) {
+            float x1 = (o.x1 - cr[0]) / cw * W, x2 = (o.x2 - cr[0]) / cw * W;
+            float y1 = (o.y1 - cr[1]) / ch * H, y2 = (o.y2 - cr[1]) / ch * H;
             int col = Vision.color(o.cls);
             box.setColor(col);
             box.setStyle(Paint.Style.STROKE);
-            cv.drawRect(o.x1, o.y1, o.x2, o.y2, box);
+            cv.drawRect(x1, y1, x2, y2, box);
             String t = String.format(Locale.US, "%s ~%.0f m", Vision.label(o.cls), o.metres);
             float tw = box.measureText(t);
-            float ty = Math.max(26, o.y1);
+            float ty = Math.max(26, y1);
             box.setStyle(Paint.Style.FILL);
-            cv.drawRect(o.x1, ty - 26, o.x1 + tw + 10, ty, box);
+            cv.drawRect(x1, ty - 26, x1 + tw + 10, ty, box);
             box.setColor(0xFF000000);
-            cv.drawText(t, o.x1 + 5, ty - 5, box);
+            cv.drawText(t, x1 + 5, ty - 5, box);
         }
         box.setColor(0xCCFFFFFF);
         box.setStyle(Paint.Style.FILL);

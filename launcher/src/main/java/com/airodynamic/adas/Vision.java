@@ -19,7 +19,10 @@ public final class Vision {
 
     public interface Callback { void onResult(int slice); }
 
-    /** One thing the AI found, with a rough distance from where its bottom edge sits in the picture. */
+    /**
+     * One thing the AI found. Box as fractions (0..1) of the WHOLE camera picture, whatever part
+     * was shown, plus a rough distance from where its bottom edge sits.
+     */
     public static final class Obj {
         public float x1, y1, x2, y2, score, metres;
         public int cls;
@@ -31,7 +34,7 @@ public final class Vision {
         return instance;
     }
 
-    private static final long GAP_MS = 250;   // rest between checks so the head unit stays cool
+    private static final long GAP_MS = 100;   // short rest between checks so the head unit stays cool
     private final Context app;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Handler h;
@@ -60,15 +63,16 @@ public final class Vision {
     public void setCallback(Callback c) { cb = c; }
 
     /** Called on the camera thread for every frame; takes a copy only when the AI is free. */
-    public void offer(int[] argb, int w, int hh, int slice) {
+    public void offer(int[] argb, int w, int hh, int slice, float[] crop) {
         if (busy || error != null || SystemClock.uptimeMillis() < nextAt) return;
         busy = true;
         if (buf.length != argb.length) buf = new int[argb.length];
         System.arraycopy(argb, 0, buf, 0, argb.length);
-        h.post(() -> work(w, hh, slice));
+        final float[] cr = crop.clone();
+        h.post(() -> work(w, hh, slice, cr));
     }
 
-    private void work(int w, int hh, int slice) {
+    private void work(int w, int hh, int slice, float[] cr) {
         try {
             if (det == null) {
                 try { det = new Detector(app, true); }
@@ -76,15 +80,18 @@ public final class Vision {
                 mode = det.mode();
             }
             long t0 = SystemClock.uptimeMillis();
-            List<Detector.Det> raw = det.run(buf, w, hh, 0.35f);
+            List<Detector.Det> raw = det.run(buf, w, hh, 0.20f);   // fisheye pictures score low: a car on this camera scored 0.26
             long ms = SystemClock.uptimeMillis() - t0;
             avgMs = avgMs == 0 ? ms : avgMs * 0.8f + ms * 0.2f;
             List<Obj> out = new ArrayList<>();
             for (Detector.Det d : raw) {
                 if (!wanted(d.cls)) continue;
                 Obj o = new Obj();
-                o.x1 = d.x1; o.y1 = d.y1; o.x2 = d.x2; o.y2 = d.y2; o.score = d.score; o.cls = d.cls;
-                o.metres = metres(d.y2 / hh);
+                float cw = cr[2] - cr[0], ch = cr[3] - cr[1];
+                o.x1 = cr[0] + d.x1 / w * cw; o.x2 = cr[0] + d.x2 / w * cw;
+                o.y1 = cr[1] + d.y1 / hh * ch; o.y2 = cr[1] + d.y2 / hh * ch;
+                o.score = d.score; o.cls = d.cls;
+                o.metres = metres(o.y2);
                 out.add(o);
             }
             synchronized (lock) { results[slice] = out; at[slice] = SystemClock.uptimeMillis(); }

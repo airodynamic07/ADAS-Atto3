@@ -94,7 +94,7 @@ public final class RadarView extends View {
         p.setTextAlign(Paint.Align.CENTER);
         for (int s = 0; s < 4; s++) {
             for (Vision.Obj o : objs[s]) {
-                float xn = ((o.x1 + o.x2) / 2f) / CameraFeed.W - 0.5f;     // -0.5 .. 0.5
+                float xn = (o.x1 + o.x2) / 2f - 0.5f;     // -0.5 .. 0.5
                 float m = o.metres, along = xn * m * 2.2f;
                 float x, y;
                 if (s == CameraFeed.FRONT) { x = cx + along * ppm; y = cy - ch / 2 - m * ppm; }
