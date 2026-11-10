@@ -101,6 +101,8 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         // Ghost Race open: it fills the middle + right windows and the graph area (user, 2026-11-10);
         // the left window stays and gets the full height.
         boolean wide = engineHost().ghostOpen();
+        // Window order: Info left and ChatGPT/energy right by default (user, 2026-11-10); swappable in Settings.
+        int[] order = prefs.infoLeft() ? new int[]{2, 1, 0} : new int[]{0, 1, 2};
         for (int i = 0; i < 3; i++) {
             frames[i] = new LinearLayout(this);
             frames[i].setOrientation(LinearLayout.VERTICAL);
@@ -109,9 +111,13 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             bodies[i] = new FrameLayout(this);
             bodies[i].addView(panels[i].view(), new FrameLayout.LayoutParams(-1, -1));
             frames[i].addView(bodies[i], new LinearLayout.LayoutParams(-1, -1));
+        }
+        boolean first = true;
+        for (int i : order) {
+            if (wide && i == 2) continue;   // Info is hidden under Ghost Race
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, wide && i == 1 ? 2.03f : 1f);
-            if (i > 0) lp.leftMargin = Ui.dp(this, 10);
-            if (wide && i == 2) continue;   // hidden under Ghost Race
+            if (!first) lp.leftMargin = Ui.dp(this, 10);
+            first = false;
             row.addView(frames[i], lp);
         }
         engineHost().addGhostClose(th);

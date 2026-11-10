@@ -111,4 +111,8 @@ public final class Prefs {
     public void setAmbientOver(boolean on) { p.edit().putBoolean("ambOver", on).apply(); }
     public int ambientOverColour() { return p.getInt("ambOverCol", 1); }
     public void setAmbientOverColour(int v) { p.edit().putInt("ambOverCol", v).apply(); }
+
+    /** Info window on the left, ChatGPT/music/energy on the right (default since 2026-11-10). */
+    public boolean infoLeft() { return p.getBoolean("infoLeft", true); }
+    public void setInfoLeft(boolean v) { p.edit().putBoolean("infoLeft", v).apply(); }
 }

@@ -132,6 +132,7 @@ public final class SettingsDialog {
 
         section(c, root, th, "Launcher & windows");
         LinearLayout lw = row(c);
+        lw.addView(Ui.chip(c, "⇄ Swap left and right", false, th, v -> { prefs.setInfoLeft(!prefs.infoLeft()); redo.run(); }), weight(c));
         lw.addView(Ui.chip(c, "Choose home screen…", false, th, v -> {
             Intent i = new Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             try { c.startActivity(i); } catch (Exception e) {
