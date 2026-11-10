@@ -27,6 +27,11 @@ public final class CameraFeed {
     private static final String BMM_JAR = "/system/framework/bmmcamera.jar";
 
     public interface Listener { void onFrame(Bitmap b); void onError(String msg); }
+    /** Gets every converted frame on the camera thread (used by the AI, which copies it). */
+    public interface Sink { void onArgb(int[] argb, int w, int h, int slice); }
+    private volatile Sink sink;
+    public void setSink(Sink s) { sink = s; }
+    public int slice() { return slice; }
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private HandlerThread thread;
@@ -123,9 +128,12 @@ public final class CameraFeed {
         try {
             img = rd.acquireLatestImage();
             if (img == null || listener == null) return;
-            toArgb(img, slice * (STRIP_W / 4));
+            final int s = slice;
+            toArgb(img, s * (STRIP_W / 4));
             img.close();
             img = null;
+            Sink k = sink;
+            if (k != null) k.onArgb(argb, W, H, s);
             final Bitmap b = bmps[idx];
             idx ^= 1;
             b.setPixels(argb, 0, W, 0, 0, W, H);

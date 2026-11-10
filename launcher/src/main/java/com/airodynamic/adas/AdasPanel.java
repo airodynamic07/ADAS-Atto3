@@ -14,6 +14,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import java.util.List;
 import java.util.Locale;
 
 /** Left window: speed, battery, status, view buttons, the view, alert bar. Warnings only. */
@@ -39,6 +40,14 @@ public final class AdasPanel implements Panel {
     private boolean active, autoView;
     private int lastTurn;
     private final Paint guide = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint box = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Vision vision;
+    private CarData.State lastCar;
+    private String camError;
+    /** In Map view the AI looks at each camera in turn. */
+    private static final int[] ROUND = {CameraFeed.FRONT, CameraFeed.LEFT, CameraFeed.REAR, CameraFeed.RIGHT};
+    private int roundIdx;
+    private boolean reverse;
 
     public AdasPanel(Context c, Theme th, Prefs prefs, CameraFeed feed) {
         this.c = c;
@@ -95,7 +104,7 @@ public final class AdasPanel implements Panel {
         root.addView(content, clp);
         radar = new RadarView(c, th);
         camera = new ImageView(c);
-        camera.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        camera.setScaleType(ImageView.ScaleType.FIT_CENTER);   // whole picture, not a cropped middle
         note = Ui.text(c, "", 14, th.muted, false);
         note.setGravity(Gravity.CENTER);
         note.setPadding(pad, pad, pad, pad);
@@ -109,6 +118,11 @@ public final class AdasPanel implements Panel {
         root.addView(alert);
 
         guide.setStrokeWidth(3);
+        box.setStrokeWidth(4);
+        box.setTextSize(24);
+        vision = Vision.get(c);
+        vision.setCallback(this::onAi);
+        feed.setSink(vision::offer);
         showView(MAP, false);
     }
 
@@ -131,6 +145,7 @@ public final class AdasPanel implements Panel {
         camera.setVisibility(cam ? View.VISIBLE : View.GONE);
         note.setVisibility(v == TOP ? View.VISIBLE : View.GONE);
         if (v == TOP) note.setText("Top (bird's-eye) view arrives in Phase 2");
+        if (v == MAP) feed.setSlice(ROUND[roundIdx]);
         if (cam) {
             feed.setSlice(v == FRONT ? CameraFeed.FRONT : v == REAR ? CameraFeed.REAR : v == LEFT ? CameraFeed.LEFT : CameraFeed.RIGHT);
             camera.setImageBitmap(null);
@@ -139,14 +154,20 @@ public final class AdasPanel implements Panel {
     }
 
     private void updateCamera() {
-        boolean want = active && view >= FRONT;
+        // Map needs the cameras too, for the AI. In R we let go so the car's own reverse view always works.
+        boolean want = active && view != TOP && !reverse;
         if (want) {
             feed.start(new CameraFeed.Listener() {
                 @Override public void onFrame(Bitmap b) {
+                    camError = null;
+                    if (view < FRONT) return;
                     if (view == LEFT || view == RIGHT) drawGuides(b);
+                    drawBoxes(b, feed.slice());
                     camera.setImageBitmap(b);
                 }
                 @Override public void onError(String msg) {
+                    camError = msg;
+                    if (view < FRONT) { showStatus(); return; }
                     camera.setVisibility(View.GONE);
                     note.setVisibility(View.VISIBLE);
                     note.setText("Camera: " + msg + "\nClose OverDrive's live view or the 360 view.");
@@ -171,6 +192,83 @@ public final class AdasPanel implements Panel {
             cv.drawLine(w * 0.15f, y, w * 0.85f, y, guide);
             cv.drawText(lab[i], w * 0.86f, y + 8, guide);
         }
+    }
+
+    /** AI boxes from the latest result for this camera (up to 3 s old), with its age. */
+    private void drawBoxes(Bitmap b, int slice) {
+        long age = vision.age(slice);
+        List<Vision.Obj> list = vision.objects(slice, 3000);
+        if (list.isEmpty()) return;
+        Canvas cv = new Canvas(b);
+        for (Vision.Obj o : list) {
+            int col = Vision.color(o.cls);
+            box.setColor(col);
+            box.setStyle(Paint.Style.STROKE);
+            cv.drawRect(o.x1, o.y1, o.x2, o.y2, box);
+            String t = String.format(Locale.US, "%s ~%.0f m", Vision.label(o.cls), o.metres);
+            float tw = box.measureText(t);
+            float ty = Math.max(26, o.y1);
+            box.setStyle(Paint.Style.FILL);
+            cv.drawRect(o.x1, ty - 26, o.x1 + tw + 10, ty, box);
+            box.setColor(0xFF000000);
+            cv.drawText(t, o.x1 + 5, ty - 5, box);
+        }
+        box.setColor(0xCCFFFFFF);
+        box.setStyle(Paint.Style.FILL);
+        cv.drawText(String.format(Locale.US, "AI %.1f s ago", age / 1000f), 10, b.getHeight() - 12, box);
+    }
+
+    /** A new AI result arrived (main thread). */
+    private void onAi(int slice) {
+        radar.setObjects(slice, vision.objects(slice, 6000));
+        for (int s = 0; s < 4; s++) if (s != slice) radar.setObjects(s, vision.objects(s, 6000));
+        if (view == MAP) {
+            roundIdx = (roundIdx + 1) % ROUND.length;
+            feed.setSlice(ROUND[roundIdx]);
+        }
+        showStatus();
+        updateAlert();
+    }
+
+    private void showStatus() {
+        CarData.State s = lastCar;
+        String st = s == null ? "● Waiting for car data…"
+                : s.turn == 1 ? "◀ Left signal · auto view" : s.turn == 2 ? "Right signal ▶ · auto view"
+                : s.known ? "● Around you · gear " + s.gearName() : "● Waiting for car data…";
+        if (reverse) st += " · cameras left to the car's reverse view";
+        else if (camError != null) st += " · camera: " + camError;
+        else if (active && view != TOP) st += " · " + vision.status();
+        status.setText(st);
+    }
+
+    /**
+     * Alert bar (warning only): parking radar first; otherwise a person, bicycle or motorbike
+     * the AI saw close on the left, right or behind. Red if you are signalling toward it.
+     */
+    private void updateAlert() {
+        CarData.State s = lastCar;
+        int min = 999;
+        if (s != null) for (int v : s.radar) if (v > 0 && v < min) min = v;
+        if (min < 80) {
+            alert.setVisibility(View.VISIBLE);
+            alert.setText(String.format(Locale.US, "⚠  Obstacle %d cm", min));
+            alert.setBackground(Ui.round(min < 40 ? Theme.DANGER : Theme.CAUTION, 0, 14, c));
+            return;
+        }
+        Vision.Obj best = null;
+        int bestSide = -1;
+        for (int side : new int[]{CameraFeed.LEFT, CameraFeed.RIGHT, CameraFeed.REAR}) {
+            for (Vision.Obj o : vision.objects(side, 4000)) {
+                if (!Vision.vulnerable(o.cls) || o.metres > 4f) continue;
+                if (best == null || o.metres < best.metres) { best = o; bestSide = side; }
+            }
+        }
+        if (best == null) { alert.setVisibility(View.GONE); return; }
+        boolean toward = s != null && ((s.turn == 1 && bestSide == CameraFeed.LEFT) || (s.turn == 2 && bestSide == CameraFeed.RIGHT));
+        String where = bestSide == CameraFeed.LEFT ? "left" : bestSide == CameraFeed.RIGHT ? "right" : "behind";
+        alert.setVisibility(View.VISIBLE);
+        alert.setText(String.format(Locale.US, "⚠  %s · %s · ~%.0f m", Vision.label(best.cls), where, best.metres));
+        alert.setBackground(Ui.round(toward ? Theme.DANGER : Theme.CAUTION, 0, 14, c));
     }
 
     @Override public View view() { return root; }
@@ -200,20 +298,10 @@ public final class AdasPanel implements Panel {
             }
         }
         lastTurn = s.turn;
-
-        String st = s.turn == 1 ? "◀ Left signal · auto view" : s.turn == 2 ? "Right signal ▶ · auto view"
-                : s.known ? "● Around you · gear " + s.gearName() : "● Waiting for car data…";
-        status.setText(st);
-
-        // Alert bar: nearest radar reading
-        int min = 999;
-        for (int v : s.radar) if (v > 0 && v < min) min = v;
-        if (min < 80) {
-            alert.setVisibility(View.VISIBLE);
-            alert.setText(String.format(Locale.US, "⚠  Obstacle %d cm", min));
-            alert.setBackground(Ui.round(min < 40 ? Theme.DANGER : Theme.CAUTION, 0, 14, c));
-        } else {
-            alert.setVisibility(View.GONE);
-        }
+        lastCar = s;
+        boolean r = s.gear == 2;
+        if (r != reverse) { reverse = r; updateCamera(); }
+        showStatus();
+        updateAlert();
     }
 }

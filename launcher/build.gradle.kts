@@ -37,6 +37,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+    androidResources {
+        noCompress += "tflite"   // the AI model is memory-mapped, so it must not be compressed
+    }
     lint {
         abortOnError = false
         checkReleaseBuilds = false
@@ -47,6 +50,10 @@ android {
 }
 
 dependencies {
+    // On-device AI (Apache 2.0)
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.16.1")
     // Self-update through the car's own ADB (Apache 2.0)
     implementation("dev.mobile:dadb:1.2.8") {
         exclude(group = "org.junit.platform")
