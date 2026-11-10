@@ -48,8 +48,25 @@ public final class Ambient implements CarData.Listener {
     private volatile boolean overLimit;
     private volatile int before = -1;   // the colour before the over-limit warning, put back afterwards
 
+    private long lastBlink;
+
     /**
-     * Over my speed limit (from SpeedAlert): blink the over-limit colour for 5 s (again on each
+     * Same speed as the screen turning red (Auto Sport speed, user's choice 2026-11-10):
+     * above it, blink; 10 km/h below it, back to normal. Works whether Auto Sport is on or off.
+     */
+    private void checkSpeed(CarData.State s) {
+        if (Double.isNaN(s.speedKmh)) return;
+        int k = prefs.autoSportKmh();
+        long now = System.currentTimeMillis();
+        if (s.speedKmh > k) {
+            if (!overLimit || now - lastBlink >= 20_000) { lastBlink = now; speedOver(true); }
+        } else if (s.speedKmh < k - 10 && overLimit) {
+            speedOver(false);
+        }
+    }
+
+    /**
+     * Over the red-screen speed: blink the over-limit colour for 5 s (again on each
      * repeat while still over), then hold it; back under: put the earlier colour back.
      */
     public void speedOver(boolean over) {
@@ -79,6 +96,7 @@ public final class Ambient implements CarData.Listener {
     }
 
     @Override public void onCar(CarData.State s) {
+        checkSpeed(s);
         int g = slot(s.gear);
         if (g < 0 || g == lastGear) return;
         boolean first = lastGear < 0;

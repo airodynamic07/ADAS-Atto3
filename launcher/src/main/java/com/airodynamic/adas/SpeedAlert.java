@@ -7,8 +7,8 @@ import android.media.AudioTrack;
 
 /**
  * My speed limit (the user's own limit, not the road's): warning only.
- * Over the limit for 2 s: two beeps (if 🔊 is on) and the ambient light blinks (if switched on),
- * again every 20 s while still over;
+ * Over the limit for 2 s: two beeps (if 🔊 is on), again every 20 s while still over;
+ * (the ambient light blink follows the screen's red Auto Sport speed instead, see Ambient);
  * clears when 3 km/h below. The Info card turns red while over (InfoPanel reads over()).
  * The car has no voice engine, so beeps for now; recorded voice clips can come later.
  */
@@ -42,11 +42,9 @@ public final class SpeedAlert implements CarData.Listener {
                 if (now - lastBeep >= 20_000) {
                     lastBeep = now;
                     if (prefs.speedVoice()) beep();
-                    Ambient.get(c).speedOver(true);   // blink the ambient light (if switched on)
                 }
             }
         } else if (s.speedKmh < lim - 3) {
-            if (over) Ambient.get(c).speedOver(false);
             over = false;
             overSince = 0;
             lastBeep = 0;

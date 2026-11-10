@@ -106,7 +106,7 @@ public final class Prefs {
         p.edit().putString("shortcuts", b.toString()).apply();
     }
 
-    /** Ambient light when over my speed limit: on/off (off until switched on), colour. Blinks. */
+    /** Ambient light above the red-screen (Auto Sport) speed: on/off (off until switched on), colour. Blinks. */
     public boolean ambientOver() { return p.getBoolean("ambOver", false); }
     public void setAmbientOver(boolean on) { p.edit().putBoolean("ambOver", on).apply(); }
     public int ambientOverColour() { return p.getInt("ambOverCol", 1); }

@@ -105,7 +105,7 @@ public final class SettingsDialog {
             root.addView(gr);
         }
 
-        section(c, root, th, "Ambient light when over my speed limit (" + prefs.speedLimit() + " km/h): "
+        section(c, root, th, "Ambient light when the screen turns red (above " + prefs.autoSportKmh() + " km/h): "
                 + (prefs.ambientOver() ? "on" : "off") + " · blinks, then holds the colour");
         LinearLayout ao = row(c);
         ao.setGravity(android.view.Gravity.CENTER_VERTICAL);
