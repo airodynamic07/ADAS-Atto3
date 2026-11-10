@@ -105,6 +105,18 @@ public final class SettingsDialog {
             root.addView(gr);
         }
 
+        section(c, root, th, "Ambient light when over my speed limit (" + prefs.speedLimit() + " km/h): "
+                + (prefs.ambientOver() ? "on" : "off") + " · blinks, then holds the colour");
+        LinearLayout ao = row(c);
+        ao.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        ao.addView(Ui.chip(c, prefs.ambientOver() ? "On" : "Off", prefs.ambientOver(), th, v -> { prefs.setAmbientOver(!prefs.ambientOver()); redo.run(); }),
+                new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
+        ao.addView(colourBar(c, th, prefs.ambientOverColour(), v -> { prefs.setAmbientOverColour(v); Ambient.get(c).apply(v, 0); }),
+                new LinearLayout.LayoutParams(0, Ui.dp(c, 48), 1f));
+        ao.addView(Ui.chip(c, "Try", false, th, v -> Ambient.get(c).apply(prefs.ambientOverColour(), 2)),
+                new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
+        root.addView(ao);
+
         section(c, root, th, "Left / Right camera picture");
         LinearLayout sc = row(c);
         sc.addView(Ui.chip(c, "Close-up of the side", prefs.sideCloseUp(), th, v -> { prefs.setSideCloseUp(true); redo.run(); }), weight(c));
@@ -142,6 +154,29 @@ public final class SettingsDialog {
         root.addView(up);
 
         dlg[0] = new AlertDialog.Builder(c).setTitle("Settings").setView(sv).setPositiveButton("Close", null).show();
+    }
+
+    public interface IntPick { void on(int v); }
+
+    /** Colour bar 1–31 painted as a spectrum; calls back while sliding. */
+    private static android.widget.SeekBar colourBar(Context c, Theme th, int value, IntPick pick) {
+        android.widget.SeekBar bar = new android.widget.SeekBar(c);
+        bar.setMax(30);
+        bar.setProgress(value - 1);
+        int[] hues = new int[31];
+        for (int k = 0; k < 31; k++) hues[k] = android.graphics.Color.HSVToColor(new float[]{k * 330f / 30f, 0.9f, 1f});
+        android.graphics.drawable.GradientDrawable spec = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, hues);
+        spec.setCornerRadius(Ui.dp(c, 6));
+        bar.setProgressDrawable(spec);
+        bar.setPadding(Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14));
+        bar.setThumbTintList(android.content.res.ColorStateList.valueOf(0xFFFFFFFF));
+        bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar sb, int pr, boolean user) { if (user) pick.on(pr + 1); }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar sb) {}
+            @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {}
+        });
+        return bar;
     }
 
     private static void section(Context c, LinearLayout root, Theme th, String s) {

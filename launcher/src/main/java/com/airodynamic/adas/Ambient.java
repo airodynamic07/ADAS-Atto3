@@ -45,12 +45,45 @@ public final class Ambient implements CarData.Listener {
         switch (gear) { case 0: case 1: return 0; case 2: return 1; case 3: return 2; case 4: return 3; default: return -1; }
     }
 
+    private volatile boolean overLimit;
+    private volatile int before = -1;   // the colour before the over-limit warning, put back afterwards
+
+    /**
+     * Over my speed limit (from SpeedAlert): blink the over-limit colour for 5 s (again on each
+     * repeat while still over), then hold it; back under: put the earlier colour back.
+     */
+    public void speedOver(boolean over) {
+        if (!prefs.ambientOver()) { if (!over && overLimit) restore(); overLimit = false; return; }
+        if (over) {
+            if (!overLimit) {
+                overLimit = true;
+                h.post(() -> {   // remember the colour first, then blink
+                    Object v = CarData.get(c).ambient("getIALColor", 1);
+                    if (v instanceof Number && before < 0) before = ((Number) v).intValue();
+                    apply(prefs.ambientOverColour(), 2);
+                });
+            } else {
+                apply(prefs.ambientOverColour(), 2);
+            }
+        } else if (overLimit) {
+            overLimit = false;
+            restore();
+        }
+    }
+
+    private void restore() {
+        int g = lastGear;
+        int col = prefs.ambientGear() && g >= 0 ? prefs.ambientColour(g) : before;
+        before = -1;
+        if (col > 0) apply(col, 0);
+    }
+
     @Override public void onCar(CarData.State s) {
         int g = slot(s.gear);
         if (g < 0 || g == lastGear) return;
         boolean first = lastGear < 0;
         lastGear = g;
-        if (first || !prefs.ambientGear()) return;   // only on a real gear change, never at start-up
+        if (first || !prefs.ambientGear() || overLimit) return;   // only on a real gear change, never at start-up
         apply(prefs.ambientColour(g), prefs.ambientStyle());
     }
 
