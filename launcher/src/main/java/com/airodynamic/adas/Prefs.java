@@ -68,4 +68,15 @@ public final class Prefs {
         return p.getString("win" + win + ".slot" + i, def);
     }
     public void setSlot(int win, int i, String v) { p.edit().putString("win" + win + ".slot" + i, v).apply(); }
+
+    // Ambient light by gear (off until switched on). Colour numbers are the car's own (unknown palette: try them).
+    public static final String[] GEARS = {"P", "R", "N", "D"};
+    private static final int[] GEAR_COLOUR = {10, 1, 20, 25};
+    public boolean ambientGear() { return p.getBoolean("ambGear", false); }
+    public void setAmbientGear(boolean on) { p.edit().putBoolean("ambGear", on).apply(); }
+    public int ambientColour(int g) { return p.getInt("ambCol" + GEARS[g], GEAR_COLOUR[g]); }
+    public void setAmbientColour(int g, int v) { p.edit().putInt("ambCol" + GEARS[g], v).apply(); }
+    /** 0 Solid, 1 Breathe, 2 Flash */
+    public int ambientStyle() { return p.getInt("ambStyle", 0); }
+    public void setAmbientStyle(int v) { p.edit().putInt("ambStyle", v).apply(); }
 }

@@ -47,6 +47,27 @@ public final class SettingsDialog {
         tc.addView(Ui.chip(c, "+ 1 s", false, th, v -> { prefs.setTurnCameraReturnSec(Math.min(15, prefs.turnCameraReturnSec() + 1)); redo.run(); }), weight(c));
         root.addView(tc);
 
+        section(c, root, th, "Ambient light by gear: " + (prefs.ambientGear() ? "on" : "off")
+                + " · style " + Ambient.STYLES[prefs.ambientStyle()]);
+        LinearLayout am = row(c);
+        am.addView(Ui.chip(c, prefs.ambientGear() ? "On" : "Off", prefs.ambientGear(), th, v -> { prefs.setAmbientGear(!prefs.ambientGear()); redo.run(); }), weight(c));
+        for (int i = 0; i < Ambient.STYLES.length; i++) {
+            final int st = i;
+            am.addView(Ui.chip(c, Ambient.STYLES[i], prefs.ambientStyle() == i, th, v -> { prefs.setAmbientStyle(st); redo.run(); }), weight(c));
+        }
+        root.addView(am);
+        root.addView(Ui.text(c, "The car numbers its colours (1–31?). Use − / + and Try to see each one on the car's light.", 12, th.muted, false));
+        for (int g = 0; g < Prefs.GEARS.length; g++) {
+            final int gg = g;
+            LinearLayout gr = row(c);
+            gr.setPadding(0, Ui.dp(c, 4), 0, 0);
+            gr.addView(Ui.text(c, Prefs.GEARS[g] + "  colour " + prefs.ambientColour(g), 15, th.text, true), weight(c));
+            gr.addView(Ui.chip(c, "−", false, th, v -> { prefs.setAmbientColour(gg, Math.max(1, prefs.ambientColour(gg) - 1)); Ambient.get(c).apply(prefs.ambientColour(gg), 0); redo.run(); }), weight(c));
+            gr.addView(Ui.chip(c, "+", false, th, v -> { prefs.setAmbientColour(gg, Math.min(31, prefs.ambientColour(gg) + 1)); Ambient.get(c).apply(prefs.ambientColour(gg), 0); redo.run(); }), weight(c));
+            gr.addView(Ui.chip(c, "Try", false, th, v -> Ambient.get(c).apply(prefs.ambientColour(gg), prefs.ambientStyle())), weight(c));
+            root.addView(gr);
+        }
+
         section(c, root, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
         for (String[] u : new String[][]{{"psi", "PSI"}, {"bar", "bar"}, {"kpa", "kPa"}}) {

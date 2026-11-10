@@ -50,6 +50,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Ambient.get(this);   // ambient light by gear, keeps working while other apps are open
         prefs = new Prefs(this);
         for (int i = 0; i < 3; i++) showing[i] = prefs.defaultPanel(i);
         registerReceiver(themeRequest, new IntentFilter(ACTION_THEME_REQUEST));

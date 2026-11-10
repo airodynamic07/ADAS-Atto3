@@ -116,6 +116,15 @@ public final class CarData {
         try { Class.forName(P + "speed.BYDAutoSpeedDevice"); return true; } catch (Throwable t) { return false; }
     }
 
+    /**
+     * Interior ambient light (IAL) only: the one thing the launcher may change on the car.
+     * Anything else is refused here. Not a driving system (hard rule 1).
+     */
+    public Object ambient(String method, int v) {
+        if (!method.matches("(get|set)IAL(Color|Brightness)")) return null;
+        return call("setting.BYDAutoSettingDevice", method, v);
+    }
+
     private Object call(String cls, String name, Object... args) {
         Object d = dev(cls);
         if (d == null) return null;
