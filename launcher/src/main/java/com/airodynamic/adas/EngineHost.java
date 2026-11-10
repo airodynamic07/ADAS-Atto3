@@ -182,6 +182,19 @@ public final class EngineHost {
 
     private static String q(String s) { return JSONObject.quote(s); }
 
+    /** Ghost Race's map (MapLibre) needs WebGL2: report what this WebView has if the map can't start. */
+    private void checkGhostBrowser(WebView v) {
+        v.evaluateJavascript("(function(){var c=document.createElement('canvas');"
+                + "var g2=!!c.getContext('webgl2'),g1=!!(c.getContext('webgl')||c.getContext('experimental-webgl'));"
+                + "var m=navigator.userAgent.match(/Chrome\\/(\\d+)/);return (g2?'1':'0')+(g1?'1':'0')+' '+(m?m[1]:'?');})()",
+                r -> {
+                    String t = r == null ? "" : r.replace("\"", "");
+                    if (!t.startsWith("1")) showDiag("Ghost Race map: WebGL2 " + (t.startsWith("0") ? "missing" : "?")
+                            + ", WebGL1 " + (t.length() > 1 && t.charAt(1) == '1' ? "yes" : "no")
+                            + ", Chrome " + (t.indexOf(' ') > 0 ? t.substring(t.indexOf(' ') + 1) : "?"));
+                });
+    }
+
     private void showDiag(String s) {
         main.post(() -> {
             String wv = "?";
@@ -279,7 +292,7 @@ public final class EngineHost {
                 @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                     return !GHOST_HOST.equals(r.getUrl().getHost());
                 }
-                @Override public void onPageFinished(WebView v, String url) { applyTheme(); }
+                @Override public void onPageFinished(WebView v, String url) { applyTheme(); checkGhostBrowser(v); }
                 @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
                     if (r.isForMainFrame()) showDiag("Ghost Race didn't load: " + e.getDescription() + " (internet?)");
                 }
@@ -312,8 +325,10 @@ public final class EngineHost {
         @JavascriptInterface public void connectObd() { ghostCar = true; startCarPoll(); }
     }
 
+    private int ghostFixes;
     private final LocationListener gps = new LocationListener() {
         @Override public void onLocationChanged(Location l) {
+            ghostFixes++;
             if (!ghostGps) return;
             try {
                 JSONObject o = new JSONObject().put("epochMs", l.getTime()).put("lat", l.getLatitude()).put("lng", l.getLongitude())
@@ -335,6 +350,9 @@ public final class EngineHost {
         try {
             LocationManager lm = (LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
             lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, gps, Looper.getMainLooper());
+            try { lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 2000, 0, gps, Looper.getMainLooper()); } catch (Throwable ignored) {}
+            main.postDelayed(() -> { if (ghostGps && Places.gpsReport(ctx).contains(" 0 fixes") && ghostFixes == 0)
+                showDiag("Ghost Race: no GPS from the car after 60 s · " + Places.gpsReport(ctx)); }, 60_000L);
         } catch (Throwable t) {
             js(ghost, "window.__attoGeoError && window.__attoGeoError('unavailable')");
         }

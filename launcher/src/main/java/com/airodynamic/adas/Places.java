@@ -40,6 +40,25 @@ public final class Places {
     }
 
     private static boolean asked;
+    private static volatile int fixes;
+    private static volatile String lastProvider = "", askError = "";
+
+    /** Short GPS report for the weather card while it waits: providers on/off, fixes received. */
+    public static String gpsReport(Context c) {
+        StringBuilder b = new StringBuilder();
+        try {
+            LocationManager lm = (LocationManager) c.getSystemService(Context.LOCATION_SERVICE);
+            for (String p : lm.getAllProviders()) {
+                if (LocationManager.PASSIVE_PROVIDER.equals(p)) continue;
+                b.append(p).append(lm.isProviderEnabled(p) ? " on, " : " OFF, ");
+            }
+            int mode = android.provider.Settings.Secure.getInt(c.getContentResolver(), android.provider.Settings.Secure.LOCATION_MODE, -1);
+            b.append("mode ").append(mode).append(", ");
+        } catch (Throwable t) { b.append(t.getClass().getSimpleName()).append(", "); }
+        b.append(fixes).append(" fixes");
+        if (!askError.isEmpty()) b.append(", ").append(askError);
+        return b.toString();
+    }
 
     /** Ask the car for location updates (GPS and network) so "last known" is never empty. Once. */
     @SuppressLint("MissingPermission")
@@ -49,14 +68,15 @@ public final class Places {
         try {
             LocationManager lm = (LocationManager) c.getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
             android.location.LocationListener ll = new android.location.LocationListener() {
-                @Override public void onLocationChanged(Location l) {}
+                @Override public void onLocationChanged(Location l) { fixes++; lastProvider = l.getProvider(); }
                 @Override public void onStatusChanged(String p, int s, android.os.Bundle b) {}
                 @Override public void onProviderEnabled(String p) {}
                 @Override public void onProviderDisabled(String p) {}
             };
             for (String p : lm.getAllProviders()) {
                 if (LocationManager.PASSIVE_PROVIDER.equals(p)) continue;
-                try { lm.requestLocationUpdates(p, 60_000L, 50f, ll, Looper.getMainLooper()); } catch (Throwable ignored) {}
+                try { lm.requestLocationUpdates(p, 60_000L, 50f, ll, Looper.getMainLooper()); }
+                catch (Throwable t) { askError = p + ": " + t.getClass().getSimpleName(); }
             }
         } catch (Throwable ignored) {}
     }
@@ -94,7 +114,7 @@ public final class Places {
                 l0.setLongitude(pr.parkedLng());
             }
         }
-        if (l0 == null) { Weather w = new Weather(); w.note = "waiting for GPS…"; l.onWeather(w); return; }
+        if (l0 == null) { Weather w = new Weather(); w.note = "waiting for GPS · " + gpsReport(c); l.onWeather(w); return; }
         final Location loc = l0;
         failedAt = System.currentTimeMillis();   // one try at a time; cleared on success
         final Handler main = new Handler(Looper.getMainLooper());
