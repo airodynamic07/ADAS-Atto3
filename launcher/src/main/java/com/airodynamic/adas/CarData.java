@@ -39,6 +39,9 @@ public final class CarData {
         public boolean sunroofOpen;
         public int lock;                        // 0 unknown, 1 locked, 2 unlocked
         public double lat = Double.NaN, lng = Double.NaN;
+        public double powerKw = Double.NaN;     // motor power: + driving, - regen
+        public double remainKwh = Double.NaN;   // energy left in the battery
+        public long at;                         // when this snapshot was read (ms)
 
         public boolean anyOpen() {
             for (boolean d : doorOpen) if (d) return true;
@@ -177,6 +180,30 @@ public final class CarData {
         try { return r.getClass().getField("intValue").getInt(r); } catch (Throwable t) { return null; }
     }
 
+    /** Motor power in kW (OverDrive's reads): getter first, then the feature id as a double. -1 means "no value". */
+    private double power() {
+        Object o = call("engine.BYDAutoEngineDevice", "getEnginePower");
+        if (o instanceof Number) {
+            double kw = ((Number) o).doubleValue();
+            if (kw >= -200 && kw <= 400 && kw != -1) return kw;
+        }
+        Object d = dev("engine.BYDAutoEngineDevice");
+        if (d == null) return Double.NaN;
+        for (Class<?> k = d.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+            try {
+                Method m = k.getDeclaredMethod("get", int[].class, Class.class);
+                m.setAccessible(true);
+                Object r = m.invoke(d, new int[]{339738656}, double.class);   // ENGINE_POWER
+                if (r == null) return Double.NaN;
+                double raw = r instanceof Number ? ((Number) r).doubleValue() : r.getClass().getField("doubleValue").getDouble(r);
+                double kw = raw > 100 ? raw * 0.1 : raw;
+                return raw >= -200 && raw <= 4000 && kw != -1 ? kw : Double.NaN;
+            } catch (NoSuchMethodException ignored) {
+            } catch (Throwable t) { return Double.NaN; }
+        }
+        return Double.NaN;
+    }
+
     private double health = Double.NaN;
     private long healthAt;
 
@@ -235,6 +262,10 @@ public final class CarData {
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getAverageElectricConsumption", 1)) && ((Number) v).doubleValue() > 0)
             s.kwhPer100 = ((Number) v).doubleValue();
         s.healthPct = batteryHealth();
+        s.powerKw = power();
+        if (ok(v = call("statistic.BYDAutoStatisticDevice", "getRemainingBatteryPower")) && ((Number) v).intValue() > 10 && ((Number) v).intValue() < 1200)
+            s.remainKwh = ((Number) v).intValue() / 10.0;   // 0.1 kWh units
+        s.at = System.currentTimeMillis();
         for (int a = 1; a <= 5; a++) {
             if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getDoorState", a))) s.doorOpen[a] = ((Number) v).intValue() == 1;
         }
