@@ -24,27 +24,30 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build probe APK
+      - name: Build APKs (probe + launcher)
         run: |
           chmod +x gradlew
-          ./gradlew :probe:assembleRelease --no-daemon
+          ./gradlew :probe:assembleRelease :launcher:assembleRelease --no-daemon
           mkdir -p out
           cp probe/build/outputs/apk/release/probe-release.apk out/adas-probe.apk
+          cp launcher/build/outputs/apk/release/launcher-release.apk out/adas-launcher.apk
           ls -la out
 
       - name: Upload APK (Actions artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: adas-probe-${{ github.run_number }}
-          path: out/adas-probe.apk
+          name: adas-apks-${{ github.run_number }}
+          path: out/*.apk
 
       - name: Publish as GitHub Release (easy download on your phone)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: probe-${{ github.run_number }}
-          name: ADAS Probe build ${{ github.run_number }}
+          name: ADAS build ${{ github.run_number }}
           make_latest: true
-          files: out/adas-probe.apk
+          files: |
+            out/adas-probe.apk
+            out/adas-launcher.apk
           body: |
-            Phase 0 probe app, build ${{ github.run_number }} (commit ${{ github.sha }}).
-            Install: adb install -r adas-probe.apk
+            Build ${{ github.run_number }} (commit ${{ github.sha }}).
+            adas-launcher.apk = the ADAS home screen. adas-probe.apk = the test tool.

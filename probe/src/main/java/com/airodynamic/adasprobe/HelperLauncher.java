@@ -91,6 +91,22 @@ public final class HelperLauncher {
         }
     }
 
+    /** Installs another APK (the launcher) through the car's ADB; this app keeps running. */
+    public static boolean installOther(Context ctx, File apk, Report r) {
+        if (!portOpen("127.0.0.1", 5555, 3000)) {
+            r.fail("install", "the car's ADB port 5555 is closed — install the file from the USB stick instead");
+            return false;
+        }
+        try (Dadb dadb = Dadb.create("127.0.0.1", 5555, keys(ctx), 5000, 120000)) {
+            r.info("Installing...");
+            dadb.install(apk, "-r");
+            return true;
+        } catch (Throwable t) {
+            r.error("install", t);
+            return false;
+        }
+    }
+
     public static String run(Context ctx, String task, int timeoutSec, Report r) throws Exception {
         r.info("Checking the car's ADB port 5555 ...");
         boolean p5555 = portOpen("127.0.0.1", 5555, 3000);

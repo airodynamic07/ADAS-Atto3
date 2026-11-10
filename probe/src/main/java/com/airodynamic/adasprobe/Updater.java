@@ -32,6 +32,43 @@ public final class Updater {
         return c;
     }
 
+    /** Downloads the newest adas-launcher.apk and installs it through the car's ADB. */
+    public static void installLauncher(Context ctx, Report r) throws Exception {
+        r.info("Looking for the ADAS Launcher on GitHub...");
+        HttpURLConnection c = open(LATEST);
+        String json;
+        try (InputStream in = c.getInputStream()) {
+            java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) b.write(buf, 0, n);
+            json = b.toString("UTF-8");
+        } catch (Exception e) {
+            r.fail("internet", "cannot reach GitHub. Connect the car to Wi-Fi (e.g. your phone's hotspot).");
+            return;
+        }
+        JSONArray assets = new JSONObject(json).getJSONArray("assets");
+        String url = null;
+        for (int i = 0; i < assets.length(); i++) {
+            JSONObject a = assets.getJSONObject(i);
+            if (a.getString("name").equals("adas-launcher.apk")) url = a.getString("browser_download_url");
+        }
+        if (url == null) { r.fail("launcher", "not in the newest release yet"); return; }
+        File apk = new File(ctx.getExternalFilesDir(null), "adas-launcher.apk");
+        HttpURLConnection d = open(url);
+        d.setRequestProperty("Accept", "application/octet-stream");
+        try (InputStream in = d.getInputStream(); FileOutputStream out = new FileOutputStream(apk)) {
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        }
+        apk.setReadable(true, false);
+        r.ok("downloaded", (apk.length() / 1024) + " KB");
+        if (HelperLauncher.installOther(ctx, apk, r)) {
+            r.ok("ADAS Launcher", "installed. Press the car's Home button and choose ADAS Launcher, or open it from the app list.");
+        }
+    }
+
     public static void update(Context ctx, Report r) throws Exception {
         PackageInfo pi = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
         int mine = pi.versionCode;
@@ -63,7 +100,7 @@ public final class Updater {
         JSONArray assets = rel.getJSONArray("assets");
         for (int i = 0; i < assets.length(); i++) {
             JSONObject a = assets.getJSONObject(i);
-            if (a.getString("name").endsWith(".apk")) url = a.getString("browser_download_url");
+            if (a.getString("name").equals("adas-probe.apk")) url = a.getString("browser_download_url");
         }
         if (url == null) {
             r.fail("update", "no APK in the newest release");

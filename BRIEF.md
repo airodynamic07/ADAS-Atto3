@@ -65,11 +65,7 @@ Source: https://github.com/yash-srivastava/Overdrive-release
 - **Right (Info), top to bottom:**
   - the window bar
   - a **Gemini card**: last reply, **Ask** (voice) and **⤢ Open** (full chat in the middle window)
-  - a **Climate** panel:
-    - On, A/C, Auto, Recirc, Purify
-    - temperature − / +
-    - fan − / +
-    - air direction: Face, Both, Feet, Feet+Wind, Defrost, Rear
+  - ~~a Climate panel~~ — **removed (user's choice, 2026-11-10):** the car's own bottom bar already controls the A/C.
   - a bottom row of equal width:
     - **tyre pressures** (car outline, low tyre in amber)
     - **outside and inside temperature cards**, each with its own PM2.5 reading
@@ -78,6 +74,11 @@ Source: https://github.com/yash-srivastava/Overdrive-release
   - Colours: teal `#3DD9C1` safe, amber `#FFB020` caution, red `#FF4D3D` danger, grey other traffic, purple `#B8A4FF` person. Blue theme accent `#4DA3FF` on `#05080F`.
 - **Turn signal:** the ADAS window auto-switches to the left or right rear camera, with 3 / 6 / 10 m guide lines, then returns to Map a set time after the signal turns off.
 - **Google Maps:** the real Maps app, following the system dark/light mode. Its own colours can't be themed.
+
+## Decisions after Phase 0 (2026-11-10)
+- **Other apps can't be shown inside a window on this car** (freeform off; GBox opens full screen). They open full screen; the Home button returns to the launcher. Video apps open only in P.
+- **Middle window = Engine Sound**, opened full screen from its card. The launcher sends its theme to Engine Sound, which switches colours with it (incl. Auto Sport).
+- **Assistant card:** Gemini Pro / Claude Max subscriptions can't be used by other apps. Phase 5 choice: open the Claude/Gemini app, or use an API key (billed per use).
 
 ## Settings (left menu, one page per section)
 1. **Driving & alerts:**

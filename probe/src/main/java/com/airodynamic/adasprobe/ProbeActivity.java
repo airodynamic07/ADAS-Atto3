@@ -80,6 +80,9 @@ public class ProbeActivity extends Activity {
         r2.setTypeface(Typeface.DEFAULT_BOLD);
         Button r2b = button(left, "▶  ROUND 2 — after restart", v -> runTask("answers3", this::round2AfterRestart));
         r2b.setTextColor(ACCENT);
+        Button inst = button(left, "⬇  Install / update ADAS Launcher", v -> runTask("app_install_launcher", rep -> Updater.installLauncher(this, rep)));
+        inst.setTextColor(ACCENT);
+        inst.setTypeface(Typeface.DEFAULT_BOLD);
         button(left, "⟳  Update app from internet", v -> runTask("app_update", rep -> Updater.update(this, rep)));
         Button stop = button(left, "■  Stop current test", v -> stopTask());
         stop.setTextColor(AMBER);
