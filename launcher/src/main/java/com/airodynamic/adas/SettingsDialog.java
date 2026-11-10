@@ -58,6 +58,14 @@ public final class SettingsDialog {
         root.addView(am);
         root.addView(Ui.text(c, "The car numbers its colours (1–31?). Slide a bar: the light follows. Try plays the gear's colour with the style.\nLast: "
                 + Ambient.get(c).report, 12, th.muted, false));
+        // Live: which colour number the car has now. Pick a colour in BYD's own ambient menu,
+        // then open this to see its number (so the bar can be matched to BYD's colours).
+        final TextView now = Ui.text(c, "Car's colour now: …", 13, th.text, true);
+        root.addView(now);
+        new Thread(() -> {
+            Object v = CarData.get(c).ambient("getIALColor", 1);
+            now.post(() -> now.setText("Car's colour now: " + v));
+        }).start();
         for (int g = 0; g < Prefs.GEARS.length; g++) {
             final int gg = g;
             LinearLayout gr = row(c);
@@ -69,8 +77,15 @@ public final class SettingsDialog {
             android.widget.SeekBar bar = new android.widget.SeekBar(c);
             bar.setMax(30);
             bar.setProgress(prefs.ambientColour(g) - 1);
-            bar.setProgressTintList(android.content.res.ColorStateList.valueOf(th.accent));
-            bar.setThumbTintList(android.content.res.ColorStateList.valueOf(th.accent));
+            // Colour spectrum like BYD's own ambient light screen (order is a guess until matched on the car)
+            int[] hues = new int[31];
+            for (int k = 0; k < 31; k++) hues[k] = android.graphics.Color.HSVToColor(new float[]{k * 330f / 30f, 0.9f, 1f});
+            android.graphics.drawable.GradientDrawable spec = new android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, hues);
+            spec.setCornerRadius(Ui.dp(c, 6));
+            bar.setProgressDrawable(spec);
+            bar.setPadding(Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14));
+            bar.setThumbTintList(android.content.res.ColorStateList.valueOf(0xFFFFFFFF));
             bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
                 @Override public void onProgressChanged(android.widget.SeekBar sb, int pr, boolean user) {
                     if (!user) return;
