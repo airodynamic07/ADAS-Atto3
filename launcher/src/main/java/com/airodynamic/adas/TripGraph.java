@@ -12,8 +12,8 @@ import java.util.Locale;
 
 /**
  * Bottom graph across the screen: the last 20 km of this trip.
- * Blue = speed (scale 0–80 km/h, grows when faster), orange = live kWh/100 km over each 100 m,
- * dashed orange = trip average (scale -10 to 40, grows when beyond). Scales go back to their
+ * Blue = speed (scale 0–80 km/h, grows when faster), orange = live kWh/100 km over each 100 m
+ * (scale -10 to 40, grows when beyond; the trip average is on the energy card, not here). Scales go back to their
  * starting size once the big values have scrolled out of the last 20 km.
  */
 public final class TripGraph extends View implements TripEnergy.Listener {
@@ -43,7 +43,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         if (pts != null) for (TripEnergy.Point q : pts) {
             if (q.km < from) continue;
             sMax = Math.max(sMax, Math.ceil(q.speed / 20) * 20);
-            for (double e : new double[]{q.live, q.avg}) {
+            for (double e : new double[]{q.live}) {
                 if (Double.isNaN(e) || Double.isInfinite(e)) continue;
                 eMin = Math.min(eMin, Math.floor(e / 10) * 10);
                 eMax = Math.max(eMax, Math.ceil(e / 10) * 10);
@@ -56,7 +56,6 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         float lx = left;
         lx = legend(c, lx, 13 * d, SPEED_COL, false, "Speed km/h", d);
         lx = legend(c, lx, 13 * d, ENERGY_COL, false, "Live kWh/100 km", d);
-        lx = legend(c, lx, 13 * d, ENERGY_COL, true, "Trip average", d);
         p.setColor(th.muted);
         c.drawText("· last 20 km", lx, 13 * d + 4 * d, p);
 
@@ -95,7 +94,6 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         }
         line(c, 0, from, to, 0, sMax, left, right, top, bottom, SPEED_COL, false, 2.5f * d, 5 * d);
         line(c, 1, from, to, eMin, eMax, left, right, top, bottom, ENERGY_COL, false, 2.2f * d, 5 * d);
-        line(c, 2, from, to, eMin, eMax, left, right, top, bottom, ENERGY_COL, true, 1.4f * d, 3.5f * d);
         // newest points blink (twice a second)
         removeCallbacks(blink);
         postDelayed(blink, 500);
