@@ -49,6 +49,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         super.onCreate(b);
         Ambient.get(this);   // ambient light by gear, keeps working while other apps are open
         prefs = new Prefs(this);
+        SpeedAlert.get(this);   // my speed limit warning, also while other apps are open
         TripEnergy.get(this);   // counts this trip's energy even while other apps are open
         turnCam = new TurnCamera(this, feed, prefs);
         registerReceiver(themeRequest, new IntentFilter(ACTION_THEME_REQUEST));

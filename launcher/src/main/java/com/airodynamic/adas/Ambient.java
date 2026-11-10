@@ -28,7 +28,9 @@ public final class Ambient implements CarData.Listener {
     private int lastGear = -1;
     private volatile int run;          // bumps on every new gear so an old effect stops
     private volatile boolean effecting;
-    private int normal = 5;            // your own brightness, read when no effect is running
+    private int normal = 5;
+    /** What the car answered to the last colour sent (shown in Settings, to see if it listens). */
+    public volatile String report = "nothing sent yet";            // your own brightness, read when no effect is running
 
     private Ambient(Context c) {
         this.c = c;
@@ -63,7 +65,9 @@ public final class Ambient implements CarData.Listener {
                 if (b instanceof Number && ((Number) b).intValue() > 1) normal = ((Number) b).intValue();
             }
             int hi = normal;
-            car.ambient("setIALColor", colour);
+            Object res = car.ambient("setIALColor", colour);
+            Object back = car.ambient("getIALColor", 1);
+            report = "sent colour " + colour + " · car answered " + res + " · car now reports " + back;
             if (style == 0) { if (effecting) car.ambient("setIALBrightness", hi); effecting = false; return; }
             effecting = true;
             long step = style == 1 ? 250 : 400;

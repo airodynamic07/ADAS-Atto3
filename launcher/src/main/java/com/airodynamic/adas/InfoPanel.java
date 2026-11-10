@@ -25,7 +25,7 @@ import java.util.Locale;
 
 /**
  * Right window, one page (user's choice): tyres + doors/lock, trip / battery health /
- * odometer, weather / PM2.5 / my speed limit, now playing, where I parked + assistant.
+ * odometer, PM2.5 / my speed limit, now playing (weather, parked spot and assistant removed 2026-11-10).
  * No climate panel: the car's own bottom bar does the A/C.
  */
 public final class InfoPanel implements Panel {
@@ -41,7 +41,8 @@ public final class InfoPanel implements Panel {
     private final TextView[] tyre = new TextView[4];
     private final TextView[] tyreT = new TextView[4];
     private final DoorsView doors;
-    private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub, weather, weatherSub, pm, pmSub, limit, song, parkedSub, aiText;
+    private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub, pm, pmSub, limit, song;
+    private LinearLayout limitCard;
     private final Button play;
 
     public InfoPanel(Context c, Theme th, Prefs prefs) {
@@ -100,10 +101,8 @@ public final class InfoPanel implements Panel {
         r2.addView(t1, weight(1, true)); r2.addView(t2, weight(1, true)); r2.addView(t3, weight(1, false));
         root.addView(r2);
 
-        // --- row 3: weather, then PM2.5 and my speed limit laid out side to side (one line each)
+        // --- row 3: PM2.5 and my speed limit laid out side to side (one line each)
         LinearLayout r3 = row();
-        LinearLayout w = tile("Weather");
-        weather = big(w); weatherSub = small(w);
         LinearLayout p = tile("PM2.5 out / in");
         LinearLayout pl = new LinearLayout(c);
         pl.setGravity(Gravity.BOTTOM);
@@ -128,7 +127,8 @@ public final class InfoPanel implements Panel {
         lb.setPadding(0, Ui.dp(c, 2), 0, 0);
         l.addView(lb);
         limit.setOnClickListener(v -> { prefs.setSpeedVoice(!prefs.speedVoice()); showLimit(); });
-        r3.addView(w, weight(0.8f, true)); r3.addView(p, weight(1, true)); r3.addView(l, weight(1.3f, false));
+        r3.addView(p, weight(1, true)); r3.addView(l, weight(1.3f, false));
+        limitCard = l;
         root.addView(r3);
         showLimit();
 
@@ -152,28 +152,6 @@ public final class InfoPanel implements Panel {
         nlp.bottomMargin = Ui.dp(c, 6);
         root.addView(np, nlp);
 
-        // --- row 5: where I parked + assistant
-        LinearLayout r5 = row();
-        LinearLayout pk = card();
-        pk.addView(label("Where I parked"));
-        parkedSub = Ui.text(c, "", 14, th.text, true);
-        parkedSub.setPadding(0, Ui.dp(c, 6), 0, Ui.dp(c, 6));
-        pk.addView(parkedSub);
-        pk.addView(Ui.chip(c, "Show on map", false, th, v -> showParked()));
-        r5.addView(pk, weight(1, true));
-        LinearLayout ai = card();
-        ai.addView(label("Assistant"));
-        String asst = assistantPkg();
-        aiText = Ui.text(c, asst == null ? "No Gemini / Google app found" : "Opens " + Apps.label(c, asst), 13, th.text, false);
-        aiText.setPadding(0, Ui.dp(c, 4), 0, Ui.dp(c, 6));
-        ai.addView(aiText, new LinearLayout.LayoutParams(-1, 0, 1f));
-        LinearLayout ab = new LinearLayout(c);
-        ab.addView(Ui.chip(c, "🎤 Ask", true, th, v -> openAssistant(true)), weight(1.4f, true));
-        ab.addView(Ui.chip(c, "⤢ Open", false, th, v -> openAssistant(false)), weight(1, false));
-        ai.addView(ab);
-        r5.addView(ai, weight(1.25f, false));
-        LinearLayout.LayoutParams r5lp = new LinearLayout.LayoutParams(-1, 0, 1f);
-        root.addView(r5, r5lp);
     }
 
     // ---------------------------------------------------------------- building helpers
@@ -243,31 +221,6 @@ public final class InfoPanel implements Panel {
         return lp;
     }
 
-    /** Gemini first (GBox or normal), then the Google app (its mic button talks to Gemini). */
-    private static final String[] ASSISTANTS = {
-            "com.gbox.com.google.android.apps.bard", "com.google.android.apps.bard",
-            "com.gbox.com.google.android.googlequicksearchbox", "com.google.android.googlequicksearchbox"};
-
-    private String assistantPkg() {
-        for (String p : ASSISTANTS) if (Apps.installed(c, p)) return p;
-        return null;
-    }
-
-    private void openAssistant(boolean voice) {
-        // Gemini inside GBox can't be told to start listening from outside, so 🎤 Ask opens it:
-        // tap its mic there. A normally installed Google app gets the voice-search screen directly.
-        if (voice && Apps.installed(c, "com.google.android.googlequicksearchbox")) {
-            try {
-                c.startActivity(new android.content.Intent(android.speech.RecognizerIntent.ACTION_VOICE_SEARCH_HANDS_FREE)
-                        .setPackage("com.google.android.googlequicksearchbox").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
-                return;
-            } catch (Throwable ignored) {}
-        }
-        String p = assistantPkg();
-        if (p == null) { Toast.makeText(c, "Gemini / Google app not found", Toast.LENGTH_SHORT).show(); return; }
-        if (!Apps.open(c, p, CarData.get(c).last())) Toast.makeText(c, "Couldn't open " + Apps.label(c, p), Toast.LENGTH_SHORT).show();
-    }
-
     private void showLimit() {
         limit.setText(prefs.speedLimit() + (prefs.speedVoice() ? " 🔊" : " 🔇"));
     }
@@ -296,14 +249,6 @@ public final class InfoPanel implements Panel {
                 .setNegativeButton("Cancel", null).show();
     }
 
-    private void showParked() {
-        double lat = prefs.parkedLat(), lng = prefs.parkedLng();
-        if (Double.isNaN(lat)) { Toast.makeText(c, "Saved the next time you put the car in P", Toast.LENGTH_SHORT).show(); return; }
-        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(String.format(Locale.US, "geo:%f,%f?q=%f,%f(Parked)", lat, lng, lat, lng)));
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try { c.startActivity(i); } catch (Exception e) { Toast.makeText(c, "No maps app found", Toast.LENGTH_SHORT).show(); }
-    }
-
     private void media(int what) {
         if (!NowPlaying.allowed(c)) {
             Toast.makeText(c, "Turn on 'Notification access' for ADAS Launcher", Toast.LENGTH_LONG).show();
@@ -330,18 +275,10 @@ public final class InfoPanel implements Panel {
         song.setText(mc == null ? "Nothing playing" : !t.isEmpty() ? t : Apps.label(c, mc.getPackageName()));
     }
 
-    private void refreshWeather() {
-        Places.weather(c, w -> {
-            weather.setText(w.icon() + " " + (w.tempC == Integer.MIN_VALUE ? "–" : w.tempC + "°"));
-            weatherSub.setText(!w.note.isEmpty() ? w.note : w.rainPct < 0 ? "" : String.format(Locale.US, "rain %d%% %02d:00", w.rainPct, w.rainHour));
-        });
-    }
-
     private final Runnable slow = new Runnable() {
         @Override public void run() {
             if (!active) return;
             refreshMedia();
-            refreshWeather();
             main.postDelayed(this, 5000);
         }
     };
@@ -390,12 +327,10 @@ public final class InfoPanel implements Panel {
         pm.setTextColor(s.pmOut > 50 ? Theme.DANGER : s.pmOut > 25 ? Theme.CAUTION : th.text);
         pmSub.setText(level(s.pmOut) + " / " + level(s.pmIn));
 
-        long at = prefs.parkedAt();
-        if (at == 0) parkedSub.setText("Saved when you put it in P");
-        else {
-            long min = (System.currentTimeMillis() - at) / 60000;
-            parkedSub.setText(min < 60 ? min + " min ago" : (min / 60) + " h ago");
-        }
+        // My speed limit: card turns red while over (warning only; SpeedAlert beeps)
+        boolean over = SpeedAlert.get(c).over();
+        if (limitCard != null) limitCard.setBackground(over ? Ui.round(Theme.DANGER, Theme.DANGER, 16, c) : Ui.round(th.panel, th.line, 16, c));
+        limit.setTextColor(over ? 0xFFFFFFFF : th.text);
     }
 
     /** Pressure in the chosen unit: PSI (default), bar or kPa. */

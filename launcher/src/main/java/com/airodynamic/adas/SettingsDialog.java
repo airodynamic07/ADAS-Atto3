@@ -56,15 +56,37 @@ public final class SettingsDialog {
             am.addView(Ui.chip(c, Ambient.STYLES[i], prefs.ambientStyle() == i, th, v -> { prefs.setAmbientStyle(st); redo.run(); }), weight(c));
         }
         root.addView(am);
-        root.addView(Ui.text(c, "The car numbers its colours (1–31?). Use − / + and Try to see each one on the car's light.", 12, th.muted, false));
+        root.addView(Ui.text(c, "The car numbers its colours (1–31?). Slide a bar: the light follows. Try plays the gear's colour with the style.\nLast: "
+                + Ambient.get(c).report, 12, th.muted, false));
         for (int g = 0; g < Prefs.GEARS.length; g++) {
             final int gg = g;
             LinearLayout gr = row(c);
+            gr.setGravity(android.view.Gravity.CENTER_VERTICAL);
             gr.setPadding(0, Ui.dp(c, 4), 0, 0);
-            gr.addView(Ui.text(c, Prefs.GEARS[g] + "  colour " + prefs.ambientColour(g), 15, th.text, true), weight(c));
-            gr.addView(Ui.chip(c, "−", false, th, v -> { prefs.setAmbientColour(gg, Math.max(1, prefs.ambientColour(gg) - 1)); Ambient.get(c).apply(prefs.ambientColour(gg), 0); redo.run(); }), weight(c));
-            gr.addView(Ui.chip(c, "+", false, th, v -> { prefs.setAmbientColour(gg, Math.min(31, prefs.ambientColour(gg) + 1)); Ambient.get(c).apply(prefs.ambientColour(gg), 0); redo.run(); }), weight(c));
-            gr.addView(Ui.chip(c, "Try", false, th, v -> Ambient.get(c).apply(prefs.ambientColour(gg), prefs.ambientStyle())), weight(c));
+            final TextView val = Ui.text(c, Prefs.GEARS[g] + "  " + prefs.ambientColour(g), 15, th.text, true);
+            gr.addView(val, new LinearLayout.LayoutParams(Ui.dp(c, 64), -2));
+            // Slide to pick a colour: the car's light follows as you slide (colours 1–31)
+            android.widget.SeekBar bar = new android.widget.SeekBar(c);
+            bar.setMax(30);
+            bar.setProgress(prefs.ambientColour(g) - 1);
+            bar.setProgressTintList(android.content.res.ColorStateList.valueOf(th.accent));
+            bar.setThumbTintList(android.content.res.ColorStateList.valueOf(th.accent));
+            bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(android.widget.SeekBar sb, int pr, boolean user) {
+                    if (!user) return;
+                    prefs.setAmbientColour(gg, pr + 1);
+                    val.setText(Prefs.GEARS[gg] + "  " + (pr + 1));
+                    Ambient.get(c).apply(pr + 1, 0);
+                }
+                @Override public void onStartTrackingTouch(android.widget.SeekBar sb) {}
+                @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {}
+            });
+            gr.addView(bar, new LinearLayout.LayoutParams(0, Ui.dp(c, 48), 1f));
+            gr.addView(Ui.chip(c, "Try", false, th, v -> {
+                Ambient.get(c).apply(prefs.ambientColour(gg), prefs.ambientStyle());
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
+                        android.widget.Toast.makeText(c, Ambient.get(c).report, android.widget.Toast.LENGTH_LONG).show(), 1500);
+            }), new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
             root.addView(gr);
         }
 
@@ -83,11 +105,6 @@ public final class SettingsDialog {
 
         section(c, root, th, "Launcher & windows");
         LinearLayout lw = row(c);
-        lw.addView(Ui.chip(c, "⇄ Swap windows", false, th, v -> {
-            String a = prefs.defaultPanel(0), b = prefs.defaultPanel(1), d = prefs.defaultPanel(2);
-            prefs.setDefaultPanel(0, d); prefs.setDefaultPanel(1, a); prefs.setDefaultPanel(2, b);
-            redo.run();
-        }), weight(c));
         lw.addView(Ui.chip(c, "Choose home screen…", false, th, v -> {
             Intent i = new Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             try { c.startActivity(i); } catch (Exception e) {
