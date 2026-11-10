@@ -128,11 +128,36 @@ public final class EngineHost {
         if (path.isEmpty()) path = "index.html";
         try {
             InputStream in = assets.open(android.net.Uri.decode(path));
+            if (path.equals("index.html")) in = withOldBrowserFix(in);
             return new WebResourceResponse(mime(path), mime(path).startsWith("text") ? "UTF-8" : null, in);
         } catch (Exception e) {
             return new WebResourceResponse("text/plain", "UTF-8", 404, "Not found",
                     new java.util.HashMap<String, String>(), new java.io.ByteArrayInputStream(new byte[0]));
         }
+    }
+
+    /**
+     * The car's WebView is older than the phone's: it has no CSS aspect-ratio (the rev meter
+     * collapsed to zero height) and no inset. Same fix as Engine Sound's own page, added here so
+     * an Engine Sound already installed on the car works without reinstalling it.
+     */
+    private static final String OLD_BROWSER_CSS = "<style>"
+            + ".cluster{aspect-ratio:auto!important}"
+            + ".cluster::before{content:\"\";display:block;padding-top:78%}"
+            + "canvas#tach{position:absolute!important;top:0;left:0}"
+            + ".sheet{top:0;right:0;bottom:0;left:0}"
+            + "</style>";
+
+    private static InputStream withOldBrowserFix(InputStream in) throws java.io.IOException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[16384];
+        int n;
+        while ((n = in.read(buf)) > 0) b.write(buf, 0, n);
+        in.close();
+        String html = b.toString("UTF-8");
+        int i = html.indexOf("</head>");
+        html = i >= 0 ? html.substring(0, i) + OLD_BROWSER_CSS + html.substring(i) : OLD_BROWSER_CSS + html;
+        return new java.io.ByteArrayInputStream(html.getBytes("UTF-8"));
     }
 
     private static String mime(String p) {
