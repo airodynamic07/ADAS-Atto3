@@ -76,7 +76,13 @@ public class AdasCameraActivity extends Activity {
     private Report log;
     private long lastLogSave;
 
+    /** Live picture (camera thread) and the copy the AI is working on (AI thread). */
     private final int[] argb = new int[OUT_W * OUT_H];
+    private final int[] argbAi = new int[OUT_W * OUT_H];
+    /** Latest AI result and when its picture was taken. Boxes older than MAX_BOX_AGE_MS are hidden. */
+    private volatile List<Detector.Det> lastDets = java.util.Collections.emptyList();
+    private volatile long lastDetsAt;
+    private static final long MAX_BOX_AGE_MS = 3000;
     private byte[] yRow, uvRowU, uvRowV;
 
     @Override protected void onCreate(Bundle b) {
@@ -246,12 +252,21 @@ public class AdasCameraActivity extends Activity {
             img = rd.acquireLatestImage();
             if (img == null) return;
             camFrames++;
-            if (aiBusy || !running) return;
+            if (!running) return;
             long t0 = System.nanoTime();
             toArgb(img, view * (STRIP_W / 4));
             final double conv = (System.nanoTime() - t0) / 1e6;
-            aiBusy = true;
-            aiH.post(() -> process(conv));
+            final long frameAt = System.currentTimeMillis();
+            img.close();
+            img = null;
+            // 1) Show this picture right away with the newest boxes we have (may be 1-2 s old).
+            show(conv);
+            // 2) If the AI is free, give it a copy of this picture.
+            if (!aiBusy && detector != null) {
+                System.arraycopy(argb, 0, argbAi, 0, argb.length);
+                aiBusy = true;
+                aiH.post(() -> process(frameAt));
+            }
         } catch (Throwable t) {
             log.error("frame", t);
         } finally {
@@ -309,46 +324,57 @@ public class AdasCameraActivity extends Activity {
         return TEAL;
     }
 
-    private void process(double conv) {
+    /** AI thread: find objects in the copied picture; the camera thread draws them. */
+    private void process(long frameAt) {
         try {
-            Bitmap bmp = bmps[bmpIdx];
-            bmpIdx ^= 1;
-            bmp.setPixels(argb, 0, OUT_W, 0, 0, OUT_W, OUT_H);
-            List<Detector.Det> dets = null;
             Detector d = detector;
-            if (d != null) {
-                long t0 = System.nanoTime();
-                dets = d.run(argb, OUT_W, OUT_H, 0.35f);
-                double ms = (System.nanoTime() - t0) / 1e6;
-                aiCount++;
-                aiMsSum += ms;
-                convMsSum += conv;
-                Canvas c = new Canvas(bmp);
-                for (Detector.Det det : dets) {
-                    int col = colorFor(det.cls);
-                    box.setColor(col);
-                    c.drawRect(det.x1, det.y1, det.x2, det.y2, box);
-                    String s = Detector.name(det.cls) + " " + Math.round(det.score * 100) + "%";
-                    float w = label.measureText(s) + 8;
-                    labelBg.setColor(col);
-                    float ty = Math.max(det.y1, 22);
-                    c.drawRect(det.x1, ty - 22, det.x1 + w, ty, labelBg);
-                    c.drawText(s, det.x1 + 4, ty - 5, label);
-                }
-                lastObjects = dets.size();
-            }
-            shownFrames++;
-            lastShown = bmp;
-            final String mode = d == null ? "loading" : d.mode();
-            updateNumbers(mode);
-            final String text = String.format(Locale.US, "Camera %s fps   AI %s ms (%s)   Screen %s fps   Objects %d   Convert %s ms",
-                    camFps, aiMs, mode, shownFps, lastObjects, convMs);
-            ui.post(() -> { image.setImageBitmap(bmp); stats.setText(text); });
+            if (d == null) return;
+            long t0 = System.nanoTime();
+            List<Detector.Det> dets = d.run(argbAi, OUT_W, OUT_H, 0.35f);
+            double ms = (System.nanoTime() - t0) / 1e6;
+            aiCount++;
+            aiMsSum += ms;
+            lastDets = dets;
+            lastDetsAt = frameAt;
+            lastObjects = dets.size();
         } catch (Throwable t) {
             log.error("process", t);
         } finally {
             aiBusy = false;
         }
+    }
+
+    /** Camera thread: live picture + the newest boxes, labelled with their age. */
+    private void show(double conv) {
+        Bitmap bmp = bmps[bmpIdx];
+        bmpIdx ^= 1;
+        bmp.setPixels(argb, 0, OUT_W, 0, 0, OUT_W, OUT_H);
+        long age = System.currentTimeMillis() - lastDetsAt;
+        boolean fresh = lastDetsAt > 0 && age <= MAX_BOX_AGE_MS;
+        if (fresh) {
+            Canvas c = new Canvas(bmp);
+            for (Detector.Det det : lastDets) {
+                int col = colorFor(det.cls);
+                box.setColor(col);
+                c.drawRect(det.x1, det.y1, det.x2, det.y2, box);
+                String s = Detector.name(det.cls) + " " + Math.round(det.score * 100) + "%";
+                float w = label.measureText(s) + 8;
+                labelBg.setColor(col);
+                float ty = Math.max(det.y1, 22);
+                c.drawRect(det.x1, ty - 22, det.x1 + w, ty, labelBg);
+                c.drawText(s, det.x1 + 4, ty - 5, label);
+            }
+        }
+        convMsSum += conv;
+        shownFrames++;
+        lastShown = bmp;
+        Detector d = detector;
+        final String mode = d == null ? "loading" : d.mode();
+        updateNumbers(mode);
+        final String ageTxt = lastDetsAt == 0 ? "-" : String.format(Locale.US, "%.1f s ago%s", age / 1000.0, fresh ? "" : " (hidden)");
+        final String text = String.format(Locale.US, "Camera %s fps   Screen %s fps   AI %s ms (%s)   Boxes %s   Objects %d",
+                camFps, shownFps, aiMs, mode, ageTxt, fresh ? lastObjects : 0);
+        ui.post(() -> { image.setImageBitmap(bmp); stats.setText(text); });
     }
 
     private void updateNumbers(String mode) {
@@ -357,10 +383,8 @@ public class AdasCameraActivity extends Activity {
         if (dt < 2000) return;
         camFps = String.format(Locale.US, "%.1f", camFrames * 1000.0 / dt);
         shownFps = String.format(Locale.US, "%.1f", shownFrames * 1000.0 / dt);
-        if (aiCount > 0) {
-            aiMs = String.format(Locale.US, "%.0f", aiMsSum / aiCount);
-            convMs = String.format(Locale.US, "%.0f", convMsSum / aiCount);
-        }
+        if (aiCount > 0) aiMs = String.format(Locale.US, "%.0f", aiMsSum / aiCount);
+        if (shownFrames > 0) convMs = String.format(Locale.US, "%.0f", convMsSum / shownFrames);
         camFrames = 0; shownFrames = 0; aiCount = 0; aiMsSum = 0; convMsSum = 0;
         statT0 = now;
         if (now - lastLogSave > 10000) {
