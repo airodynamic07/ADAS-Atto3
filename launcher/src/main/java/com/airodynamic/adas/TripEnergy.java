@@ -18,8 +18,10 @@ public final class TripEnergy implements CarData.Listener {
     private static final long NEW_TRIP_GAP_MS = 10 * 60_000L;
 
     public static final class Point {
-        public final double km, speed, live, avg;
-        Point(double km, double speed, double live, double avg) { this.km = km; this.speed = speed; this.live = live; this.avg = avg; }
+        public final double km, speed, live, avg, pedal;
+        Point(double km, double speed, double live, double avg, double pedal) {
+            this.km = km; this.speed = speed; this.live = live; this.avg = avg; this.pedal = pedal;
+        }
     }
 
     private static TripEnergy instance;
@@ -42,7 +44,8 @@ public final class TripEnergy implements CarData.Listener {
     private double startRemain = Double.NaN;
     private long lastAt;
     private double segKm, segKwh, segSpeedSum;
-    private int segN;
+    private int segN, segPedalN;
+    private double segPedalSum;
     private final ArrayList<Point> points = new ArrayList<>();
 
     public synchronized List<Point> points() { return new ArrayList<>(points); }
@@ -86,11 +89,13 @@ public final class TripEnergy implements CarData.Listener {
             segKm += dKm;
             segKwh += dKwh;
             if (!Double.isNaN(s.speedKmh)) { segSpeedSum += s.speedKmh; segN++; }
+            if (!Double.isNaN(s.pedalPct)) { segPedalSum += s.pedalPct; segPedalN++; }
             if (segKm >= STEP_KM) {
                 double live = segKwh / segKm * 100;
-                points.add(new Point(km, segN > 0 ? segSpeedSum / segN : 0, live, avg()));
-                segKm = segKwh = segSpeedSum = 0;
-                segN = 0;
+                points.add(new Point(km, segN > 0 ? segSpeedSum / segN : 0, live, avg(),
+                        segPedalN > 0 ? segPedalSum / segPedalN : Double.NaN));
+                segKm = segKwh = segSpeedSum = segPedalSum = 0;
+                segN = segPedalN = 0;
                 while (!points.isEmpty() && points.get(0).km < km - WINDOW_KM - 1) points.remove(0);
             }
         }

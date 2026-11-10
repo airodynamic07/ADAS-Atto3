@@ -13,7 +13,8 @@ import java.util.Locale;
 /**
  * Bottom graph across the screen: the last 20 km of this trip.
  * Blue = speed (scale 0–80 km/h, grows when faster), orange = live kWh/100 km over each 100 m
- * (scale -10 to 40, grows when beyond; the trip average is on the energy card, not here). Scales go back to their
+ * (scale -10 to 40, grows when beyond; the trip average is on the energy card, not here),
+ * green shading where it goes below zero (regen), thin purple = accelerator pedal 0–100 %. Scales go back to their
  * starting size once the big values have scrolled out of the last 20 km.
  */
 public final class TripGraph extends View implements TripEnergy.Listener {
@@ -22,7 +23,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private final Path path = new Path();
     private List<TripEnergy.Point> pts;
     private double nowKm;
-    private static final int SPEED_COL = 0xFF4DA3FF, ENERGY_COL = 0xFFFFB020;
+    private static final int SPEED_COL = 0xFF4DA3FF, ENERGY_COL = 0xFFFFB020, PEDAL_COL = 0xFFB8A4FF, REGEN_COL = 0x553DD9C1;
 
     public TripGraph(Context c, Theme th) { super(c); this.th = th; }
 
@@ -56,6 +57,8 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         float lx = left;
         lx = legend(c, lx, 13 * d, SPEED_COL, false, "Speed km/h", d);
         lx = legend(c, lx, 13 * d, ENERGY_COL, false, "Live kWh/100 km", d);
+        lx = legend(c, lx, 13 * d, PEDAL_COL, false, "Pedal 0–100%", d);
+        lx = legend(c, lx, 13 * d, 0xFF3DD9C1, false, "Regen", d);
         p.setColor(th.muted);
         c.drawText("· last 20 km", lx, 13 * d + 4 * d, p);
 
@@ -92,6 +95,17 @@ public final class TripGraph extends View implements TripEnergy.Listener {
             c.drawText("The graph starts after the first 100 m of driving", left + 12 * d, (top + bottom) / 2, p);
             return;
         }
+        // regen: green shading between the zero line and the orange line where it goes below zero
+        float y0 = (float) (bottom - (0 - eMin) / (eMax - eMin) * (bottom - top));
+        float stepPx = (float) (TripEnergy.STEP_KM / TripEnergy.WINDOW_KM * (right - left));
+        p.setColor(REGEN_COL);
+        for (TripEnergy.Point q : pts) {
+            if (q.km < from || !(q.live < 0)) continue;
+            float x = (float) (left + (q.km - from) / (to - from) * (right - left));
+            float y = (float) (bottom - (q.live - eMin) / (eMax - eMin) * (bottom - top));
+            c.drawRect(x - stepPx, y0, x, y, p);
+        }
+        line(c, 3, from, to, 0, 100, left, right, top, bottom, PEDAL_COL, false, 1.5f * d, 3.5f * d);
         line(c, 0, from, to, 0, sMax, left, right, top, bottom, SPEED_COL, false, 2.5f * d, 5 * d);
         line(c, 1, from, to, eMin, eMax, left, right, top, bottom, ENERGY_COL, false, 2.2f * d, 5 * d);
         // newest points blink (twice a second)
@@ -119,7 +133,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         boolean started = false;
         for (TripEnergy.Point q : pts) {
             if (q.km < from) continue;
-            double v = which == 0 ? q.speed : which == 1 ? q.live : q.avg;
+            double v = which == 0 ? q.speed : which == 1 ? q.live : which == 3 ? q.pedal : q.avg;
             if (Double.isNaN(v) || Double.isInfinite(v)) { started = false; continue; }
             float x = (float) (l + (q.km - from) / (to - from) * (r - l));
             float y = (float) (b - (v - lo) / (hi - lo) * (b - t));

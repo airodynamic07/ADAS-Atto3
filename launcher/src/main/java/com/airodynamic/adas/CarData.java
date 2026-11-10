@@ -39,6 +39,7 @@ public final class CarData {
         public boolean sunroofOpen;
         public int lock;                        // 0 unknown, 1 locked, 2 unlocked
         public double lat = Double.NaN, lng = Double.NaN;
+        public double pedalPct = Double.NaN;    // accelerator 0-100
         public double powerKw = Double.NaN;     // motor power: + driving, - regen
         public double remainKwh = Double.NaN;   // energy left in the battery
         public long at;                         // when this snapshot was read (ms)
@@ -263,6 +264,7 @@ public final class CarData {
             s.kwhPer100 = ((Number) v).doubleValue();
         s.healthPct = batteryHealth();
         s.powerKw = power();
+        s.pedalPct = speedAndPedal()[1];
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getRemainingBatteryPower")) && ((Number) v).intValue() > 10 && ((Number) v).intValue() < 1200)
             s.remainKwh = ((Number) v).intValue() / 10.0;   // 0.1 kWh units
         s.at = System.currentTimeMillis();
