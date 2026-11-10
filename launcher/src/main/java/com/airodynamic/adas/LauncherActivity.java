@@ -15,7 +15,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * The home screen: top strip + three windows, each with its own bar.
+ * The home screen: top strip (time, date) + three windows, each with its own bar.
+ * No title bar; the theme dots and Settings sit at the bottom-left of the left window.
  * Other apps open full screen (this car can't put them in a window); Home comes back here.
  */
 public class LauncherActivity extends Activity implements CarData.Listener, SettingsDialog.Host {
@@ -96,20 +97,6 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         toast = Ui.text(this, "", 13, th.muted, false);
         toast.setPadding(Ui.dp(this, 16), 0, 0, 0);
         top.addView(toast, new LinearLayout.LayoutParams(0, -2, 1f));
-        for (Theme t : Theme.values()) {
-            View dot = new View(this);
-            boolean sel = prefs.theme() == t;
-            dot.setBackground(Ui.round(t.accent == Theme.WHITE.accent ? 0xFFFFFFFF : t == Theme.RED ? 0xFFE5202E : 0xFF2E8BFF,
-                    sel ? th.text : th.line, 11, this));
-            FrameLayout hit = new FrameLayout(this);
-            hit.setContentDescription(t.name() + " theme");
-            hit.addView(dot, new FrameLayout.LayoutParams(Ui.dp(this, 22), Ui.dp(this, 22), Gravity.CENTER));
-            hit.setOnClickListener(v -> { prefs.setTheme(t); rebuild(); });
-            top.addView(hit, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
-        }
-        android.widget.Button settings = Ui.chip(this, "⚙", false, th, v -> SettingsDialog.show(this, theme, prefs, this));
-        settings.setContentDescription("Settings");
-        top.addView(settings, new LinearLayout.LayoutParams(Ui.dp(this, 48), Ui.dp(this, 44)));
         root.addView(top);
 
         // ---- three windows
@@ -175,7 +162,36 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         panels[win] = p;
         bodies[win].addView(p.view(), new FrameLayout.LayoutParams(-1, -1));
         f.addView(bodies[win], new LinearLayout.LayoutParams(-1, 0, 1f));
+        // Theme dots + Settings live at the bottom-left of the left window (user's layout, 2026-11-10)
+        if (win == 0) {
+            FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START);
+            clp.setMargins(Ui.dp(this, 6), 0, 0, Ui.dp(this, 4));
+            bodies[win].addView(themeControls(th), clp);
+        }
         return f;
+    }
+
+    /** Blue / white / red dots and the Settings button. */
+    private LinearLayout themeControls(Theme th) {
+        LinearLayout box = new LinearLayout(this);
+        box.setGravity(Gravity.CENTER_VERTICAL);
+        box.setBackground(Ui.round(th.panel, th.line, 22, this));
+        box.setPadding(Ui.dp(this, 4), 0, Ui.dp(this, 2), 0);
+        for (Theme t : Theme.values()) {
+            View dot = new View(this);
+            boolean sel = prefs.theme() == t;
+            dot.setBackground(Ui.round(t == Theme.WHITE ? 0xFFFFFFFF : t == Theme.RED ? 0xFFE5202E : 0xFF2E8BFF,
+                    sel ? th.text : th.line, 11, this));
+            FrameLayout hit = new FrameLayout(this);
+            hit.setContentDescription(t.name() + " theme");
+            hit.addView(dot, new FrameLayout.LayoutParams(Ui.dp(this, 22), Ui.dp(this, 22), Gravity.CENTER));
+            hit.setOnClickListener(v -> { prefs.setTheme(t); rebuild(); });
+            box.addView(hit, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+        }
+        android.widget.Button settings = Ui.chip(this, "⚙", false, th, v -> SettingsDialog.show(this, theme, prefs, this));
+        settings.setContentDescription("Settings");
+        box.addView(settings, new LinearLayout.LayoutParams(Ui.dp(this, 48), Ui.dp(this, 44)));
+        return box;
     }
 
     @Override protected void onResume() {

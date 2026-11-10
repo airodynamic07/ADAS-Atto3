@@ -29,7 +29,7 @@ import java.util.Locale;
  * No climate panel: the car's own bottom bar does the A/C.
  */
 public final class InfoPanel implements Panel {
-    private static final double LOW_BAR = 2.3;
+    private static final double LOW_BAR = 2.3;   // = 33 psi = 230 kPa
 
     private final Context c;
     private final Theme th;
@@ -56,7 +56,8 @@ public final class InfoPanel implements Panel {
         // --- row 1: tyres + doors & windows
         LinearLayout r1 = row();
         LinearLayout ty = card();
-        ty.addView(label("Tyres · bar / °C"));
+        String unit = prefs.tyreUnit();
+        ty.addView(label("Tyres · " + (unit.equals("bar") ? "bar" : unit.equals("kpa") ? "kPa" : "psi") + " / °C"));
         GridLayout g = new GridLayout(c);
         g.setColumnCount(2);
         for (int i = 0; i < 4; i++) {
@@ -81,7 +82,7 @@ public final class InfoPanel implements Panel {
         TextView dl = label("Doors & windows");
         dw.addView(dl, new LinearLayout.LayoutParams(-1, -2));
         doors = new DoorsView(c, th);
-        dw.addView(doors, new LinearLayout.LayoutParams(Ui.dp(c, 44), Ui.dp(c, 66)));
+        dw.addView(doors, new LinearLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 66)));
         doorsText = Ui.text(c, "", 11, Theme.SAFE, false);
         dw.addView(doorsText);
         r1.addView(dw, weight(1, false));
@@ -99,20 +100,35 @@ public final class InfoPanel implements Panel {
         r2.addView(t1, weight(1, true)); r2.addView(t2, weight(1, true)); r2.addView(t3, weight(1, false));
         root.addView(r2);
 
-        // --- row 3: weather, PM2.5, my speed limit
+        // --- row 3: weather, then PM2.5 and my speed limit laid out side to side (one line each)
         LinearLayout r3 = row();
         LinearLayout w = tile("Weather");
         weather = big(w); weatherSub = small(w);
         LinearLayout p = tile("PM2.5 out / in");
-        pm = big(p); pmSub = small(p);
+        LinearLayout pl = new LinearLayout(c);
+        pl.setGravity(Gravity.BOTTOM);
+        pm = Ui.text(c, "–", 18, th.text, true);
+        pmSub = Ui.text(c, "", 10, th.muted, false);
+        pmSub.setSingleLine(true);
+        pmSub.setEllipsize(TextUtils.TruncateAt.END);
+        pmSub.setPadding(Ui.dp(c, 6), 0, 0, Ui.dp(c, 2));
+        pl.addView(pm);
+        pl.addView(pmSub, new LinearLayout.LayoutParams(0, -2, 1f));
+        pl.setPadding(0, Ui.dp(c, 4), 0, 0);
+        p.addView(pl);
         LinearLayout l = tile("My speed limit");
-        limit = big(l);
         LinearLayout lb = new LinearLayout(c);
-        lb.addView(Ui.chip(c, "−", false, th, v -> { prefs.setSpeedLimit(Math.max(30, prefs.speedLimit() - 10)); showLimit(); }), weight(1, true));
-        lb.addView(Ui.chip(c, "+", false, th, v -> { prefs.setSpeedLimit(Math.min(180, prefs.speedLimit() + 10)); showLimit(); }), weight(1, false));
+        lb.setGravity(Gravity.CENTER_VERTICAL);
+        limit = Ui.text(c, "–", 18, th.text, true);
+        lb.addView(limit, new LinearLayout.LayoutParams(0, -2, 1f));
+        LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(Ui.dp(c, 36), Ui.dp(c, 32));
+        pb.leftMargin = Ui.dp(c, 4);
+        lb.addView(small(Ui.chip(c, "−", false, th, v -> { prefs.setSpeedLimit(Math.max(30, prefs.speedLimit() - 10)); showLimit(); })), pb);
+        lb.addView(small(Ui.chip(c, "+", false, th, v -> { prefs.setSpeedLimit(Math.min(180, prefs.speedLimit() + 10)); showLimit(); })), pb);
+        lb.setPadding(0, Ui.dp(c, 2), 0, 0);
         l.addView(lb);
         limit.setOnClickListener(v -> { prefs.setSpeedVoice(!prefs.speedVoice()); showLimit(); });
-        r3.addView(w, weight(1, true)); r3.addView(p, weight(1, true)); r3.addView(l, weight(1, false));
+        r3.addView(w, weight(0.8f, true)); r3.addView(p, weight(1, true)); r3.addView(l, weight(1.3f, false));
         root.addView(r3);
         showLimit();
 
@@ -204,6 +220,14 @@ public final class InfoPanel implements Panel {
         t.setEllipsize(TextUtils.TruncateAt.END);
         parent.addView(t);
         return t;
+    }
+
+    /** A compact chip (32 dp tall) for the one-line cards. */
+    private Button small(Button b) {
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(0, 0, 0, 0);
+        return b;
     }
 
     private LinearLayout.LayoutParams weight(float w, boolean gapRight) {
@@ -312,7 +336,7 @@ public final class InfoPanel implements Panel {
         for (int i = 0; i < 4; i++) {
             double b = s.tyreBar[i];
             boolean low = !Double.isNaN(b) && b < LOW_BAR;
-            tyre[i].setText(Double.isNaN(b) ? "–" : String.format(Locale.US, "%.1f", b));
+            tyre[i].setText(Double.isNaN(b) ? "–" : pressure(b, prefs.tyreUnit()));
             tyre[i].setTextColor(low ? Theme.CAUTION : th.text);
             tyreT[i].setText(s.tyreC[i] == Integer.MIN_VALUE ? names[i] : s.tyreC[i] + "°");
         }
@@ -348,49 +372,111 @@ public final class InfoPanel implements Panel {
         }
     }
 
+    /** Pressure in the chosen unit: PSI (default), bar or kPa. */
+    static String pressure(double bar, String unit) {
+        if ("bar".equals(unit)) return String.format(Locale.US, "%.1f", bar);
+        if ("kpa".equals(unit)) return String.format(Locale.US, "%.0f", bar * 100);
+        return String.format(Locale.US, "%.0f", bar * 14.5038);
+    }
+
     private static String level(int pm) {
         if (pm < 0) return "–";
         return pm <= 25 ? "good" : pm <= 50 ? "moderate" : "unhealthy";
     }
 
-    /** The car from above: doors and windows green when closed, amber when open. */
+    /**
+     * The car from above (nose up), drawn as the driver sees it: right side on the right.
+     * Doors swing open and closed with an animation; the boot lid slides out behind.
+     * Closed = teal, open door or window = amber.
+     */
     static final class DoorsView extends View {
         private final Theme th;
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF r = new RectF();
+        private final android.graphics.Path path = new android.graphics.Path();
         private CarData.State s;
+        // animated opening 0..1 for: FR, FL, RR, RL (car areas 1..4), boot
+        private final float[] cur = new float[5];
+        private long lastFrame;
 
         DoorsView(Context c, Theme th) { super(c); this.th = th; }
 
         void set(CarData.State st) { s = st; invalidate(); }
 
+        private boolean open(int area) { return s != null && s.doorOpen[area]; }
+
         @Override protected void onDraw(Canvas cv) {
+            // --- animation step (about 0.45 s for a full swing)
+            long now = android.os.SystemClock.uptimeMillis();
+            float dt = lastFrame == 0 ? 0 : Math.min(0.05f, (now - lastFrame) / 1000f);
+            lastFrame = now;
+            boolean moving = false;
+            for (int i = 0; i < 5; i++) {
+                float target = open(i + 1) ? 1f : 0f;
+                float step = dt / 0.45f;
+                if (Math.abs(target - cur[i]) > 0.001f) {
+                    cur[i] += Math.signum(target - cur[i]) * Math.min(step, Math.abs(target - cur[i]));
+                    moving = true;
+                }
+            }
+
             float w = getWidth(), h = getHeight(), d = getResources().getDisplayMetrics().density;
-            float bw = w * 0.62f, x0 = (w - bw) / 2;
+            float bw = Math.min(w * 0.42f, h * 0.55f), x0 = (w - bw) / 2, x1 = x0 + bw;
+            float top = d * 2, bot = h - d * 10;     // room behind the car for the boot lid
+
+            // body
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeWidth(2 * d);
             p.setColor(th.text);
-            r.set(x0, d * 2, x0 + bw, h - d * 2);
-            cv.drawRoundRect(r, bw * 0.35f, bw * 0.35f, p);
+            r.set(x0, top, x1, bot);
+            cv.drawRoundRect(r, bw * 0.38f, bw * 0.30f, p);
+            // windscreen and rear glass
+            p.setStrokeWidth(1.4f * d);
+            p.setColor(th.muted);
+            float bh = bot - top;
+            cv.drawLine(x0 + bw * 0.18f, top + bh * 0.26f, x1 - bw * 0.18f, top + bh * 0.26f, p);
+            cv.drawLine(x0 + bw * 0.2f, top + bh * 0.82f, x1 - bw * 0.2f, top + bh * 0.82f, p);
+            // sunroof
             boolean sun = s != null && s.sunroofOpen;
             p.setStyle(Paint.Style.FILL);
             p.setColor(sun ? Theme.CAUTION : th.muted);
-            r.set(x0 + bw * 0.22f, h * 0.30f, x0 + bw * 0.78f, h * 0.44f);
+            r.set(x0 + bw * 0.26f, top + bh * 0.34f, x1 - bw * 0.26f, top + bh * 0.48f);
             cv.drawRoundRect(r, 3 * d, 3 * d, p);
+
+            // doors: {area index 0..3, right side?, hinge y, end y} — FR/FL front, RR/RL rear
+            float[][] door = {{0, 1, 0.28f, 0.52f}, {1, 0, 0.28f, 0.52f}, {2, 1, 0.55f, 0.78f}, {3, 0, 0.55f, 0.78f}};
+            p.setStrokeCap(Paint.Cap.ROUND);
+            for (float[] dr : door) {
+                int i = (int) dr[0];
+                boolean right = dr[1] == 1;
+                float k = ease(cur[i]);
+                float hx = right ? x1 : x0, hy = top + bh * dr[2];
+                float len = bh * (dr[3] - dr[2]);
+                double ang = Math.toRadians(58 * k);           // swings outward around the front hinge
+                float ex = hx + (float) Math.sin(ang) * len * (right ? 1 : -1);
+                float ey = hy + (float) Math.cos(ang) * len;
+                boolean win = s != null && s.windowPct[i + 1] > 0;
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(3.5f * d);
+                p.setColor(k > 0.02f ? Theme.CAUTION : win ? Theme.CAUTION : Theme.SAFE);
+                cv.drawLine(hx, hy, ex, ey, p);
+                if (win && k < 0.02f) {   // open window: small amber notch inside the door
+                    p.setStrokeWidth(2 * d);
+                    float ix = right ? hx - 4 * d : hx + 4 * d;
+                    cv.drawLine(ix, hy + len * 0.25f, ix, hy + len * 0.75f, p);
+                }
+            }
+            // boot: lid slides out behind the car when open
+            float kb = ease(cur[4]);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeWidth(3.5f * d);
-            p.setStrokeCap(Paint.Cap.ROUND);
-            // areas 1..4 = FL, FR, RL, RR (left side drawn on the left)
-            float[][] seg = {{0, 0.30f, 0.52f}, {1, 0.30f, 0.52f}, {0, 0.58f, 0.78f}, {1, 0.58f, 0.78f}};
-            for (int i = 0; i < 4; i++) {
-                boolean open = s != null && (s.doorOpen[i + 1] || s.windowPct[i + 1] > 0);
-                p.setColor(open ? Theme.CAUTION : Theme.SAFE);
-                float x = seg[i][0] == 0 ? x0 - 3 * d : x0 + bw + 3 * d;
-                cv.drawLine(x, h * seg[i][1], x, h * seg[i][2], p);
-            }
-            boolean boot = s != null && s.doorOpen[5];
-            p.setColor(boot ? Theme.CAUTION : Theme.SAFE);
-            cv.drawLine(x0 + bw * 0.3f, h - d, x0 + bw * 0.7f, h - d, p);
+            p.setColor(kb > 0.02f ? Theme.CAUTION : Theme.SAFE);
+            float by = bot - d + kb * 8 * d;
+            cv.drawLine(x0 + bw * 0.28f, by, x1 - bw * 0.28f, by, p);
+
+            if (moving) postInvalidateOnAnimation(); else lastFrame = 0;
         }
+
+        private static float ease(float x) { return x < 0.5f ? 2 * x * x : 1 - (float) Math.pow(-2 * x + 2, 2) / 2; }
     }
 }

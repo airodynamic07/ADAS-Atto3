@@ -47,6 +47,13 @@ public final class SettingsDialog {
         tc.addView(Ui.chip(c, "+ 1 s", false, th, v -> { prefs.setTurnCameraReturnSec(Math.min(15, prefs.turnCameraReturnSec() + 1)); redo.run(); }), weight(c));
         root.addView(tc);
 
+        section(c, root, th, "Tyre pressure unit");
+        LinearLayout tu = row(c);
+        for (String[] u : new String[][]{{"psi", "PSI"}, {"bar", "bar"}, {"kpa", "kPa"}}) {
+            tu.addView(Ui.chip(c, u[1], prefs.tyreUnit().equals(u[0]), th, v -> { prefs.setTyreUnit(u[0]); redo.run(); }), weight(c));
+        }
+        root.addView(tu);
+
         section(c, root, th, "Launcher & windows");
         LinearLayout lw = row(c);
         lw.addView(Ui.chip(c, "⇄ Swap windows", false, th, v -> {

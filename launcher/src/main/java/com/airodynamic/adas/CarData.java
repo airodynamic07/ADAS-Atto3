@@ -34,7 +34,7 @@ public final class CarData {
         public double tripKm = Double.NaN;      // trip A
         public double kwhPer100 = Double.NaN;   // average consumption
         public double healthPct = Double.NaN;   // battery health index (if the car reports it)
-        public final boolean[] doorOpen = new boolean[6];     // 1..4 doors, 5 boot (area numbers from the car)
+        public final boolean[] doorOpen = new boolean[6];     // car area numbers: 1 FR (driver, RHD), 2 FL, 3 RR, 4 RL, 5 boot
         public final int[] windowPct = {0, 0, 0, 0, 0};       // 0 unused, 1..4 windows
         public boolean sunroofOpen;
         public int lock;                        // 0 unknown, 1 locked, 2 unlocked
@@ -180,10 +180,11 @@ public final class CarData {
             if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", a))) s.windowPct[a] = Math.max(0, ((Number) v).intValue());
         }
         if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", 5))) s.sunroofOpen = ((Number) v).intValue() > 0;
-        // Lock: OTA device's left-front lock state works on DiLink 3 (OverDrive): 1 locked, 2 unlocked
+        // Lock: OTA device's left-front lock state. On the user's Atto 3 (car test 2026-11-10)
+        // the raw value is the opposite of OverDrive's note: 1 = unlocked, 2 = locked.
         if (ok(v = call("ota.BYDAutoOtaDevice", "getLFDoorLockState"))) {
             int l = ((Number) v).intValue();
-            s.lock = l == 1 ? 1 : l == 2 ? 2 : 0;
+            s.lock = l == 2 ? 1 : l == 1 ? 2 : 0;
         }
         v = call("radar.BYDAutoRadarDevice", "getAllRadarDistance");
         if (v instanceof int[]) s.radar = (int[]) v;

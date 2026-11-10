@@ -37,6 +37,10 @@ public final class Prefs {
     public boolean speedVoice() { return p.getBoolean("speedVoice", true); }
     public void setSpeedVoice(boolean on) { p.edit().putBoolean("speedVoice", on).apply(); }
 
+    /** Tyre pressure unit: "psi" (default), "bar" or "kpa". */
+    public String tyreUnit() { return p.getString("tyreUnit", "psi"); }
+    public void setTyreUnit(String u) { p.edit().putString("tyreUnit", u).apply(); }
+
     /** Next service odometer reading in km; 0 = not set yet. */
     public int serviceAtKm() { return p.getInt("serviceAtKm", 0); }
     public void setServiceAtKm(int km) { p.edit().putInt("serviceAtKm", km).apply(); }

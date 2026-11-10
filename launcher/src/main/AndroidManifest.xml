@@ -141,7 +141,8 @@
         android:label="ADAS Launcher"
         android:icon="@android:drawable/ic_menu_compass"
         android:usesCleartextTraffic="true"
-        android:resizeableActivity="true">
+        android:resizeableActivity="true"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
         <activity
             android:name=".LauncherActivity"
             android:exported="true"
