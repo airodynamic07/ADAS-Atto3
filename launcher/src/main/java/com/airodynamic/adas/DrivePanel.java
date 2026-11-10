@@ -24,6 +24,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private final Theme th;
     private final LinearLayout root;
     private final LinearLayout shortcuts;
+    private MusicCard music;
     private final Prefs prefs;
     private final TextView used, avg, dist, power, regen, soc, range, since, gptText;
 
@@ -79,11 +80,11 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout bigRow = new LinearLayout(c);
         LinearLayout u = col();
         u.addView(Ui.text(c, "Used", 12, th.muted, false));
-        used = Ui.text(c, "–", 34, th.text, true);
+        used = Ui.text(c, "–", 30, th.text, true);
         u.addView(used);
         LinearLayout a = col();
         a.addView(Ui.text(c, "Average (live)", 12, th.muted, false));
-        avg = Ui.text(c, "–", 34, Theme.CAUTION, true);
+        avg = Ui.text(c, "–", 30, Theme.CAUTION, true);
         a.addView(avg);
         bigRow.addView(u, new LinearLayout.LayoutParams(0, -2, 1f));
         bigRow.addView(a, new LinearLayout.LayoutParams(0, -2, 1.2f));
@@ -98,6 +99,12 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         en.addView(small);
         View fill = new View(c);
         en.addView(fill, new LinearLayout.LayoutParams(-1, 0, 1f));
+        music = new MusicCard(c, th);
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(-1, -2);
+        mlp.bottomMargin = Ui.dp(c, 8);
+        en.addView(music.view(), mlp);
+        View fill2 = new View(c);
+        en.addView(fill2, new LinearLayout.LayoutParams(-1, 0, 1f));
         en.addView(themeControls, new LinearLayout.LayoutParams(-2, -2));
         root.addView(en, new LinearLayout.LayoutParams(-1, 0, 1f));
     }
@@ -202,6 +209,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
     @Override public void setActive(boolean a) {
         if (a) TripEnergy.get(c).addListener(this); else TripEnergy.get(c).removeListener(this);
+        music.setActive(a);
     }
 
     @Override public void onCar(CarData.State s) {
