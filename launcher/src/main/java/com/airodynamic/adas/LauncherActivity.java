@@ -30,7 +30,10 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     private EngineHost engineHost;
 
     private EngineHost engineHost() {
-        if (engineHost == null) engineHost = new EngineHost(this);
+        if (engineHost == null) {
+            engineHost = new EngineHost(this);
+            engineHost.setGhostListener(open -> rebuild());   // Ghost Race opens wide, closes back
+        }
         return engineHost;
     }
     private boolean sportOn;        // Auto Sport currently active
@@ -95,6 +98,9 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         panels[0] = new DrivePanel(this, th, prefs, themeControls(th));
         panels[1] = new EnginePanel(engineHost(), th);
         panels[2] = new InfoPanel(this, th, prefs);
+        // Ghost Race open: it fills the middle + right windows and the graph area (user, 2026-11-10);
+        // the left window stays and gets the full height.
+        boolean wide = engineHost().ghostOpen();
         for (int i = 0; i < 3; i++) {
             frames[i] = new LinearLayout(this);
             frames[i].setOrientation(LinearLayout.VERTICAL);
@@ -103,10 +109,12 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             bodies[i] = new FrameLayout(this);
             bodies[i].addView(panels[i].view(), new FrameLayout.LayoutParams(-1, -1));
             frames[i].addView(bodies[i], new LinearLayout.LayoutParams(-1, -1));
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, 1f);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, wide && i == 1 ? 2.03f : 1f);
             if (i > 0) lp.leftMargin = Ui.dp(this, 10);
+            if (wide && i == 2) continue;   // hidden under Ghost Race
             row.addView(frames[i], lp);
         }
+        engineHost().addGhostClose(th);
         turnCam.attach(bodies[1], th);
 
         FrameLayout graphBox = new FrameLayout(this);
@@ -115,7 +123,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         graphBox.addView(new TripGraph(this, th), new FrameLayout.LayoutParams(-1, -1));
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 132));
         glp.topMargin = Ui.dp(this, 8);
-        root.addView(graphBox, glp);
+        if (!wide) root.addView(graphBox, glp);
 
         setContentView(root);
         for (int i = 0; i < 3; i++) panels[i].onCar(CarData.get(this).last());

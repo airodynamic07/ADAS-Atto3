@@ -311,7 +311,29 @@ public final class EngineHost {
             ghost.loadUrl(GHOST_URL);
         }
         if (ghost != null) ghost.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (ghostClose != null) ghostClose.setVisibility(show ? View.VISIBLE : View.GONE);
+        boolean changed = ghostVisible != show;
         ghostVisible = show;
+        if (changed && ghostListener != null) ghostListener.onGhost(show);
+    }
+
+    /** The launcher makes the window wide (middle + right + graph) while Ghost Race is open. */
+    public interface GhostListener { void onGhost(boolean open); }
+    private GhostListener ghostListener;
+    private android.widget.Button ghostClose;
+    public void setGhostListener(GhostListener l) { ghostListener = l; }
+    public boolean ghostOpen() { return ghostVisible; }
+    public void closeGhost() { showGhost(false); }
+
+    /** Small "back to Engine Sound" button on top of Ghost Race (top centre, away from its own buttons). */
+    public void addGhostClose(Theme th) {
+        if (ghostClose != null) root.removeView(ghostClose);
+        ghostClose = Ui.chip(ctx, "✕  Engine Sound", false, th, v -> showGhost(false));
+        ghostClose.setAlpha(0.85f);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, Ui.dp(ctx, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        lp.topMargin = Ui.dp(ctx, 4);
+        root.addView(ghostClose, lp);
+        ghostClose.setVisibility(ghostVisible ? View.VISIBLE : View.GONE);
     }
 
     /** window.AttoHost for Ghost Race (same functions as in the Engine Sound app). */
