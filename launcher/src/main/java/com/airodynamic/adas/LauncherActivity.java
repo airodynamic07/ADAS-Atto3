@@ -27,6 +27,13 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     private Prefs prefs;
     private Theme theme;            // what is on screen now (may be Sport via Auto Sport)
+    /** Engine Sound + Ghost Race, kept alive for the whole launcher session (sound never restarts). */
+    private EngineHost engineHost;
+
+    private EngineHost engineHost() {
+        if (engineHost == null) engineHost = new EngineHost(this);
+        return engineHost;
+    }
     private boolean sportOn;        // Auto Sport currently active
     private final CameraFeed feed = new CameraFeed();
     private final Panel[] panels = new Panel[3];
@@ -68,6 +75,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     @Override public void rebuild() {
         for (Panel p : panels) if (p != null) p.setActive(false);
         theme = effectiveTheme();
+        if (engineHost != null) engineHost.setTheme(theme);
         Theme th = theme;
         getWindow().setStatusBarColor(th.bg);
         getWindow().setNavigationBarColor(th.bg);
@@ -157,7 +165,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         bodies[win] = new FrameLayout(this);
         String what = showing[win];
         Panel p = Prefs.ADAS.equals(what) ? new AdasPanel(this, th, prefs, feed)
-                : Prefs.ENGINE.equals(what) ? new EnginePanel(this, th)
+                : Prefs.ENGINE.equals(what) ? new EnginePanel(engineHost(), th)
                 : new InfoPanel(this, th, prefs);
         panels[win] = p;
         bodies[win].addView(p.view(), new FrameLayout.LayoutParams(-1, -1));
@@ -196,6 +204,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     @Override protected void onResume() {
         super.onResume();
+        if (engineHost != null) engineHost.setForeground(true);
         resumed = true;
         CarData.get(this).addListener(this);
         for (Panel p : panels) if (p != null) p.setActive(true);
@@ -204,6 +213,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     @Override protected void onPause() {
         super.onPause();
+        if (engineHost != null) engineHost.setForeground(false);   // keep the engine sound going
         resumed = false;
         CarData.get(this).removeListener(this);
         for (Panel p : panels) if (p != null) p.setActive(false);

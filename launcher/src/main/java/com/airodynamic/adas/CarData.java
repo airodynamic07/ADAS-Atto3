@@ -95,12 +95,25 @@ public final class CarData {
         }
     };
 
-    private Object dev(String cls) {
+    private synchronized Object dev(String cls) {
         if (devices.containsKey(cls)) return devices.get(cls);
         Object d = null;
         try { d = Class.forName(P + cls).getMethod("getInstance", Context.class).invoke(null, ctx); } catch (Throwable ignored) {}
         devices.put(cls, d);
         return d;
+    }
+
+    /** Fast read for Engine Sound (20 times a second): {km/h, accelerator 0-100 or NaN}. */
+    public double[] speedAndPedal() {
+        Object v = call("speed.BYDAutoSpeedDevice", "getCurrentSpeed");
+        Object p = call("speed.BYDAutoSpeedDevice", "getAccelerateDeepness");
+        double kmh = ok(v) ? Math.max(0, ((Number) v).doubleValue()) : 0;
+        double pedal = ok(p) && ((Number) p).doubleValue() >= 0 && ((Number) p).doubleValue() <= 100 ? ((Number) p).doubleValue() : Double.NaN;
+        return new double[]{kmh, pedal};
+    }
+
+    public boolean onBydCar() {
+        try { Class.forName(P + "speed.BYDAutoSpeedDevice"); return true; } catch (Throwable t) { return false; }
     }
 
     private Object call(String cls, String name, Object... args) {
