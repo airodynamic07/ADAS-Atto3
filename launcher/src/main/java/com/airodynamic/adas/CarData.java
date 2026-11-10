@@ -138,23 +138,64 @@ public final class CarData {
         }
     }
 
-    /** Generic feature read: device.get(int[]{id}, Integer.class) (OverDrive's method). */
-    private Object feature(String cls, int id) {
+    /**
+     * Generic feature read: device.get(int[]{id}, <primitive type>) (OverDrive's method).
+     * The car only answers when asked with the primitive type (int.class, not Integer.class),
+     * and replies with a BYDAutoEventValue whose intValue field holds the number.
+     */
+    private Integer feature(String cls, int id) {
+        Object d = dev(cls);
+        if (d == null) return null;
+        Method m = null;
+        for (Class<?> k = d.getClass(); k != null && k != Object.class && m == null; k = k.getSuperclass()) {
+            try { m = k.getDeclaredMethod("get", int[].class, Class.class); m.setAccessible(true); } catch (Throwable ignored) {}
+        }
+        if (m == null) return null;
+        for (Class<?> t : new Class<?>[]{int.class, long.class}) {
+            try {
+                Integer v = intOf(m.invoke(d, new int[]{id}, t));
+                if (v != null) return v;
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
+    /** device.get(deviceType, featureId) — the other read channel some firmwares use. */
+    private Integer featureTyped(String cls, int type, int id) {
         Object d = dev(cls);
         if (d == null) return null;
         try {
-            for (Class<?> k = d.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
-                try {
-                    Method m = k.getDeclaredMethod("get", int[].class, Class.class);
-                    m.setAccessible(true);
-                    Object r = m.invoke(d, new int[]{id}, Integer.class);
-                    if (r instanceof int[] && ((int[]) r).length > 0) return ((int[]) r)[0];
-                    return r;
-                } catch (NoSuchMethodException ignored) {}
-            }
-        } catch (Throwable ignored) {}
-        return null;
+            Method m = d.getClass().getMethod("get", int.class, int.class);
+            return intOf(m.invoke(d, type, id));
+        } catch (Throwable t) { return null; }
     }
+
+    private static Integer intOf(Object r) {
+        if (r == null) return null;
+        if (r instanceof int[]) return ((int[]) r).length > 0 ? ((int[]) r)[0] : null;
+        if (r instanceof Number) return ((Number) r).intValue();
+        try { return r.getClass().getField("intValue").getInt(r); } catch (Throwable t) { return null; }
+    }
+
+    private double health = Double.NaN;
+    private long healthAt;
+
+    /** Battery health %, tried the ways OverDrive does; read again every 10 minutes once found. */
+    private double batteryHealth() {
+        long now = System.currentTimeMillis();
+        if (!Double.isNaN(health) && now - healthAt < 600_000L) return health;
+        if (Double.isNaN(health) && now - healthAt < 30_000L) return health;   // not found: retry every 30 s
+        healthAt = now;
+        Integer v = featureTyped("instrument.BYDAutoInstrumentDevice", 1000, 0x44400028);
+        if (!plausibleHealth(v)) { Object o = call("statistic.BYDAutoStatisticDevice", "getStatisticBatteryHealthyIndex"); v = o instanceof Number ? ((Number) o).intValue() : null; }
+        if (!plausibleHealth(v)) v = featureTyped("statistic.BYDAutoStatisticDevice", 1014, 1145045032);
+        if (!plausibleHealth(v)) v = feature("statistic.BYDAutoStatisticDevice", 1145045032);   // STATISTIC_BATTERY_HEALTHY_INDEX
+        if (!plausibleHealth(v)) { Object o = call("vehiclehealth.BYDAutoVehicleHealthDevice", "getBatteryHealthStatus"); v = o instanceof Number && ((Number) o).intValue() >= 50 ? ((Number) o).intValue() : null; }
+        health = plausibleHealth(v) ? v : Double.NaN;
+        return health;
+    }
+
+    private static boolean plausibleHealth(Integer v) { return v != null && v > 0 && v <= 100; }
 
     private static boolean ok(Object v) {
         if (!(v instanceof Number)) return false;
@@ -193,8 +234,7 @@ public final class CarData {
             s.tripKm = ((Number) v).doubleValue() / 10.0;
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getAverageElectricConsumption", 1)) && ((Number) v).doubleValue() > 0)
             s.kwhPer100 = ((Number) v).doubleValue();
-        Object h = feature("statistic.BYDAutoStatisticDevice", 1145045032);   // STATISTIC_BATTERY_HEALTHY_INDEX
-        if (ok(h) && ((Number) h).doubleValue() > 0 && ((Number) h).doubleValue() <= 100) s.healthPct = ((Number) h).doubleValue();
+        s.healthPct = batteryHealth();
         for (int a = 1; a <= 5; a++) {
             if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getDoorState", a))) s.doorOpen[a] = ((Number) v).intValue() == 1;
         }

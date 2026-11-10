@@ -41,7 +41,7 @@ public final class InfoPanel implements Panel {
     private final TextView[] tyre = new TextView[4];
     private final TextView[] tyreT = new TextView[4];
     private final DoorsView doors;
-    private final TextView doorsText, trip, tripSub, health, odo, odoSub, weather, weatherSub, pm, pmSub, limit, song, parkedSub, aiText;
+    private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub, weather, weatherSub, pm, pmSub, limit, song, parkedSub, aiText;
     private final Button play;
 
     public InfoPanel(Context c, Theme th, Prefs prefs) {
@@ -93,7 +93,7 @@ public final class InfoPanel implements Panel {
         LinearLayout t1 = tile("Trip");
         trip = big(t1); tripSub = small(t1);
         LinearLayout t2 = tile("Battery health");
-        health = big(t2); small(t2).setText("from the car");
+        health = big(t2); healthSub = small(t2); healthSub.setText("from the car");
         LinearLayout t3 = tile("Odometer");
         odo = big(t3); odoSub = small(t3);
         t3.setOnClickListener(v -> serviceDialog());
@@ -163,12 +163,13 @@ public final class InfoPanel implements Panel {
         r5.addView(pk, weight(1, true));
         LinearLayout ai = card();
         ai.addView(label("Assistant"));
-        aiText = Ui.text(c, "Ask about your car (Phase 5)", 13, th.text, false);
+        String asst = assistantPkg();
+        aiText = Ui.text(c, asst == null ? "No Gemini / Google app found" : "Opens " + Apps.label(c, asst), 13, th.text, false);
         aiText.setPadding(0, Ui.dp(c, 4), 0, Ui.dp(c, 6));
         ai.addView(aiText, new LinearLayout.LayoutParams(-1, 0, 1f));
         LinearLayout ab = new LinearLayout(c);
-        ab.addView(Ui.chip(c, "🎤 Ask", true, th, v -> soon()), weight(1.4f, true));
-        ab.addView(Ui.chip(c, "⤢ Open", false, th, v -> soon()), weight(1, false));
+        ab.addView(Ui.chip(c, "🎤 Ask", true, th, v -> openAssistant(true)), weight(1.4f, true));
+        ab.addView(Ui.chip(c, "⤢ Open", false, th, v -> openAssistant(false)), weight(1, false));
         ai.addView(ab);
         r5.addView(ai, weight(1.25f, false));
         LinearLayout.LayoutParams r5lp = new LinearLayout.LayoutParams(-1, 0, 1f);
@@ -242,7 +243,30 @@ public final class InfoPanel implements Panel {
         return lp;
     }
 
-    private void soon() { Toast.makeText(c, "The assistant arrives in Phase 5", Toast.LENGTH_SHORT).show(); }
+    /** Gemini first (GBox or normal), then the Google app (its mic button talks to Gemini). */
+    private static final String[] ASSISTANTS = {
+            "com.gbox.com.google.android.apps.bard", "com.google.android.apps.bard",
+            "com.gbox.com.google.android.googlequicksearchbox", "com.google.android.googlequicksearchbox"};
+
+    private String assistantPkg() {
+        for (String p : ASSISTANTS) if (Apps.installed(c, p)) return p;
+        return null;
+    }
+
+    private void openAssistant(boolean voice) {
+        // Gemini inside GBox can't be told to start listening from outside, so 🎤 Ask opens it:
+        // tap its mic there. A normally installed Google app gets the voice-search screen directly.
+        if (voice && Apps.installed(c, "com.google.android.googlequicksearchbox")) {
+            try {
+                c.startActivity(new android.content.Intent(android.speech.RecognizerIntent.ACTION_VOICE_SEARCH_HANDS_FREE)
+                        .setPackage("com.google.android.googlequicksearchbox").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+                return;
+            } catch (Throwable ignored) {}
+        }
+        String p = assistantPkg();
+        if (p == null) { Toast.makeText(c, "Gemini / Google app not found", Toast.LENGTH_SHORT).show(); return; }
+        if (!Apps.open(c, p, CarData.get(c).last())) Toast.makeText(c, "Couldn't open " + Apps.label(c, p), Toast.LENGTH_SHORT).show();
+    }
 
     private void showLimit() {
         limit.setText(prefs.speedLimit() + (prefs.speedVoice() ? " 🔊" : " 🔇"));
@@ -302,13 +326,14 @@ public final class InfoPanel implements Panel {
     private void refreshMedia() {
         if (!NowPlaying.allowed(c)) { song.setText("Tap ⏯ to allow"); return; }
         MediaController mc = NowPlaying.active(c);
-        song.setText(mc == null ? "Nothing playing" : NowPlaying.title(mc));
+        String t = mc == null ? "" : NowPlaying.title(mc);
+        song.setText(mc == null ? "Nothing playing" : !t.isEmpty() ? t : Apps.label(c, mc.getPackageName()));
     }
 
     private void refreshWeather() {
         Places.weather(c, w -> {
             weather.setText(w.icon() + " " + (w.tempC == Integer.MIN_VALUE ? "–" : w.tempC + "°"));
-            weatherSub.setText(w.rainPct < 0 ? "" : String.format(Locale.US, "rain %d%% %02d:00", w.rainPct, w.rainHour));
+            weatherSub.setText(!w.note.isEmpty() ? w.note : w.rainPct < 0 ? "" : String.format(Locale.US, "rain %d%% %02d:00", w.rainPct, w.rainHour));
         });
     }
 
@@ -349,6 +374,7 @@ public final class InfoPanel implements Panel {
         trip.setText(Double.isNaN(s.tripKm) ? "–" : String.format(Locale.US, "%.0f km", s.tripKm));
         tripSub.setText(Double.isNaN(s.kwhPer100) ? "" : String.format(Locale.US, "%.1f kWh/100", s.kwhPer100));
         health.setText(Double.isNaN(s.healthPct) ? "–" : String.format(Locale.US, "%.0f%%", s.healthPct));
+        healthSub.setText(Double.isNaN(s.healthPct) ? (s.known ? "car not reporting" : "from the car") : "from the car");
         odo.setText(Double.isNaN(s.odometerKm) ? "–" : String.format(Locale.US, "%,d", Math.round(s.odometerKm)));
         int due = prefs.serviceAtKm();
         if (due > 0 && !Double.isNaN(s.odometerKm)) {
