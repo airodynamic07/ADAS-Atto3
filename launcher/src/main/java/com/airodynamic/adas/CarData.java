@@ -29,6 +29,22 @@ public final class CarData {
         public final double[] tyreBar = {Double.NaN, Double.NaN, Double.NaN, Double.NaN}; // FL FR RL RR
         public int turn;                      // 0 none, 1 left, 2 right, 3 hazard
         public int[] radar = new int[0];      // cm per sensor, 150 = nothing near
+        public final int[] tyreC = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+        public double odometerKm = Double.NaN;
+        public double tripKm = Double.NaN;      // trip A
+        public double kwhPer100 = Double.NaN;   // average consumption
+        public double healthPct = Double.NaN;   // battery health index (if the car reports it)
+        public final boolean[] doorOpen = new boolean[6];     // 1..4 doors, 5 boot (area numbers from the car)
+        public final int[] windowPct = {0, 0, 0, 0, 0};       // 0 unused, 1..4 windows
+        public boolean sunroofOpen;
+        public int lock;                        // 0 unknown, 1 locked, 2 unlocked
+        public double lat = Double.NaN, lng = Double.NaN;
+
+        public boolean anyOpen() {
+            for (boolean d : doorOpen) if (d) return true;
+            for (int w : windowPct) if (w > 0) return true;
+            return sunroofOpen;
+        }
         public boolean known;                 // at least one reading worked
 
         public boolean parked() { return (gear == 0 || gear == 1) && !(speedKmh > 1); }
@@ -100,6 +116,24 @@ public final class CarData {
         }
     }
 
+    /** Generic feature read: device.get(int[]{id}, Integer.class) (OverDrive's method). */
+    private Object feature(String cls, int id) {
+        Object d = dev(cls);
+        if (d == null) return null;
+        try {
+            for (Class<?> k = d.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+                try {
+                    Method m = k.getDeclaredMethod("get", int[].class, Class.class);
+                    m.setAccessible(true);
+                    Object r = m.invoke(d, new int[]{id}, Integer.class);
+                    if (r instanceof int[] && ((int[]) r).length > 0) return ((int[]) r)[0];
+                    return r;
+                } catch (NoSuchMethodException ignored) {}
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
     private static boolean ok(Object v) {
         if (!(v instanceof Number)) return false;
         double d = ((Number) v).doubleValue();
@@ -124,6 +158,32 @@ public final class CarData {
         if (ok(v = call("light.BYDAutoLightDevice", "getTurnLightFlashState"))) {
             int f = ((Number) v).intValue();
             s.turn = (f == 2 || f == 3) ? 1 : (f == 4 || f == 5) ? 2 : (f == 6 || f == 7) ? 3 : 0;
+        }
+        for (int i = 0; i < 4; i++) {
+            if (ok(v = call("instrument.BYDAutoInstrumentDevice", "getWheelTemperature", i + 1))) s.tyreC[i] = ((Number) v).intValue();
+        }
+        // Odometer: whole km, or 0.1 km when the raw value is >= 1,000,000 (OverDrive's rule)
+        if (ok(v = call("statistic.BYDAutoStatisticDevice", "getTotalMileageValue")) && ((Number) v).doubleValue() > 0) {
+            double raw = ((Number) v).doubleValue();
+            s.odometerKm = raw >= 1_000_000 ? raw / 10.0 : raw;
+        }
+        if (ok(v = call("statistic.BYDAutoStatisticDevice", "getMileageNumber", 0)) && ((Number) v).doubleValue() >= 0)
+            s.tripKm = ((Number) v).doubleValue() / 10.0;
+        if (ok(v = call("statistic.BYDAutoStatisticDevice", "getAverageElectricConsumption", 1)) && ((Number) v).doubleValue() > 0)
+            s.kwhPer100 = ((Number) v).doubleValue();
+        Object h = feature("statistic.BYDAutoStatisticDevice", 1145045032);   // STATISTIC_BATTERY_HEALTHY_INDEX
+        if (ok(h) && ((Number) h).doubleValue() > 0 && ((Number) h).doubleValue() <= 100) s.healthPct = ((Number) h).doubleValue();
+        for (int a = 1; a <= 5; a++) {
+            if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getDoorState", a))) s.doorOpen[a] = ((Number) v).intValue() == 1;
+        }
+        for (int a = 1; a <= 4; a++) {
+            if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", a))) s.windowPct[a] = Math.max(0, ((Number) v).intValue());
+        }
+        if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", 5))) s.sunroofOpen = ((Number) v).intValue() > 0;
+        // Lock: OTA device's left-front lock state works on DiLink 3 (OverDrive): 1 locked, 2 unlocked
+        if (ok(v = call("ota.BYDAutoOtaDevice", "getLFDoorLockState"))) {
+            int l = ((Number) v).intValue();
+            s.lock = l == 1 ? 1 : l == 2 ? 2 : 0;
         }
         v = call("radar.BYDAutoRadarDevice", "getAllRadarDistance");
         if (v instanceof int[]) s.radar = (int[]) v;

@@ -1,142 +1,396 @@
 package com.airodynamic.adas;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.location.Location;
+import android.media.session.MediaController;
+import android.media.session.PlaybackState;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.Button;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.Locale;
 
 /**
- * Right window: assistant card (Phase 5), tyres, outside and inside cards with PM2.5.
- * No climate panel: the car's own bottom bar already does the A/C (user's choice).
+ * Right window, one page (user's choice): tyres + doors/lock, trip / battery health /
+ * odometer, weather / PM2.5 / my speed limit, now playing, where I parked + assistant.
+ * No climate panel: the car's own bottom bar does the A/C.
  */
 public final class InfoPanel implements Panel {
     private static final double LOW_BAR = 2.3;
+
     private final Context c;
     private final Theme th;
+    private final Prefs prefs;
     private final LinearLayout root;
-    private final TextView[] tyre = new TextView[4];
-    private final TextView tyreNote, outTemp, outPm, outLevel, inPm, inLevel;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private boolean active;
 
-    public InfoPanel(Context c, Theme th) {
+    private final TextView[] tyre = new TextView[4];
+    private final TextView[] tyreT = new TextView[4];
+    private final DoorsView doors;
+    private final TextView doorsText, trip, tripSub, health, odo, odoSub, weather, weatherSub, pm, pmSub, limit, song, parkedSub, aiText;
+    private final Button play;
+
+    public InfoPanel(Context c, Theme th, Prefs prefs) {
         this.c = c;
         this.th = th;
+        this.prefs = prefs;
         root = new LinearLayout(c);
         root.setOrientation(LinearLayout.VERTICAL);
-        int gap = Ui.dp(c, 8);
+        int pad = Ui.dp(c, 8);
+        root.setPadding(pad, pad, pad, pad);
 
-        LinearLayout ai = card();
-        ai.addView(Ui.label(c, "Assistant", th));
-        TextView aiText = Ui.text(c, "Ask about your car — coming in Phase 5", 15, th.text, false);
-        aiText.setPadding(0, Ui.dp(c, 6), 0, 0);
-        ai.addView(aiText);
-        root.addView(ai, lp(-2, 0, gap));
-
-        LinearLayout row = new LinearLayout(c);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        root.addView(row, new LinearLayout.LayoutParams(-1, 0, 1f));
-
-        LinearLayout tyres = card();
-        LinearLayout head = new LinearLayout(c);
-        head.addView(Ui.label(c, "Tyres (bar)", th), new LinearLayout.LayoutParams(0, -2, 1f));
-        tyreNote = Ui.text(c, "", 11, Theme.CAUTION, true);
-        head.addView(tyreNote);
-        tyres.addView(head);
+        // --- row 1: tyres + doors & windows
+        LinearLayout r1 = row();
+        LinearLayout ty = card();
+        ty.addView(label("Tyres · bar / °C"));
         GridLayout g = new GridLayout(c);
         g.setColumnCount(2);
-        g.setPadding(0, Ui.dp(c, 10), 0, 0);
         for (int i = 0; i < 4; i++) {
-            tyre[i] = Ui.text(c, "–", 22, th.text, true);
-            tyre[i].setGravity(Gravity.CENTER);
-            tyre[i].setBackground(Ui.round(th.chip, 0, 10, c));
-            GridLayout.LayoutParams p = new GridLayout.LayoutParams(GridLayout.spec(i / 2, 1f), GridLayout.spec(i % 2, 1f));
-            p.width = 0;
-            p.height = Ui.dp(c, 54);
-            p.setMargins(Ui.dp(c, 4), i / 2 == 1 ? Ui.dp(c, 40) : 0, Ui.dp(c, 4), 0);
-            g.addView(tyre[i], p);
+            LinearLayout cell = new LinearLayout(c);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(Gravity.CENTER);
+            cell.setBackground(Ui.round(th.chip, 0, 10, c));
+            cell.setPadding(0, Ui.dp(c, 3), 0, Ui.dp(c, 3));
+            tyre[i] = Ui.text(c, "–", 16, th.text, true);
+            tyreT[i] = Ui.text(c, "", 10, th.muted, false);
+            cell.addView(tyre[i]);
+            cell.addView(tyreT[i]);
+            GridLayout.LayoutParams lp = new GridLayout.LayoutParams(GridLayout.spec(i / 2), GridLayout.spec(i % 2, 1f));
+            lp.width = 0;
+            lp.setMargins(Ui.dp(c, 2), Ui.dp(c, 4), Ui.dp(c, 2), 0);
+            g.addView(cell, lp);
         }
-        tyres.addView(g);
-        TextView car = Ui.text(c, "▲ front", 11, th.muted, false);
-        car.setGravity(Gravity.CENTER);
-        tyres.addView(car);
-        row.addView(tyres, new LinearLayout.LayoutParams(0, -1, 1f));
+        ty.addView(g);
+        r1.addView(ty, weight(1, true));
+        LinearLayout dw = card();
+        dw.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView dl = label("Doors & windows");
+        dw.addView(dl, new LinearLayout.LayoutParams(-1, -2));
+        doors = new DoorsView(c, th);
+        dw.addView(doors, new LinearLayout.LayoutParams(Ui.dp(c, 44), Ui.dp(c, 66)));
+        doorsText = Ui.text(c, "", 11, Theme.SAFE, false);
+        dw.addView(doorsText);
+        r1.addView(dw, weight(1, false));
+        root.addView(r1);
 
-        LinearLayout temps = new LinearLayout(c);
-        temps.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -1, 1f);
-        tl.leftMargin = gap;
-        row.addView(temps, tl);
+        // --- row 2: trip, battery health, odometer
+        LinearLayout r2 = row();
+        LinearLayout t1 = tile("Trip");
+        trip = big(t1); tripSub = small(t1);
+        LinearLayout t2 = tile("Battery health");
+        health = big(t2); small(t2).setText("from the car");
+        LinearLayout t3 = tile("Odometer");
+        odo = big(t3); odoSub = small(t3);
+        t3.setOnClickListener(v -> serviceDialog());
+        r2.addView(t1, weight(1, true)); r2.addView(t2, weight(1, true)); r2.addView(t3, weight(1, false));
+        root.addView(r2);
 
-        LinearLayout out = card();
-        out.addView(Ui.label(c, "Outside", th));
-        outTemp = Ui.text(c, "–°", 40, th.text, true);
-        out.addView(outTemp);
-        LinearLayout op = new LinearLayout(c);
-        op.addView(Ui.text(c, "PM2.5 ", 12, th.muted, false));
-        outPm = Ui.text(c, "–", 18, th.text, true);
-        outLevel = Ui.text(c, "", 13, th.accent, true);
-        op.addView(outPm);
-        op.addView(outLevel);
-        out.addView(op);
-        temps.addView(out, lp(0, 1f, gap));
+        // --- row 3: weather, PM2.5, my speed limit
+        LinearLayout r3 = row();
+        LinearLayout w = tile("Weather");
+        weather = big(w); weatherSub = small(w);
+        LinearLayout p = tile("PM2.5 out / in");
+        pm = big(p); pmSub = small(p);
+        LinearLayout l = tile("My speed limit");
+        limit = big(l);
+        LinearLayout lb = new LinearLayout(c);
+        lb.addView(Ui.chip(c, "−", false, th, v -> { prefs.setSpeedLimit(Math.max(30, prefs.speedLimit() - 10)); showLimit(); }), weight(1, true));
+        lb.addView(Ui.chip(c, "+", false, th, v -> { prefs.setSpeedLimit(Math.min(180, prefs.speedLimit() + 10)); showLimit(); }), weight(1, false));
+        l.addView(lb);
+        limit.setOnClickListener(v -> { prefs.setSpeedVoice(!prefs.speedVoice()); showLimit(); });
+        r3.addView(w, weight(1, true)); r3.addView(p, weight(1, true)); r3.addView(l, weight(1, false));
+        root.addView(r3);
+        showLimit();
 
-        LinearLayout in = card();
-        in.addView(Ui.label(c, "Inside", th));
-        in.addView(Ui.text(c, "–°", 40, th.muted, true));   // the car has no cabin temperature reading
-        LinearLayout ip = new LinearLayout(c);
-        ip.addView(Ui.text(c, "PM2.5 ", 12, th.muted, false));
-        inPm = Ui.text(c, "–", 18, th.text, true);
-        inLevel = Ui.text(c, "", 13, th.accent, true);
-        ip.addView(inPm);
-        ip.addView(inLevel);
-        in.addView(ip);
-        temps.addView(in, lp(0, 1f, 0));
+        // --- row 4: now playing
+        LinearLayout np = card();
+        np.setOrientation(LinearLayout.HORIZONTAL);
+        np.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout npText = new LinearLayout(c);
+        npText.setOrientation(LinearLayout.VERTICAL);
+        npText.addView(label("Now playing"));
+        song = Ui.text(c, "", 13, th.text, true);
+        song.setSingleLine(true);
+        song.setEllipsize(TextUtils.TruncateAt.END);
+        npText.addView(song);
+        np.addView(npText, new LinearLayout.LayoutParams(0, -2, 1f));
+        np.addView(Ui.chip(c, "⏮", false, th, v -> media(0)), sq());
+        play = Ui.chip(c, "⏯", false, th, v -> media(1));
+        np.addView(play, sq());
+        np.addView(Ui.chip(c, "⏭", false, th, v -> media(2)), sq());
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(-1, -2);
+        nlp.bottomMargin = Ui.dp(c, 6);
+        root.addView(np, nlp);
+
+        // --- row 5: where I parked + assistant
+        LinearLayout r5 = row();
+        LinearLayout pk = card();
+        pk.addView(label("Where I parked"));
+        parkedSub = Ui.text(c, "", 14, th.text, true);
+        parkedSub.setPadding(0, Ui.dp(c, 6), 0, Ui.dp(c, 6));
+        pk.addView(parkedSub);
+        pk.addView(Ui.chip(c, "Show on map", false, th, v -> showParked()));
+        r5.addView(pk, weight(1, true));
+        LinearLayout ai = card();
+        ai.addView(label("Assistant"));
+        aiText = Ui.text(c, "Ask about your car (Phase 5)", 13, th.text, false);
+        aiText.setPadding(0, Ui.dp(c, 4), 0, Ui.dp(c, 6));
+        ai.addView(aiText, new LinearLayout.LayoutParams(-1, 0, 1f));
+        LinearLayout ab = new LinearLayout(c);
+        ab.addView(Ui.chip(c, "🎤 Ask", true, th, v -> soon()), weight(1.4f, true));
+        ab.addView(Ui.chip(c, "⤢ Open", false, th, v -> soon()), weight(1, false));
+        ai.addView(ab);
+        r5.addView(ai, weight(1.25f, false));
+        LinearLayout.LayoutParams r5lp = new LinearLayout.LayoutParams(-1, 0, 1f);
+        root.addView(r5, r5lp);
+    }
+
+    // ---------------------------------------------------------------- building helpers
+
+    private LinearLayout row() {
+        LinearLayout r = new LinearLayout(c);
+        r.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = Ui.dp(c, 6);
+        r.setLayoutParams(lp);
+        return r;
     }
 
     private LinearLayout card() {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.VERTICAL);
-        l.setGravity(Gravity.CENTER_VERTICAL);
-        int p = Ui.dp(c, 12);
-        l.setPadding(p, p, p, p);
-        l.setBackground(Ui.round(th.panel, th.line, 20, c));
+        int p = Ui.dp(c, 9);
+        l.setPadding(p, Ui.dp(c, 7), p, Ui.dp(c, 7));
+        l.setBackground(Ui.round(th.panel, th.line, 16, c));
         return l;
     }
 
-    private static LinearLayout.LayoutParams lp(int h, float weight, int bottom) {
-        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, h == 0 ? 0 : h, weight);
-        l.bottomMargin = bottom;
+    private LinearLayout tile(String name) {
+        LinearLayout l = card();
+        l.addView(label(name));
         return l;
     }
 
-    private void pm(TextView v, TextView level, int pm) {
-        if (pm < 0) { v.setText("–"); level.setText(""); return; }
-        v.setText(pm + "  ");
-        if (pm <= 25) { level.setText("Good"); level.setTextColor(th.accent); }
-        else if (pm <= 50) { level.setText("Moderate"); level.setTextColor(Theme.CAUTION); }
-        else { level.setText("Unhealthy"); level.setTextColor(Theme.DANGER); }
+    private TextView label(String s) {
+        TextView t = Ui.label(c, s, th);
+        t.setTextSize(10);
+        return t;
     }
+
+    private TextView big(LinearLayout parent) {
+        TextView t = Ui.text(c, "–", 18, th.text, true);
+        t.setPadding(0, Ui.dp(c, 2), 0, 0);
+        parent.addView(t);
+        return t;
+    }
+
+    private TextView small(LinearLayout parent) {
+        TextView t = Ui.text(c, "", 10, th.muted, false);
+        t.setSingleLine(true);
+        t.setEllipsize(TextUtils.TruncateAt.END);
+        parent.addView(t);
+        return t;
+    }
+
+    private LinearLayout.LayoutParams weight(float w, boolean gapRight) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, w);
+        if (gapRight) lp.rightMargin = Ui.dp(c, 6);
+        return lp;
+    }
+
+    private LinearLayout.LayoutParams sq() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(c, 44), Ui.dp(c, 40));
+        lp.leftMargin = Ui.dp(c, 4);
+        return lp;
+    }
+
+    private void soon() { Toast.makeText(c, "The assistant arrives in Phase 5", Toast.LENGTH_SHORT).show(); }
+
+    private void showLimit() {
+        limit.setText(prefs.speedLimit() + (prefs.speedVoice() ? " 🔊" : " 🔇"));
+    }
+
+    // ---------------------------------------------------------------- actions
+
+    private void serviceDialog() {
+        CarData.State s = CarData.get(c).last();
+        int base = prefs.serviceAtKm() > 0 ? prefs.serviceAtKm()
+                : (Double.isNaN(s.odometerKm) ? 10000 : (int) Math.round(s.odometerKm / 1000.0) * 1000 + 10000);
+        final int[] v = {base};
+        LinearLayout box = new LinearLayout(c);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(Ui.dp(c, 20), Ui.dp(c, 12), Ui.dp(c, 20), 0);
+        TextView t = Ui.text(c, "", 26, th.text, true);
+        t.setGravity(Gravity.CENTER);
+        Runnable show = () -> t.setText(String.format(Locale.US, "%,d km", v[0]));
+        show.run();
+        box.addView(t);
+        LinearLayout b = new LinearLayout(c);
+        b.addView(Ui.chip(c, "− 1,000", false, th, x -> { v[0] = Math.max(1000, v[0] - 1000); show.run(); }), weight(1, true));
+        b.addView(Ui.chip(c, "+ 1,000", false, th, x -> { v[0] += 1000; show.run(); }), weight(1, false));
+        box.addView(b, new LinearLayout.LayoutParams(-1, Ui.dp(c, 48)));
+        new AlertDialog.Builder(c).setTitle("Next service at (odometer)").setView(box)
+                .setPositiveButton("Save", (d, w) -> prefs.setServiceAtKm(v[0]))
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void showParked() {
+        double lat = prefs.parkedLat(), lng = prefs.parkedLng();
+        if (Double.isNaN(lat)) { Toast.makeText(c, "Saved the next time you put the car in P", Toast.LENGTH_SHORT).show(); return; }
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(String.format(Locale.US, "geo:%f,%f?q=%f,%f(Parked)", lat, lng, lat, lng)));
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try { c.startActivity(i); } catch (Exception e) { Toast.makeText(c, "No maps app found", Toast.LENGTH_SHORT).show(); }
+    }
+
+    private void media(int what) {
+        if (!NowPlaying.allowed(c)) {
+            Toast.makeText(c, "Turn on 'Notification access' for ADAS Launcher", Toast.LENGTH_LONG).show();
+            Intent i = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try { c.startActivity(i); } catch (Exception ignored) {}
+            return;
+        }
+        MediaController mc = NowPlaying.active(c);
+        if (mc == null) return;
+        MediaController.TransportControls tc = mc.getTransportControls();
+        if (what == 0) tc.skipToPrevious();
+        else if (what == 2) tc.skipToNext();
+        else {
+            PlaybackState st = mc.getPlaybackState();
+            if (st != null && st.getState() == PlaybackState.STATE_PLAYING) tc.pause(); else tc.play();
+        }
+        main.postDelayed(this::refreshMedia, 600);
+    }
+
+    private void refreshMedia() {
+        if (!NowPlaying.allowed(c)) { song.setText("Tap ⏯ to allow"); return; }
+        MediaController mc = NowPlaying.active(c);
+        song.setText(mc == null ? "Nothing playing" : NowPlaying.title(mc));
+    }
+
+    private void refreshWeather() {
+        Places.weather(c, w -> {
+            weather.setText(w.icon() + " " + (w.tempC == Integer.MIN_VALUE ? "–" : w.tempC + "°"));
+            weatherSub.setText(w.rainPct < 0 ? "" : String.format(Locale.US, "rain %d%% %02d:00", w.rainPct, w.rainHour));
+        });
+    }
+
+    private final Runnable slow = new Runnable() {
+        @Override public void run() {
+            if (!active) return;
+            refreshMedia();
+            refreshWeather();
+            main.postDelayed(this, 5000);
+        }
+    };
+
+    // ---------------------------------------------------------------- Panel
 
     @Override public View view() { return root; }
-    @Override public void setActive(boolean a) {}
+
+    @Override public void setActive(boolean a) {
+        active = a;
+        main.removeCallbacks(slow);
+        if (a) main.post(slow);
+    }
 
     @Override public void onCar(CarData.State s) {
         String[] names = {"FL", "FR", "RL", "RR"};
-        String low = "";
         for (int i = 0; i < 4; i++) {
             double b = s.tyreBar[i];
+            boolean low = !Double.isNaN(b) && b < LOW_BAR;
             tyre[i].setText(Double.isNaN(b) ? "–" : String.format(Locale.US, "%.1f", b));
-            boolean isLow = !Double.isNaN(b) && b < LOW_BAR;
-            tyre[i].setBackground(Ui.round(isLow ? Theme.CAUTION : th.chip, 0, 10, c));
-            tyre[i].setTextColor(isLow ? 0xFF000000 : th.text);
-            if (isLow) low = names[i] + " low";
+            tyre[i].setTextColor(low ? Theme.CAUTION : th.text);
+            tyreT[i].setText(s.tyreC[i] == Integer.MIN_VALUE ? names[i] : s.tyreC[i] + "°");
         }
-        tyreNote.setText(low);
-        outTemp.setText(s.outsideC == Integer.MIN_VALUE ? "–°" : s.outsideC + "°");
-        pm(outPm, outLevel, s.pmOut);
-        pm(inPm, inLevel, s.pmIn);
+        doors.set(s);
+        boolean open = s.anyOpen();
+        String lock = s.lock == 1 ? " · 🔒 Locked" : s.lock == 2 ? " · Unlocked" : "";
+        doorsText.setText((open ? "Something is open" : "All closed") + lock);
+        doorsText.setTextColor(open || s.lock == 2 ? Theme.CAUTION : Theme.SAFE);
+
+        trip.setText(Double.isNaN(s.tripKm) ? "–" : String.format(Locale.US, "%.0f km", s.tripKm));
+        tripSub.setText(Double.isNaN(s.kwhPer100) ? "" : String.format(Locale.US, "%.1f kWh/100", s.kwhPer100));
+        health.setText(Double.isNaN(s.healthPct) ? "–" : String.format(Locale.US, "%.0f%%", s.healthPct));
+        odo.setText(Double.isNaN(s.odometerKm) ? "–" : String.format(Locale.US, "%,d", Math.round(s.odometerKm)));
+        int due = prefs.serviceAtKm();
+        if (due > 0 && !Double.isNaN(s.odometerKm)) {
+            long left = Math.round(due - s.odometerKm);
+            odoSub.setText(left > 0 ? String.format(Locale.US, "service in %,d km", left) : "service due now");
+            odoSub.setTextColor(left < 1000 ? Theme.CAUTION : th.muted);
+        } else {
+            odoSub.setText("tap to set service");
+            odoSub.setTextColor(th.muted);
+        }
+
+        pm.setText((s.pmOut < 0 ? "–" : String.valueOf(s.pmOut)) + " / " + (s.pmIn < 0 ? "–" : String.valueOf(s.pmIn)));
+        pm.setTextColor(s.pmOut > 50 ? Theme.DANGER : s.pmOut > 25 ? Theme.CAUTION : th.text);
+        pmSub.setText(level(s.pmOut) + " / " + level(s.pmIn));
+
+        long at = prefs.parkedAt();
+        if (at == 0) parkedSub.setText("Saved when you put it in P");
+        else {
+            long min = (System.currentTimeMillis() - at) / 60000;
+            parkedSub.setText(min < 60 ? min + " min ago" : (min / 60) + " h ago");
+        }
+    }
+
+    private static String level(int pm) {
+        if (pm < 0) return "–";
+        return pm <= 25 ? "good" : pm <= 50 ? "moderate" : "unhealthy";
+    }
+
+    /** The car from above: doors and windows green when closed, amber when open. */
+    static final class DoorsView extends View {
+        private final Theme th;
+        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF r = new RectF();
+        private CarData.State s;
+
+        DoorsView(Context c, Theme th) { super(c); this.th = th; }
+
+        void set(CarData.State st) { s = st; invalidate(); }
+
+        @Override protected void onDraw(Canvas cv) {
+            float w = getWidth(), h = getHeight(), d = getResources().getDisplayMetrics().density;
+            float bw = w * 0.62f, x0 = (w - bw) / 2;
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(2 * d);
+            p.setColor(th.text);
+            r.set(x0, d * 2, x0 + bw, h - d * 2);
+            cv.drawRoundRect(r, bw * 0.35f, bw * 0.35f, p);
+            boolean sun = s != null && s.sunroofOpen;
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(sun ? Theme.CAUTION : th.muted);
+            r.set(x0 + bw * 0.22f, h * 0.30f, x0 + bw * 0.78f, h * 0.44f);
+            cv.drawRoundRect(r, 3 * d, 3 * d, p);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(3.5f * d);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            // areas 1..4 = FL, FR, RL, RR (left side drawn on the left)
+            float[][] seg = {{0, 0.30f, 0.52f}, {1, 0.30f, 0.52f}, {0, 0.58f, 0.78f}, {1, 0.58f, 0.78f}};
+            for (int i = 0; i < 4; i++) {
+                boolean open = s != null && (s.doorOpen[i + 1] || s.windowPct[i + 1] > 0);
+                p.setColor(open ? Theme.CAUTION : Theme.SAFE);
+                float x = seg[i][0] == 0 ? x0 - 3 * d : x0 + bw + 3 * d;
+                cv.drawLine(x, h * seg[i][1], x, h * seg[i][2], p);
+            }
+            boolean boot = s != null && s.doorOpen[5];
+            p.setColor(boot ? Theme.CAUTION : Theme.SAFE);
+            cv.drawLine(x0 + bw * 0.3f, h - d, x0 + bw * 0.7f, h - d, p);
+        }
     }
 }

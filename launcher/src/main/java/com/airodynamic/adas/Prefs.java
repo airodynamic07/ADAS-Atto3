@@ -32,6 +32,23 @@ public final class Prefs {
     public int turnCameraReturnSec() { return p.getInt("turnCamReturn", 3); }
     public void setTurnCameraReturnSec(int s) { p.edit().putInt("turnCamReturn", s).apply(); }
 
+    public int speedLimit() { return p.getInt("speedLimit", 100); }
+    public void setSpeedLimit(int v) { p.edit().putInt("speedLimit", v).apply(); }
+    public boolean speedVoice() { return p.getBoolean("speedVoice", true); }
+    public void setSpeedVoice(boolean on) { p.edit().putBoolean("speedVoice", on).apply(); }
+
+    /** Next service odometer reading in km; 0 = not set yet. */
+    public int serviceAtKm() { return p.getInt("serviceAtKm", 0); }
+    public void setServiceAtKm(int km) { p.edit().putInt("serviceAtKm", km).apply(); }
+
+    /** Where the car was last put into P. */
+    public double parkedLat() { return Double.longBitsToDouble(p.getLong("parkLat", Double.doubleToLongBits(Double.NaN))); }
+    public double parkedLng() { return Double.longBitsToDouble(p.getLong("parkLng", Double.doubleToLongBits(Double.NaN))); }
+    public long parkedAt() { return p.getLong("parkAt", 0); }
+    public void setParked(double lat, double lng, long at) {
+        p.edit().putLong("parkLat", Double.doubleToLongBits(lat)).putLong("parkLng", Double.doubleToLongBits(lng)).putLong("parkAt", at).apply();
+    }
+
     /** Window order after swapping: which default panel sits in window i. */
     public String defaultPanel(int win) { return p.getString("win" + win + ".default", DEFAULT_PANEL[win]); }
     public void setDefaultPanel(int win, String v) { p.edit().putString("win" + win + ".default", v).apply(); }
@@ -42,7 +59,7 @@ public final class Prefs {
         switch (win) {
             case 0: def = new String[]{ADAS, "com.gbox.com.google.android.apps.maps", "com.waze"}[i]; break;
             case 1: def = new String[]{ENGINE, "com.gbox.com.google.android.youtube", "com.gbox.com.spotify.music"}[i]; break;
-            default: def = new String[]{INFO, "com.byd.bluetoothcall", "com.byd.mediacenter"}[i]; break;
+            default: def = new String[]{INFO, "com.byd.bluetoothcall", "com.byd.mediacenter"}[i]; break;   // label shown as "Media"
         }
         return p.getString("win" + win + ".slot" + i, def);
     }

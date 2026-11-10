@@ -50,7 +50,8 @@ public final class Apps {
 
     public static String label(Context c, String pkg) {
         if (Prefs.ADAS.equals(pkg)) return "ADAS";
-        if (Prefs.ENGINE.equals(pkg)) return "Engine Sound";
+        if (Prefs.ENGINE.equals(pkg)) return "Engine";
+        if ("com.byd.mediacenter".equals(pkg)) return "Media";
         if (Prefs.INFO.equals(pkg)) return "Info";
         try {
             PackageManager pm = c.getPackageManager();

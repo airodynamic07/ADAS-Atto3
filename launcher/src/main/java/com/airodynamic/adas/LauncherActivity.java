@@ -171,7 +171,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         String what = showing[win];
         Panel p = Prefs.ADAS.equals(what) ? new AdasPanel(this, th, prefs, feed)
                 : Prefs.ENGINE.equals(what) ? new EnginePanel(this, th)
-                : new InfoPanel(this, th);
+                : new InfoPanel(this, th, prefs);
         panels[win] = p;
         bodies[win].addView(p.view(), new FrameLayout.LayoutParams(-1, -1));
         f.addView(bodies[win], new LinearLayout.LayoutParams(-1, 0, 1f));
@@ -194,7 +194,16 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         feed.stop();
     }
 
+    private int lastGear = -1;
+
     @Override public void onCar(CarData.State s) {
+        // Where I parked: remember the spot whenever the car goes into P
+        boolean nowP = s.gear == 0 || s.gear == 1;
+        if (nowP && lastGear > 1) {
+            android.location.Location loc = Places.last(this);
+            if (loc != null) prefs.setParked(loc.getLatitude(), loc.getLongitude(), System.currentTimeMillis());
+        }
+        if (s.gear >= 0) lastGear = s.gear;
         // Auto Sport: black-red above the set speed, back 10 km/h below it
         if (prefs.autoSport() && !Double.isNaN(s.speedKmh)) {
             boolean want = sportOn ? s.speedKmh > prefs.autoSportKmh() - 10 : s.speedKmh > prefs.autoSportKmh();
