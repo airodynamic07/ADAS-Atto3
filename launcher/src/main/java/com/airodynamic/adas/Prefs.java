@@ -82,4 +82,27 @@ public final class Prefs {
     /** Left/Right cameras: close-up of the side looking back (like Kinex) instead of the whole fisheye. */
     public boolean sideCloseUp() { return p.getBoolean("sideCloseUp", true); }
     public void setSideCloseUp(boolean on) { p.edit().putBoolean("sideCloseUp", on).apply(); }
+
+    /**
+     * App shortcuts in the ChatGPT box (user adds with +, removes by press-and-hold).
+     * Starts from the apps the user had put on the old window bars, so nothing is lost.
+     */
+    public java.util.List<String> shortcuts(Context c) {
+        String v = p.getString("shortcuts", null);
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (v != null) {
+            for (String s : v.split(",")) if (!s.isEmpty()) out.add(s);
+            return out;
+        }
+        for (int w = 0; w < 3; w++) for (int i = 0; i < 3; i++) {
+            String s = slot(w, i);
+            if (!s.startsWith("@") && !out.contains(s) && Apps.installed(c, s)) out.add(s);
+        }
+        return out;
+    }
+    public void setShortcuts(java.util.List<String> list) {
+        StringBuilder b = new StringBuilder();
+        for (String s : list) { if (b.length() > 0) b.append(','); b.append(s); }
+        p.edit().putString("shortcuts", b.toString()).apply();
+    }
 }

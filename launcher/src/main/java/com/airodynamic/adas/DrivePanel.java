@@ -23,10 +23,13 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private final Context c;
     private final Theme th;
     private final LinearLayout root;
+    private final LinearLayout shortcuts;
+    private final Prefs prefs;
     private final TextView used, avg, dist, power, regen, soc, range, since, gptText;
 
-    public DrivePanel(Context c, Theme th, View themeControls) {
+    public DrivePanel(Context c, Theme th, Prefs prefs, View themeControls) {
         this.c = c;
+        this.prefs = prefs;
         this.th = th;
         root = new LinearLayout(c);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -48,9 +51,17 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         bl.leftMargin = Ui.dp(c, 6);
         gpt.addView(Ui.chip(c, "🎤 Talk", true, th, v -> openGpt()), bl);
         gpt.addView(Ui.chip(c, "⤢ Open", false, th, v -> openGpt()), bl);
+        LinearLayout box1 = card();
+        box1.setPadding(0, 0, 0, 0);
+        box1.addView(gpt);
+        shortcuts = new LinearLayout(c);
+        shortcuts.setGravity(Gravity.CENTER_VERTICAL);
+        shortcuts.setPadding(Ui.dp(c, 8), 0, Ui.dp(c, 8), Ui.dp(c, 8));
+        box1.addView(shortcuts);
+        drawShortcuts();
         LinearLayout.LayoutParams g1 = new LinearLayout.LayoutParams(-1, -2);
         g1.bottomMargin = Ui.dp(c, 8);
-        root.addView(gpt, g1);
+        root.addView(box1, g1);
 
         // --- box 2: this trip's energy
         LinearLayout en = card();
@@ -89,6 +100,40 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         en.addView(fill, new LinearLayout.LayoutParams(-1, 0, 1f));
         en.addView(themeControls, new LinearLayout.LayoutParams(-2, -2));
         root.addView(en, new LinearLayout.LayoutParams(-1, 0, 1f));
+    }
+
+    /** App icons: tap opens full screen, press and hold removes, + adds. */
+    private void drawShortcuts() {
+        shortcuts.removeAllViews();
+        android.content.pm.PackageManager pm = c.getPackageManager();
+        java.util.List<String> list = prefs.shortcuts(c);
+        for (String pkg : list) {
+            android.widget.ImageView icon = new android.widget.ImageView(c);
+            try { icon.setImageDrawable(pm.getApplicationIcon(pkg)); } catch (Exception e) { continue; }
+            int ip = Ui.dp(c, 4);
+            icon.setPadding(ip, ip, ip, ip);
+            icon.setBackground(Ui.round(th.panel, 0, 12, c));
+            icon.setContentDescription(Apps.label(c, pkg));
+            icon.setOnClickListener(v -> Apps.open(c, pkg, CarData.get(c).last()));
+            icon.setOnLongClickListener(v -> {
+                java.util.List<String> l = prefs.shortcuts(c);
+                l.remove(pkg);
+                prefs.setShortcuts(l);
+                Toast.makeText(c, "Removed " + Apps.label(c, pkg), Toast.LENGTH_SHORT).show();
+                drawShortcuts();
+                return true;
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(c, 44), Ui.dp(c, 44));
+            lp.rightMargin = Ui.dp(c, 6);
+            shortcuts.addView(icon, lp);
+        }
+        shortcuts.addView(Ui.chip(c, "＋", false, th, v -> AppPicker.pickOne(c, th, pkg -> {
+            java.util.List<String> l = prefs.shortcuts(c);
+            if (!l.contains(pkg)) l.add(pkg);
+            prefs.setShortcuts(l);
+            drawShortcuts();
+        })), new LinearLayout.LayoutParams(Ui.dp(c, 44), Ui.dp(c, 44)));
+        if (list.isEmpty()) shortcuts.addView(Ui.text(c, "  Add app shortcuts · hold an icon to remove", 12, th.muted, false));
     }
 
     private String chatGpt() {

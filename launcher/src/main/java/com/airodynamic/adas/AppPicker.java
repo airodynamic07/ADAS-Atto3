@@ -68,4 +68,32 @@ public final class AppPicker {
         new AlertDialog.Builder(c).setTitle("Choose apps for this window").setView(root)
                 .setPositiveButton("Done", null).show();
     }
+
+    public interface Picked { void onPicked(String pkg); }
+
+    /** Pick one app (with its icon) for the shortcut row. */
+    public static void pickOne(Context c, Theme th, Picked done) {
+        LinearLayout list = new LinearLayout(c);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setBackgroundColor(th.panel);
+        int p = Ui.dp(c, 8);
+        list.setPadding(p, p, p, p);
+        ScrollView sv = new ScrollView(c);
+        sv.addView(list);
+        final AlertDialog[] dlg = new AlertDialog[1];
+        android.content.pm.PackageManager pm = c.getPackageManager();
+        for (Apps.App a : Apps.all(c)) {
+            LinearLayout row = new LinearLayout(c);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setPadding(p, p, p, p);
+            android.widget.ImageView icon = new android.widget.ImageView(c);
+            try { icon.setImageDrawable(pm.getApplicationIcon(a.pkg)); } catch (Exception ignored) {}
+            row.addView(icon, new LinearLayout.LayoutParams(Ui.dp(c, 36), Ui.dp(c, 36)));
+            TextView t = Ui.text(c, "   " + a.label, 16, th.text, false);
+            row.addView(t);
+            row.setOnClickListener(v -> { dlg[0].dismiss(); done.onPicked(a.pkg); });
+            list.addView(row);
+        }
+        dlg[0] = new AlertDialog.Builder(c).setTitle("Add an app").setView(sv).setNegativeButton("Cancel", null).show();
+    }
 }

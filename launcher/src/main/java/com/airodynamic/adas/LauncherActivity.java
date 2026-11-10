@@ -15,8 +15,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * The home screen: top strip (time, date) + three windows, each with its own bar.
- * No title bar; the theme dots and Settings sit at the bottom-left of the left window.
+ * The home screen: three windows and the trip graph (see rebuild()).
  * Other apps open full screen (this car can't put them in a window); Home comes back here.
  */
 public class LauncherActivity extends Activity implements CarData.Listener, SettingsDialog.Host {
@@ -37,12 +36,10 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     private boolean sportOn;        // Auto Sport currently active
     private final CameraFeed feed = new CameraFeed();
     private final Panel[] panels = new Panel[3];
-    private final String[] showing = new String[3];
+    private TurnCamera turnCam;
     private final FrameLayout[] bodies = new FrameLayout[3];
     private final LinearLayout[] frames = new LinearLayout[3];
-    private int fullscreen = -1;
     private boolean resumed;
-    private TextView toast;
 
     private final BroadcastReceiver themeRequest = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) { sendTheme(); }
@@ -52,7 +49,8 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         super.onCreate(b);
         Ambient.get(this);   // ambient light by gear, keeps working while other apps are open
         prefs = new Prefs(this);
-        for (int i = 0; i < 3; i++) showing[i] = prefs.defaultPanel(i);
+        TripEnergy.get(this);   // counts this trip's energy even while other apps are open
+        turnCam = new TurnCamera(this, feed, prefs);
         registerReceiver(themeRequest, new IntentFilter(ACTION_THEME_REQUEST));
         rebuild();
     }
@@ -66,13 +64,16 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        // Home pressed while already home: leave full screen
-        if (fullscreen >= 0) { fullscreen = -1; rebuild(); }
     }
 
     private Theme effectiveTheme() { return sportOn ? Theme.RED : prefs.theme(); }
 
-    /** Builds the whole screen for the current theme. */
+    /**
+     * Builds the whole screen for the current theme (user's layout, 2026-11-10):
+     * no clock line and no app bars; left = ChatGPT + shortcuts + trip energy,
+     * middle = Engine Sound (side camera covers it while signalling), right = Info,
+     * and the trip graph along the bottom.
+     */
     @Override public void rebuild() {
         for (Panel p : panels) if (p != null) p.setActive(false);
         theme = effectiveTheme();
@@ -84,100 +85,41 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(th.bg);
-        int pad = Ui.dp(this, 14);
-        root.setPadding(pad, Ui.dp(this, 6), pad, pad);
+        int pad = Ui.dp(this, 10);
+        root.setPadding(pad, Ui.dp(this, 4), pad, Ui.dp(this, 6));
 
-        // ---- top strip
-        LinearLayout top = new LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        TextClock time = new TextClock(this);
-        time.setFormat24Hour("HH:mm");
-        time.setFormat12Hour("HH:mm");
-        time.setTextSize(26);
-        time.setTextColor(th.text);
-        time.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        TextClock date = new TextClock(this);
-        date.setFormat24Hour("  EEEE d MMMM");
-        date.setFormat12Hour("  EEEE d MMMM");
-        date.setTextSize(14);
-        date.setTextColor(th.muted);
-        top.addView(time);
-        top.addView(date);
-        toast = Ui.text(this, "", 13, th.muted, false);
-        toast.setPadding(Ui.dp(this, 16), 0, 0, 0);
-        top.addView(toast, new LinearLayout.LayoutParams(0, -2, 1f));
-        root.addView(top);
-
-        // ---- three windows
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(-1, 0, 1f);
-        rlp.topMargin = Ui.dp(this, 6);
-        root.addView(row, rlp);
+        root.addView(row, new LinearLayout.LayoutParams(-1, 0, 1f));
+        panels[0] = new DrivePanel(this, th, prefs, themeControls(th));
+        panels[1] = new EnginePanel(engineHost(), th);
+        panels[2] = new InfoPanel(this, th, prefs);
         for (int i = 0; i < 3; i++) {
-            frames[i] = buildWindow(i, th);
+            frames[i] = new LinearLayout(this);
+            frames[i].setOrientation(LinearLayout.VERTICAL);
+            frames[i].setBackground(Ui.round(th.panel, th.line, 20, this));
+            frames[i].setClipToOutline(true);
+            bodies[i] = new FrameLayout(this);
+            bodies[i].addView(panels[i].view(), new FrameLayout.LayoutParams(-1, -1));
+            frames[i].addView(bodies[i], new LinearLayout.LayoutParams(-1, -1));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, 1f);
-            if (i > 0) lp.leftMargin = Ui.dp(this, 12);
-            frames[i].setVisibility(fullscreen < 0 || fullscreen == i ? View.VISIBLE : View.GONE);
+            if (i > 0) lp.leftMargin = Ui.dp(this, 10);
             row.addView(frames[i], lp);
         }
+        turnCam.attach(bodies[1], th);
+
+        FrameLayout graphBox = new FrameLayout(this);
+        graphBox.setBackground(Ui.round(th.panel, th.line, 20, this));
+        graphBox.setPadding(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 2));
+        graphBox.addView(new TripGraph(this, th), new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 132));
+        glp.topMargin = Ui.dp(this, 8);
+        root.addView(graphBox, glp);
+
         setContentView(root);
         for (int i = 0; i < 3; i++) panels[i].onCar(CarData.get(this).last());
         if (resumed) for (Panel p : panels) p.setActive(true);
         sendTheme();
-    }
-
-    private LinearLayout buildWindow(int win, Theme th) {
-        LinearLayout f = new LinearLayout(this);
-        f.setOrientation(LinearLayout.VERTICAL);
-        f.setBackground(Ui.round(th.panel, th.line, 20, this));
-        f.setClipToOutline(true);
-
-        LinearLayout bar = new LinearLayout(this);
-        int bp = Ui.dp(this, 8);
-        bar.setPadding(bp, bp, bp, bp);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        for (int s = 0; s < 3; s++) {
-            final String item = prefs.slot(win, s);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1f);
-            lp.rightMargin = Ui.dp(this, 4);
-            bar.addView(Ui.chip(this, Apps.label(this, item), item.equals(showing[win]), th, v -> {
-                if (item.startsWith("@")) { showing[win] = item; rebuild(); }
-                else Apps.open(this, item, CarData.get(this).last());
-            }), lp);
-        }
-        LinearLayout.LayoutParams sq = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44));
-        sq.rightMargin = Ui.dp(this, 4);
-        bar.addView(Ui.chip(this, "＋", false, th, v -> AppPicker.show(this, theme, prefs, win, this::rebuild)), sq);
-        bar.addView(Ui.chip(this, fullscreen == win ? "⤡" : "⤢", false, th, v -> {
-            fullscreen = fullscreen == win ? -1 : win;
-            rebuild();
-        }), sq);
-        bar.addView(Ui.chip(this, "×", false, th, v -> {
-            showing[win] = prefs.defaultPanel(win);
-            if (fullscreen == win) fullscreen = -1;
-            rebuild();
-        }), new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
-        f.addView(bar);
-        View line = new View(this);
-        line.setBackgroundColor(th.line);
-        f.addView(line, new LinearLayout.LayoutParams(-1, Ui.dp(this, 1)));
-
-        bodies[win] = new FrameLayout(this);
-        String what = showing[win];
-        Panel p = Prefs.ADAS.equals(what) ? new AdasPanel(this, th, prefs, feed)
-                : Prefs.ENGINE.equals(what) ? new EnginePanel(engineHost(), th)
-                : new InfoPanel(this, th, prefs);
-        panels[win] = p;
-        bodies[win].addView(p.view(), new FrameLayout.LayoutParams(-1, -1));
-        f.addView(bodies[win], new LinearLayout.LayoutParams(-1, 0, 1f));
-        // Theme dots + Settings live at the bottom-left of the left window (user's layout, 2026-11-10)
-        if (win == 0) {
-            FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START);
-            clp.setMargins(Ui.dp(this, 6), 0, 0, Ui.dp(this, 4));
-            bodies[win].addView(themeControls(th), clp);
-        }
-        return f;
     }
 
     /** Blue / white / red dots and the Settings button. */
@@ -208,6 +150,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         if (engineHost != null) engineHost.setForeground(true);
         resumed = true;
         CarData.get(this).addListener(this);
+        turnCam.setAllowed(true);
         for (Panel p : panels) if (p != null) p.setActive(true);
         sendTheme();
     }
@@ -218,6 +161,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         resumed = false;
         CarData.get(this).removeListener(this);
         for (Panel p : panels) if (p != null) p.setActive(false);
+        turnCam.setAllowed(false);
         feed.stop();
     }
 
@@ -236,6 +180,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             boolean want = sportOn ? s.speedKmh > prefs.autoSportKmh() - 10 : s.speedKmh > prefs.autoSportKmh();
             if (want != sportOn) { sportOn = want; rebuild(); return; }
         } else if (sportOn) { sportOn = false; rebuild(); return; }
+        turnCam.onCar(s);
         for (Panel p : panels) if (p != null) p.onCar(s);
     }
 
@@ -247,9 +192,6 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     }
 
     @Override public void log(String s) {
-        runOnUiThread(() -> {
-            if (toast != null) toast.setText(s);
-            Toast.makeText(this, s, Toast.LENGTH_SHORT).show();
-        });
+        runOnUiThread(() -> Toast.makeText(this, s, Toast.LENGTH_SHORT).show());
     }
 }
