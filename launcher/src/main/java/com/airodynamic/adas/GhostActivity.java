@@ -60,7 +60,9 @@ public class GhostActivity extends Activity {
             err.setGravity(Gravity.CENTER);
             root.addView(err, new FrameLayout.LayoutParams(-1, -1));
         }
-        android.widget.Button close = Ui.chip(this, "✕  Engine Sound", false, th, v -> finish());
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            android.widget.Toast.makeText(this, "Location is not allowed for NATEE yet: Ghost Race can't find GPS", android.widget.Toast.LENGTH_LONG).show();
+                android.widget.Button close = Ui.chip(this, "✕  Engine Sound", false, th, v -> finish());
         close.setAlpha(0.85f);
         FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         cl.topMargin = Ui.dp(this, 4);

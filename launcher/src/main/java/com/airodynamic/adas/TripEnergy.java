@@ -55,9 +55,13 @@ public final class TripEnergy implements CarData.Listener {
         @Override public void onProviderEnabled(String p) { }
         @Override public void onProviderDisabled(String p) { }
     };
+    /** Called once location has been allowed. */
+    public void restartGps(Context c) { startGps(c.getApplicationContext()); }
+
     @android.annotation.SuppressLint("MissingPermission")
     private void startGps(Context c) {
         try {
+            ((android.location.LocationManager) c.getSystemService(Context.LOCATION_SERVICE)).removeUpdates(gps);
             android.location.LocationManager lm = (android.location.LocationManager) c.getSystemService(Context.LOCATION_SERVICE);
             lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 1000, 0, gps, android.os.Looper.getMainLooper());
         } catch (Throwable ignored) { }   // no GPS or no permission: the graph simply has no hill shape

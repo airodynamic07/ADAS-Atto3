@@ -57,6 +57,36 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         turnCam = new TurnCamera(this, feed, prefs);
         registerReceiver(themeRequest, new IntentFilter(ACTION_THEME_REQUEST));
         rebuild();
+        ensureLocation();
+    }
+
+    /**
+     * Location was never actually switched on for the launcher (2026-11-11: Ghost Race said "couldn't
+     * get a location fix" while Firefox found it). Switch it on through the car's own ADB, like Now
+     * playing; if that fails, show Android's normal question. Then start GPS again.
+     */
+    private void ensureLocation() {
+        final String fine = android.Manifest.permission.ACCESS_FINE_LOCATION;
+        if (checkSelfPermission(fine) == android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+        new Thread(() -> {
+            try {
+                Updater.adbShell(this, "pm grant " + getPackageName() + " android.permission.ACCESS_FINE_LOCATION; pm grant "
+                        + getPackageName() + " android.permission.ACCESS_COARSE_LOCATION");
+            } catch (Throwable ignored) { }
+            runOnUiThread(() -> {
+                if (checkSelfPermission(fine) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    TripEnergy.get(this).restartGps(this);
+                    android.widget.Toast.makeText(this, "Location switched on for NATEE", android.widget.Toast.LENGTH_SHORT).show();
+                } else {
+                    try { requestPermissions(new String[]{fine, android.Manifest.permission.ACCESS_COARSE_LOCATION}, 7); } catch (Throwable ignored) { }
+                }
+            });
+        }).start();
+    }
+
+    @Override public void onRequestPermissionsResult(int code, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(code, perms, res);
+        if (code == 7) TripEnergy.get(this).restartGps(this);
     }
 
     @Override protected void onDestroy() {
