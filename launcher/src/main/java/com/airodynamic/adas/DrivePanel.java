@@ -44,6 +44,11 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         // --- top row (user's layout, 2026-11-11): big ChatGPT box | theme dots + Settings over the app tray
         LinearLayout top = new LinearLayout(c);
         LinearLayout gpt = card();
+        // press and hold: pick exactly which app the box opens
+        gpt.setOnLongClickListener(v -> {
+            AppPicker.pickOne(c, th, pkg -> { prefs.setAssistantPkg(pkg); gptText.setText("Opens " + Apps.label(c, pkg)); });
+            return true;
+        });
         gpt.addView(Ui.label(c, gemini() ? "Gemini" : "ChatGPT", th));
         String pkg = chatGpt();
         gptText = Ui.text(c, pkg == null ? (gemini() ? "Install Gemini (GBox)" : "Install ChatGPT (GBox or store)") : "Opens " + Apps.label(c, pkg), 15, th.text, true);
@@ -194,7 +199,12 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         return lp;
     }
 
+    /** The app the assistant box opens: the one picked by press-and-hold, else found by name, else known package names. */
     private String chatGpt() {
+        String picked = prefs.assistantPkg();
+        if (picked != null && Apps.installed(c, picked)) return picked;
+        String want = gemini() ? "gemini" : "chatgpt";
+        for (Apps.App a : Apps.all(c)) if (a.label.toLowerCase(java.util.Locale.US).startsWith(want)) return a.pkg;   // e.g. "Gemini (GBox)"
         for (String p : gemini() ? GEMINI : CHATGPT) if (Apps.installed(c, p)) return p;
         return null;
     }

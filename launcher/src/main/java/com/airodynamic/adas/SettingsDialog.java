@@ -50,7 +50,7 @@ public final class SettingsDialog {
         section(c, root, th, "Ambient light by gear: " + (prefs.ambientGear() ? "on" : "off")
                 + " · style " + Ambient.STYLES[prefs.ambientStyle()]);
         LinearLayout am = row(c);
-        am.addView(Ui.chip(c, prefs.ambientGear() ? "On" : "Off", prefs.ambientGear(), th, v -> { prefs.setAmbientGear(!prefs.ambientGear()); redo.run(); }), weight(c));
+        am.addView(Ui.chip(c, prefs.ambientGear() ? "On" : "Off", prefs.ambientGear(), th, v -> { prefs.setAmbientGear(!prefs.ambientGear()); if (prefs.ambientGear()) Ambient.get(c).applyCurrentGear(); redo.run(); }), weight(c));
         for (int i = 0; i < Ambient.STYLES.length; i++) {
             final int st = i;
             am.addView(Ui.chip(c, Ambient.STYLES[i], prefs.ambientStyle() == i, th, v -> { prefs.setAmbientStyle(st); redo.run(); }), weight(c));
@@ -128,6 +128,9 @@ public final class SettingsDialog {
         section(c, root, th, "Launcher & windows");
         LinearLayout lw = row(c);
         lw.addView(Ui.chip(c, "⇄ Swap left and right", false, th, v -> { prefs.setInfoLeft(!prefs.infoLeft()); redo.run(); }), weight(c));
+        // BYD keeps asking "Select a Home app": set NATEE as the Home app through the car's ADB
+        lw.addView(Ui.chip(c, "Make NATEE the Home app", false, th, v -> adb(c, host,
+                "cmd package set-home-activity " + c.getPackageName() + "/.LauncherActivity", "Home app")), weight(c));
         lw.addView(Ui.chip(c, "Choose home screen…", false, th, v -> {
             Intent i = new Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             try { c.startActivity(i); } catch (Exception e) {
@@ -135,6 +138,25 @@ public final class SettingsDialog {
             }
         }), weight(c));
         root.addView(lw);
+
+        section(c, root, th, "Problems");
+        LinearLayout pb = row(c);
+        pb.addView(Ui.chip(c, "Show crash log", false, th, v -> new Thread(() -> {
+            String out;
+            try {
+                out = Updater.adbShell(c, "logcat -d -b crash -t 120; echo ----; logcat -d -t 400 *:E | grep -i -E 'airodynamic|gecko|fatal|AndroidRuntime' | tail -n 60");
+            } catch (Exception e) { out = "Couldn't reach the car's ADB: " + e; }
+            final String text = out.isEmpty() ? "No crash recorded." : out;
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                TextView t = Ui.text(c, text, 10, th.text, false);
+                t.setTextIsSelectable(true);
+                t.setPadding(24, 16, 24, 16);
+                ScrollView sv2 = new ScrollView(c);
+                sv2.addView(t);
+                new AlertDialog.Builder(c).setTitle("Crash log (send a photo)").setView(sv2).setPositiveButton("Close", null).show();
+            });
+        }).start()), weight(c));
+        root.addView(pb);
 
         section(c, root, th, "About");
         String ver = "?";
@@ -178,6 +200,16 @@ public final class SettingsDialog {
             @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {}
         });
         return bar;
+    }
+
+    /** Runs a shell command through the car's ADB and reports the answer. */
+    private static void adb(Context c, Host host, String cmd, String what) {
+        new Thread(() -> {
+            String out;
+            try { out = Updater.adbShell(c, cmd); out = what + ": " + (out.isEmpty() ? "done" : out); }
+            catch (Exception e) { out = what + ": couldn't reach the car's ADB (" + e.getClass().getSimpleName() + ")"; }
+            host.log(out);
+        }).start();
     }
 
     private static void section(Context c, LinearLayout root, Theme th, String s) {

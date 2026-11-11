@@ -117,6 +117,13 @@ public final class Ambient implements CarData.Listener {
         }, 1800);
     }
 
+    /** Switching "Ambient light by gear" on: show the current gear's colour straight away. */
+    public void applyCurrentGear() {
+        int g = slot(CarData.get(c).last().gear);
+        if (g >= 0) { apply(prefs.ambientColour(g), 0); gearReport = "switched on in gear " + Prefs.GEARS[g] + ": sent colour " + prefs.ambientColour(g); }
+        else gearReport = "switched on, but the gear isn't known yet (" + CarData.get(c).last().gear + ")";
+    }
+
     /** Also used by the "Try" buttons in Settings. */
     public void apply(int colour, int style) {
         final int my = ++run;

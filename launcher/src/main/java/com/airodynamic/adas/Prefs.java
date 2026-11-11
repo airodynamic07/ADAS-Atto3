@@ -127,4 +127,8 @@ public final class Prefs {
     /** Assistant box: "gemini" (works in GBox with the user's account, 2026-11-11) or "chatgpt". */
     public String assistant() { return p.getString("assistant", "gemini"); }
     public void setAssistant(String a) { p.edit().putString("assistant", a).apply(); }
+
+    /** App picked for the assistant box by press-and-hold (null = find it by name). */
+    public String assistantPkg() { return p.getString("assistantPkg", null); }
+    public void setAssistantPkg(String pkg) { p.edit().putString("assistantPkg", pkg).apply(); }
 }
