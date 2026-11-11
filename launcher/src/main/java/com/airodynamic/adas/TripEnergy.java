@@ -171,7 +171,13 @@ public final class TripEnergy implements CarData.Listener {
             powerKw = s.powerKw;
             double dKm = Double.isNaN(s.speedKmh) ? 0 : Math.max(0, s.speedKmh) * dt / 3600.0;
             double dKwh;
-            if (!Double.isNaN(s.powerKw)) {
+            // Charging (parked and energy going in) is not driving: it doesn't count as trip or today energy
+            // (user, 2026-11-12: "Used −0.3 kWh" while charging).
+            boolean charging = s.parked() && !Double.isNaN(s.powerKw) && s.powerKw < 0;
+            if (charging) {
+                fromRemaining = false;
+                dKwh = 0;
+            } else if (!Double.isNaN(s.powerKw)) {
                 fromRemaining = false;
                 dKwh = s.powerKw * dt / 3600.0;
                 if (s.powerKw < 0) regenKwh += -dKwh;
@@ -179,6 +185,7 @@ public final class TripEnergy implements CarData.Listener {
                 fromRemaining = true;
                 if (Double.isNaN(startRemain)) startRemain = s.remainKwh;
                 dKwh = (startRemain - s.remainKwh) - kwh;
+                if (dKwh < 0 && s.parked()) { startRemain = s.remainKwh + kwh; dKwh = 0; }   // charged while parked
             } else dKwh = 0;
             km += dKm;
             kwh += dKwh;
