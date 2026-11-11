@@ -24,7 +24,8 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private List<TripEnergy.Point> pts;
     private double nowKm, liveSpeed = Double.NaN, livePower = Double.NaN, livePedal = Double.NaN;
     private static final int SPEED_COL = 0xFF4DA3FF, POWER_COL = 0xFFFFB020, PEDAL_COL = 0xFFB8A4FF, REGEN_COL = 0x553DD9C1;
-    private static final int SMOOTH = 2;   // average with 2 points each side
+    private static final int SMOOTH = 2;
+    private static final int[] BRAKE_COL = {0xFF8FC8FF, 0xFFFFD21F, 0xFFFF4D3D};   // light, medium, hard   // average with 2 points each side
 
     public TripGraph(Context c, Theme th) { super(c); this.th = th; }
 
@@ -78,8 +79,11 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         lx = legend(c, lx, 13 * d, SPEED_COL, "Speed km/h", d);
         lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (+ use, − regen)", d);
         lx = legend(c, lx, 13 * d, 0xFF3DD9C1, "Regen", d);
+        lx = legend(c, lx, 13 * d, BRAKE_COL[0], "Braking: light", d);
+        lx = legend(c, lx, 13 * d, BRAKE_COL[1], "medium", d);
+        lx = legend(c, lx, 13 * d, BRAKE_COL[2], "hard", d);
         p.setColor(th.muted);
-        c.drawText("· trip km · newest point = right now", lx, 13 * d + 4 * d, p);
+        c.drawText("· now = live", lx, 13 * d + 4 * d, p);
 
         // grid + axis labels (speed left, kW right)
         p.setStrokeWidth(1 * d);
@@ -126,6 +130,16 @@ public final class TripGraph extends View implements TripEnergy.Listener {
             if (q.km < from || !(ev < 0)) continue;
             float x = X(q.km, from, to, left, right);
             c.drawRect(x - stepPx, y0, x, Y(ev, eMin, eMax, top, bottom), p);
+        }
+        // braking: shaded bands behind the lines (blue light, yellow medium, red hard)
+        for (int i = 0; i < n; i++) {
+            TripEnergy.Point q = pts.get(i);
+            if (q.km < from || q.brake == 0) continue;
+            float x = X(q.km, from, to, left, right);
+            p.setColor(BRAKE_COL[q.brake - 1]);
+            p.setAlpha(q.brake == 3 ? 110 : 80);
+            c.drawRect(x - stepPx, top, x, bottom, p);
+            p.setAlpha(255);
         }
         line(c, 1, from, to, eMin, eMax, left, right, top, bottom, POWER_COL, 2.2f * d, 5 * d);
         line(c, 0, from, to, 0, sMax, left, right, top, bottom, SPEED_COL, 3.75f * d, 6 * d);   // 1.5x thicker

@@ -19,6 +19,8 @@ public final class TripEnergy implements CarData.Listener {
 
     public static final class Point {
         public final double km, speed, live, avg, pedal, power;
+        /** strongest braking in this 100 m: 0 none, 1 light (≥0.15 g), 2 medium (≥0.25 g), 3 hard (≥0.4 g) */
+        public int brake;
         Point(double km, double speed, double live, double avg, double pedal, double power) {
             this.km = km; this.speed = speed; this.live = live; this.avg = avg; this.pedal = pedal; this.power = power;
         }
@@ -55,7 +57,8 @@ public final class TripEnergy implements CarData.Listener {
     public double best0100 = Double.NaN;                          // seconds
     public int runs0100, hardBrakes;
     public double movingSec, stoppedSec;
-    private double segMin = Double.NaN, segMax = Double.NaN;
+    private double segMin = Double.NaN, segMax = Double.NaN, segDecel;
+    private final double[] hv = new double[4]; private final long[] ht = new long[4]; private int hn;   // last speeds, for slowing-down rate
 
     /** One of the best (lowest kWh/100 km) stretches of the chosen length; stretches never overlap. */
     public static final class Best { public double kwh100, speed, min, max, fromKm, toKm; }
@@ -71,7 +74,7 @@ public final class TripEnergy implements CarData.Listener {
     private void clearStats() {
         topSpeed = topSpeedKm = peakKw = maxRegenKw = 0;
         best0100 = Double.NaN; runs0100 = hardBrakes = 0; movingSec = stoppedSec = 0;
-        best = new ArrayList<>(); segs.clear();
+        best = new ArrayList<>(); segs.clear(); segDecel = 0; hn = 0;
         segMin = segMax = Double.NaN;
         runStart = 0; runMax = 0; runArmed = false; brakeArmed = true; prevV = Double.NaN; segSec = 0;
     }
@@ -132,9 +135,13 @@ public final class TripEnergy implements CarData.Listener {
                 segs.add(new double[]{segKwh, segSec, segMin, segMax, km});
                 findBest();
                 segSec = 0; segMin = segMax = Double.NaN;
-                points.add(new Point(km, segN > 0 ? segSpeedSum / segN : 0, live, avg(),
+                Point pt = new Point(km, segN > 0 ? segSpeedSum / segN : 0, live, avg(),
                         segPedalN > 0 ? segPedalSum / segPedalN : Double.NaN,
-                        segPowerN > 0 ? segPowerSum / segPowerN : Double.NaN));
+                        segPowerN > 0 ? segPowerSum / segPowerN : Double.NaN);
+                double gs = segDecel / 9.81;
+                pt.brake = gs >= .4 ? 3 : gs >= .25 ? 2 : gs >= .15 ? 1 : 0;
+                points.add(pt);
+                segDecel = 0;
                 segKm = segKwh = segSpeedSum = segPedalSum = segPowerSum = 0;
                 segN = segPedalN = segPowerN = 0;
                 while (!points.isEmpty() && points.get(0).km < km - WINDOW_KM - 1) points.remove(0);
@@ -172,6 +179,13 @@ public final class TripEnergy implements CarData.Listener {
             else if (decel < 1.5) brakeArmed = true;
         }
         prevV = v;
+        // slowing-down rate over the last ~1 s (less jumpy than one reading), strongest one in this 100 m
+        hv[hn % 4] = v; ht[hn % 4] = s.at; hn++;
+        if (hn >= 4) {
+            int o = hn % 4;   // oldest of the last 4
+            double secs = (s.at - ht[o]) / 1000.0;
+            if (secs > 0.3 && secs < 3) segDecel = Math.max(segDecel, (hv[o] - v) / 3.6 / secs);
+        }
     }
 
     /**
