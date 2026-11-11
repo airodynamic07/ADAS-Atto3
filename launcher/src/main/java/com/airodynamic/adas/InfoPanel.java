@@ -263,7 +263,9 @@ public final class InfoPanel implements Panel {
         doors.set(s);
         boolean open = s.anyOpen();
         String lock = s.lock == 1 ? " · 🔒 Locked" : s.lock == 2 ? " · Unlocked" : "";
-        doorsText.setText((open ? "Something is open" : "All closed") + lock);
+        doorsText.setText((s.sunroofOpen ? "Sunroof open" : open ? "Something is open" : "All closed") + lock
+                + (s.roofPos != Integer.MIN_VALUE || s.roofState != Integer.MIN_VALUE
+                    ? "\nroof " + (s.roofPos == Integer.MIN_VALUE ? "–" : s.roofPos) + " / " + (s.roofState == Integer.MIN_VALUE ? "–" : s.roofState) : ""));   // raw values, temporary
         doorsText.setTextColor(open || s.lock == 2 ? Theme.CAUTION : Theme.SAFE);
 
         trip.setText(Double.isNaN(s.tripKm) ? "–" : String.format(Locale.US, "%.0f km", s.tripKm));
@@ -316,6 +318,7 @@ public final class InfoPanel implements Panel {
         private CarData.State s;
         // animated opening 0..1 for: FR, FL, RR, RL (car areas 1..4), boot
         private final float[] cur = new float[5];
+        private static final int[] WIN_FOR_DOOR = {2, 1, 4, 3};
         private long lastFrame;
 
         DoorsView(Context c, Theme th) { super(c); this.th = th; }
@@ -374,7 +377,9 @@ public final class InfoPanel implements Panel {
                 double ang = Math.toRadians(58 * k);           // swings outward around the front hinge
                 float ex = hx + (float) Math.sin(ang) * len * (right ? 1 : -1);
                 float ey = hy + (float) Math.cos(ang) * len;
-                boolean win = s != null && s.windowPct[i + 1] > 0;
+                // windows are numbered differently from doors on BYD: 1 front-left, 2 front-right, 3 rear-left, 4 rear-right
+                // (drawn door order is FR, FL, RR, RL), so FR uses window 2, FL 1, RR 4, RL 3
+                boolean win = s != null && s.windowPct[WIN_FOR_DOOR[i]] > 0;
                 p.setStyle(Paint.Style.STROKE);
                 p.setStrokeWidth(3.5f * d);
                 p.setColor(k > 0.02f ? Theme.CAUTION : win ? Theme.CAUTION : Theme.SAFE);

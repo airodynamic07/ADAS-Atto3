@@ -37,6 +37,7 @@ public final class CarData {
         public final boolean[] doorOpen = new boolean[6];     // car area numbers: 1 FR (driver, RHD), 2 FL, 3 RR, 4 RL, 5 boot
         public final int[] windowPct = {0, 0, 0, 0, 0};       // 0 unused, 1..4 windows
         public boolean sunroofOpen;
+        public int roofPos = Integer.MIN_VALUE, roofState = Integer.MIN_VALUE;   // raw sunroof readings (meaning still to confirm)
         public int lock;                        // 0 unknown, 1 locked, 2 unlocked
         public double lat = Double.NaN, lng = Double.NaN;
         public double pedalPct = Double.NaN;    // accelerator 0-100
@@ -275,6 +276,9 @@ public final class CarData {
             if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", a))) s.windowPct[a] = Math.max(0, ((Number) v).intValue());
         }
         if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", 5))) s.sunroofOpen = ((Number) v).intValue() > 0;
+        // Sunroof position/state (Phase 0 found these; values not confirmed yet). Position > 0 is taken as open.
+        if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getSunroofPosition"))) { s.roofPos = ((Number) v).intValue(); if (s.roofPos > 0) s.sunroofOpen = true; }
+        if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getSunroofState"))) s.roofState = ((Number) v).intValue();
         // Lock: OTA device's left-front lock state. On the user's Atto 3 (car test 2026-11-10)
         // the raw value is the opposite of OverDrive's note: 1 = unlocked, 2 = locked.
         if (ok(v = call("ota.BYDAutoOtaDevice", "getLFDoorLockState"))) {
