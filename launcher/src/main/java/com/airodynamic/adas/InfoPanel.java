@@ -41,7 +41,7 @@ public final class InfoPanel implements Panel {
     private final TextView[] tyre = new TextView[4];
     private final TextView[] tyreT = new TextView[4];
     private final DoorsView doors;
-    private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub;
+    private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub, serviceLabel;
     private final MusicCard music;
 
     public InfoPanel(Context c, Theme th, Prefs prefs) {
@@ -67,8 +67,21 @@ public final class InfoPanel implements Panel {
         LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(-1, -2);
         r2lp.bottomMargin = Ui.dp(c, 6);
         leftCol.addView(r2, r2lp);
-        LinearLayout t3 = tile("Odometer");
-        odo = big(t3); odoSub = small(t3);
+        // Odometer on the left, "Service in" on the right, a bit smaller (user's drawing, 2026-11-11)
+        LinearLayout t3 = card();
+        t3.setOrientation(LinearLayout.HORIZONTAL);
+        t3.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout oL = new LinearLayout(c), oR = new LinearLayout(c);
+        oL.setOrientation(LinearLayout.VERTICAL); oR.setOrientation(LinearLayout.VERTICAL);
+        oL.addView(label("Odometer"));
+        odo = big(oL);
+        oR.addView(serviceLabel = label("Service in"));
+        odoSub = Ui.text(c, "–", 15, th.text, true);
+        odoSub.setSingleLine(true);
+        odoSub.setPadding(0, Ui.dp(c, 2), 0, 0);
+        oR.addView(odoSub);
+        t3.addView(oL, new LinearLayout.LayoutParams(0, -2, 1.15f));
+        t3.addView(oR, new LinearLayout.LayoutParams(0, -2, 1f));
         t3.setOnClickListener(v -> serviceDialog());
         leftCol.addView(t3, new LinearLayout.LayoutParams(-1, 0, 1f));
         LinearLayout.LayoutParams lcl = new LinearLayout.LayoutParams(0, -1, 1.6f);
@@ -256,10 +269,12 @@ public final class InfoPanel implements Panel {
         int due = prefs.serviceAtKm();
         if (due > 0 && !Double.isNaN(s.odometerKm)) {
             long left = Math.round(due - s.odometerKm);
-            odoSub.setText(left > 0 ? String.format(Locale.US, "service in %,d km", left) : "service due now");
-            odoSub.setTextColor(left < 1000 ? Theme.CAUTION : th.muted);
+            serviceLabel.setText(left > 0 ? "SERVICE IN" : "SERVICE");
+            odoSub.setText(left > 0 ? String.format(Locale.US, "%,d km", left) : "due now");
+            odoSub.setTextColor(left < 1000 ? Theme.CAUTION : th.text);
         } else {
-            odoSub.setText("tap to set service");
+            serviceLabel.setText("SERVICE");
+            odoSub.setText("tap to set");
             odoSub.setTextColor(th.muted);
         }
 
