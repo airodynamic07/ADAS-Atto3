@@ -106,8 +106,8 @@ public final class MusicCard {
 
     private void refresh() {
         if (!NowPlaying.allowed(c)) {
-            title.setText("Tap ⏯ to allow");
-            artist.setText("Notification access, once");
+            title.setText("Tap ⏯ to switch on");
+            artist.setText("once; uses the car's ADB");
             return;
         }
         MediaController mc = session();
@@ -133,8 +133,20 @@ public final class MusicCard {
 
     private void act(int what) {
         if (!NowPlaying.allowed(c)) {
-            Toast.makeText(c, "Turn on 'Notification access' for NATEE Launcher", Toast.LENGTH_LONG).show();
-            try { c.startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception ignored) {}
+            // BYD blocks the Notification access page ("IVI system does not support this operation"),
+            // so switch it on through the car's own ADB instead (same way the installs work).
+            Toast.makeText(c, "Switching on Now playing… if the car asks 'Allow USB debugging?', tick Always allow + OK", Toast.LENGTH_LONG).show();
+            new Thread(() -> {
+                String msg;
+                try {
+                    String out = Updater.adbShell(c, "cmd notification allow_listener " + NowPlaying.component(c).flattenToString());
+                    msg = NowPlaying.allowed(c) ? "Now playing is on" : "Car answered: " + (out.isEmpty() ? "nothing" : out);
+                } catch (Exception e) {
+                    msg = "Couldn't reach the car's ADB (" + e.getClass().getSimpleName() + ")";
+                }
+                final String m = msg;
+                main.post(() -> { Toast.makeText(c, m, Toast.LENGTH_LONG).show(); refresh(); });
+            }, "allow-listener").start();
             return;
         }
         MediaController mc = session();

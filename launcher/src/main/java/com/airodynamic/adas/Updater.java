@@ -81,6 +81,22 @@ public final class Updater {
         }
     }
 
+    /**
+     * Runs one shell command through the car's own ADB (127.0.0.1:5555), like the installs do.
+     * Used to switch on Notification access for Now playing, whose settings page BYD has blocked.
+     */
+    public static String adbShell(Context ctx, String cmd) throws Exception {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress("127.0.0.1", 5555), 3000);
+        }
+        File priv = new File(ctx.getFilesDir(), "adbkey"), pub = new File(ctx.getFilesDir(), "adbkey.pub");
+        if (!priv.exists() || !pub.exists()) AdbKeyPair.generate(priv, pub);
+        try (Dadb d = Dadb.create("127.0.0.1", 5555, AdbKeyPair.read(priv, pub), 5000, 30000)) {
+            dadb.AdbShellResponse r = d.shell(cmd);
+            return (r.getAllOutput() == null ? "" : r.getAllOutput().trim()) + (r.getExitCode() != 0 ? " (exit " + r.getExitCode() + ")" : "");
+        }
+    }
+
     private static void install(Context ctx, File apk, Log log) throws Exception {
         try (Socket s = new Socket()) {
             s.connect(new InetSocketAddress("127.0.0.1", 5555), 3000);

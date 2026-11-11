@@ -30,7 +30,9 @@ public final class Ambient implements CarData.Listener {
     private volatile boolean effecting;
     private int normal = 5;
     /** What the car answered to the last colour sent (shown in Settings, to see if it listens). */
-    public volatile String report = "nothing sent yet";            // your own brightness, read when no effect is running
+    public volatile String report = "nothing sent yet";
+    /** What happened at the last gear change (shown in Settings). */
+    public volatile String gearReport = "no gear change seen yet";            // your own brightness, read when no effect is running
 
     private Ambient(Context c) {
         this.c = c;
@@ -101,8 +103,18 @@ public final class Ambient implements CarData.Listener {
         if (g < 0 || g == lastGear) return;
         boolean first = lastGear < 0;
         lastGear = g;
-        if (first || !prefs.ambientGear() || overLimit) return;   // only on a real gear change, never at start-up
-        apply(prefs.ambientColour(g), prefs.ambientStyle());
+        if (first) return;   // only on a real gear change, never at start-up
+        if (!prefs.ambientGear()) { gearReport = "gear " + Prefs.GEARS[g] + ": 'Ambient light by gear' is Off"; return; }
+        if (overLimit) return;
+        final int col = prefs.ambientColour(g), gi = g;
+        apply(col, prefs.ambientStyle());
+        // the car may set its own colour just after a gear change: send ours again a moment later
+        h.postDelayed(() -> {
+            CarData.get(c).ambient("setIALColor", col);
+            Object back = CarData.get(c).ambient("getIALColor", 1);
+            gearReport = "gear " + Prefs.GEARS[gi] + " at " + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(new java.util.Date())
+                    + ": sent colour " + col + ", car now reports " + back;
+        }, 1800);
     }
 
     /** Also used by the "Try" buttons in Settings. */

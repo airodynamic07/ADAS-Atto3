@@ -123,4 +123,8 @@ public final class Prefs {
     /** Length of the "best stretches" on the trip card, km (user can type it; default 10). */
     public float bestKm() { return p.getFloat("bestKm", 10f); }
     public void setBestKm(float km) { p.edit().putFloat("bestKm", km).apply(); }
+
+    /** Assistant box: "gemini" (works in GBox with the user's account, 2026-11-11) or "chatgpt". */
+    public String assistant() { return p.getString("assistant", "gemini"); }
+    public void setAssistant(String a) { p.edit().putString("assistant", a).apply(); }
 }

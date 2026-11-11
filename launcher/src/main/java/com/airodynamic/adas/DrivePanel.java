@@ -17,8 +17,11 @@ import java.util.Locale;
  */
 public final class DrivePanel implements Panel, TripEnergy.Listener {
 
-    /** ChatGPT: GBox copy first (the car's own store may not have it), then a normal install. */
+    /** Assistant apps, GBox copy first (the car's own store may not have them), then a normal install. */
     private static final String[] CHATGPT = {"com.gbox.com.openai.chatgpt", "com.openai.chatgpt"};
+    private static final String[] GEMINI = {"com.gbox.com.google.android.apps.bard", "com.google.android.apps.bard",
+            "com.gbox.com.google.android.googlequicksearchbox", "com.google.android.googlequicksearchbox"};
+    private boolean gemini() { return prefs.assistant().equals("gemini"); }
 
     private final Context c;
     private final Theme th;
@@ -41,9 +44,9 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         // --- top row (user's layout, 2026-11-11): big ChatGPT box | theme dots + Settings over the app tray
         LinearLayout top = new LinearLayout(c);
         LinearLayout gpt = card();
-        gpt.addView(Ui.label(c, "ChatGPT", th));
+        gpt.addView(Ui.label(c, gemini() ? "Gemini" : "ChatGPT", th));
         String pkg = chatGpt();
-        gptText = Ui.text(c, pkg == null ? "Install ChatGPT (GBox or store)" : "Opens " + Apps.label(c, pkg), 15, th.text, true);
+        gptText = Ui.text(c, pkg == null ? (gemini() ? "Install Gemini (GBox)" : "Install ChatGPT (GBox or store)") : "Opens " + Apps.label(c, pkg), 15, th.text, true);
         gptText.setPadding(0, Ui.dp(c, 3), 0, 0);
         gpt.addView(gptText);
         gpt.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 1f));
@@ -192,7 +195,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     }
 
     private String chatGpt() {
-        for (String p : CHATGPT) if (Apps.installed(c, p)) return p;
+        for (String p : gemini() ? GEMINI : CHATGPT) if (Apps.installed(c, p)) return p;
         return null;
     }
 
@@ -200,7 +203,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private void openGpt() {
         String p = chatGpt();
         if (p == null) {
-            Toast.makeText(c, "ChatGPT is not installed. Install it in GBox (or from the store), then sign in with \"Continue with email\".", Toast.LENGTH_LONG).show();
+            Toast.makeText(c, gemini() ? "Gemini is not installed in GBox" : "ChatGPT is not installed. Install it in GBox (or from the store), then sign in with \"Continue with email\".", Toast.LENGTH_LONG).show();
             return;
         }
         Apps.open(c, p, CarData.get(c).last());
