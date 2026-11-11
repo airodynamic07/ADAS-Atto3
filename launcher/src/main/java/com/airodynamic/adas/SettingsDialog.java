@@ -56,7 +56,7 @@ public final class SettingsDialog {
             am.addView(Ui.chip(c, Ambient.STYLES[i], prefs.ambientStyle() == i, th, v -> { prefs.setAmbientStyle(st); redo.run(); }), weight(c));
         }
         root.addView(am);
-        root.addView(Ui.text(c, "The car numbers its colours (1–31?). Slide a bar: the light follows. Try plays the gear's colour with the style.\nLast: "
+        root.addView(Ui.text(c, "Same colours as BYD's own ambient bar. Slide a bar: the light follows. Try plays the gear's colour with the style.\nLast: "
                 + Ambient.get(c).report, 12, th.muted, false));
         // Live: which colour number the car has now. Pick a colour in BYD's own ambient menu,
         // then open this to see its number (so the bar can be matched to BYD's colours).
@@ -73,28 +73,11 @@ public final class SettingsDialog {
             gr.setPadding(0, Ui.dp(c, 4), 0, 0);
             final TextView val = Ui.text(c, Prefs.GEARS[g] + "  " + prefs.ambientColour(g), 15, th.text, true);
             gr.addView(val, new LinearLayout.LayoutParams(Ui.dp(c, 64), -2));
-            // Slide to pick a colour: the car's light follows as you slide (colours 1–31)
-            android.widget.SeekBar bar = new android.widget.SeekBar(c);
-            bar.setMax(30);
-            bar.setProgress(prefs.ambientColour(g) - 1);
-            // Colour spectrum like BYD's own ambient light screen (order is a guess until matched on the car)
-            int[] hues = new int[31];
-            for (int k = 0; k < 31; k++) hues[k] = android.graphics.Color.HSVToColor(new float[]{k * 330f / 30f, 0.9f, 1f});
-            android.graphics.drawable.GradientDrawable spec = new android.graphics.drawable.GradientDrawable(
-                    android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, hues);
-            spec.setCornerRadius(Ui.dp(c, 6));
-            bar.setProgressDrawable(spec);
-            bar.setPadding(Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14));
-            bar.setThumbTintList(android.content.res.ColorStateList.valueOf(0xFFFFFFFF));
-            bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-                @Override public void onProgressChanged(android.widget.SeekBar sb, int pr, boolean user) {
-                    if (!user) return;
-                    prefs.setAmbientColour(gg, pr + 1);
-                    val.setText(Prefs.GEARS[gg] + "  " + (pr + 1));
-                    Ambient.get(c).apply(pr + 1, 0);
-                }
-                @Override public void onStartTrackingTouch(android.widget.SeekBar sb) {}
-                @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {}
+            // Slide to pick a colour (BYD's colour bar): the car's light follows as you slide (colours 1–31)
+            android.widget.SeekBar bar = colourBar(c, th, prefs.ambientColour(g), v -> {
+                prefs.setAmbientColour(gg, v);
+                val.setText(Prefs.GEARS[gg] + "  " + v);
+                Ambient.get(c).apply(v, 0);
             });
             gr.addView(bar, new LinearLayout.LayoutParams(0, Ui.dp(c, 48), 1f));
             gr.addView(Ui.chip(c, "Try", false, th, v -> {
@@ -157,6 +140,13 @@ public final class SettingsDialog {
         dlg[0] = new AlertDialog.Builder(c).setTitle("Settings").setView(sv).setPositiveButton("Close", null).show();
     }
 
+    /** BYD's own ambient colour bar (sampled from the car's settings screen, 2026-11-11), left to right. */
+    static final int[] BYD_COLOURS = {
+            0xFFD815EB, 0xFF9A1CF0, 0xFF4B2BF2, 0xFF0B4EF0, 0xFF0BACED, 0xFF0AC4F1, 0xFF0CD4EE, 0xFF13DFE7,
+            0xFF17E1E3, 0xFF62DCDC, 0xFF73DBD4, 0xFF79DCBE, 0xFF1AE076, 0xFF0AE80C, 0xFF9FE011, 0xFFC8D116,
+            0xFFD6C936, 0xFFD7C72B, 0xFFD8CC0E, 0xFFDACB0D, 0xFFE5C50E, 0xFFE9A911, 0xFFEA700E, 0xFFE74115,
+            0xFFF80020, 0xFFEE005D, 0xFFE95C6B, 0xFFCACDCA, 0xFFB4C8C9, 0xFF84CCD4, 0xFF7ECDD6};
+
     public interface IntPick { void on(int v); }
 
     /** Colour bar 1–31 painted as a spectrum; calls back while sliding. */
@@ -164,10 +154,8 @@ public final class SettingsDialog {
         android.widget.SeekBar bar = new android.widget.SeekBar(c);
         bar.setMax(30);
         bar.setProgress(value - 1);
-        int[] hues = new int[31];
-        for (int k = 0; k < 31; k++) hues[k] = android.graphics.Color.HSVToColor(new float[]{k * 330f / 30f, 0.9f, 1f});
         android.graphics.drawable.GradientDrawable spec = new android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, hues);
+                android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, BYD_COLOURS);
         spec.setCornerRadius(Ui.dp(c, 6));
         bar.setProgressDrawable(spec);
         bar.setPadding(Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14));
