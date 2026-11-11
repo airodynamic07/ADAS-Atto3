@@ -68,7 +68,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         td.addView(tr1); td.addView(tr2);
         info.addView(td, new LinearLayout.LayoutParams(-1, 0, 1f));
         showLimit();
-        LinearLayout.LayoutParams il = new LinearLayout.LayoutParams(0, -1, .95f);
+        LinearLayout.LayoutParams il = new LinearLayout.LayoutParams(0, -1, 1.4f);   // wider so Today fits (user, 2026-11-11)
         il.rightMargin = Ui.dp(c, 6);
         top.addView(info, il);
 
@@ -91,7 +91,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         trayBox.addView(tray);
         side.addView(trayBox, new LinearLayout.LayoutParams(-1, 0, 1f));   // bottom lines up with Today
         drawShortcuts();
-        top.addView(side, new LinearLayout.LayoutParams(0, -1, 1.25f));
+        top.addView(side, new LinearLayout.LayoutParams(0, -1, 1f));   // narrower app box + theme dots; Outside keeps its size
         LinearLayout.LayoutParams g1 = new LinearLayout.LayoutParams(-1, -2);
         g1.bottomMargin = Ui.dp(c, 6);
         root.addView(top, g1);
@@ -207,7 +207,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED),
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f));
         lp.width = 0;
-        lp.height = Ui.dp(c, 46);
+        lp.height = Ui.dp(c, 40);
         int m = Ui.dp(c, 3);
         lp.setMargins(m, m, m, m);
         return lp;
