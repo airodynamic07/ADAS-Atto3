@@ -100,12 +100,6 @@ public final class SettingsDialog {
                 new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
         root.addView(ao);
 
-        section(c, root, th, "Assistant box opens");
-        LinearLayout as2 = row(c);
-        as2.addView(Ui.chip(c, "Gemini", prefs.assistant().equals("gemini"), th, v -> { prefs.setAssistant("gemini"); redo.run(); }), weight(c));
-        as2.addView(Ui.chip(c, "ChatGPT", prefs.assistant().equals("chatgpt"), th, v -> { prefs.setAssistant("chatgpt"); redo.run(); }), weight(c));
-        root.addView(as2);
-
         section(c, root, th, "Ghost Race browser (takes effect next time the launcher starts)");
         LinearLayout gk = row(c);
         gk.addView(Ui.chip(c, "Firefox engine", prefs.ghostGecko(), th, v -> { prefs.setGhostGecko(true); redo.run(); }), weight(c));

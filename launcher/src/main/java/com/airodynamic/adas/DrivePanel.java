@@ -17,18 +17,13 @@ import java.util.Locale;
  */
 public final class DrivePanel implements Panel, TripEnergy.Listener {
 
-    /** Assistant apps, GBox copy first (the car's own store may not have them), then a normal install. */
-    private static final String[] CHATGPT = {"com.gbox.com.openai.chatgpt", "com.openai.chatgpt"};
-    private static final String[] GEMINI = {"com.gbox.com.google.android.apps.bard", "com.google.android.apps.bard",
-            "com.gbox.com.google.android.googlequicksearchbox", "com.google.android.googlequicksearchbox"};
-    private boolean gemini() { return prefs.assistant().equals("gemini"); }
 
     private final Context c;
     private final Theme th;
     private final LinearLayout root;
     private android.widget.GridLayout tray;
     private final Prefs prefs;
-    private final TextView used, avg, dist, power, soc, since, gptText, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty;
+    private final TextView used, avg, dist, power, soc, since, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty;
     private final TextView[] bestKwh = new TextView[3], bestSpd = new TextView[3], bestRange = new TextView[3], bestKmTxt = new TextView[3];
     private final LinearLayout[] bestRows = new LinearLayout[3];
 
@@ -41,46 +36,19 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         int pad = Ui.dp(c, 8);
         root.setPadding(pad, pad, pad, pad);
 
-        // --- top row (user's layout, 2026-11-11): big ChatGPT box | theme dots + Settings over the app tray
-        LinearLayout top = new LinearLayout(c);
-        LinearLayout gpt = card();
-        // press and hold: pick exactly which app the box opens
-        gpt.setOnLongClickListener(v -> {
-            AppPicker.pickOne(c, th, pkg -> { prefs.setAssistantPkg(pkg); showAssistant(pkg); });
-            return true;
-        });
-        gpt.addView(Ui.label(c, gemini() ? "Gemini" : "ChatGPT", th));
-        String pkg = chatGpt();
-        gptText = Ui.text(c, pkg == null ? (gemini() ? "Install Gemini (GBox)" : "Install ChatGPT (GBox or store)") : "Opens " + Apps.label(c, pkg), 15, th.text, true);
-        gptText.setPadding(0, Ui.dp(c, 3), 0, 0);
-        gpt.addView(gptText);
-        gpt.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 1f));
-        LinearLayout gb = new LinearLayout(c);
-        LinearLayout.LayoutParams b1 = new LinearLayout.LayoutParams(0, Ui.dp(c, 44), 1f);
-        b1.rightMargin = Ui.dp(c, 6);
-        gb.addView(Ui.chip(c, "🎤 Talk", true, th, v -> openGpt()), b1);
-        gb.addView(Ui.chip(c, "⤢ Open", false, th, v -> openGpt()), new LinearLayout.LayoutParams(0, Ui.dp(c, 44), 1f));
-        gpt.addView(gb);
-        LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(0, -1, 1.25f);
-        gl.rightMargin = Ui.dp(c, 6);
-        top.addView(gpt, gl);
-
-        LinearLayout side = new LinearLayout(c);
-        side.setOrientation(LinearLayout.VERTICAL);
+        // --- top (2026-11-11, AI box removed): theme dots + Settings in one row, app tray full width below
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
         tl.bottomMargin = Ui.dp(c, 6);
-        side.addView(themeControls, tl);
+        root.addView(themeControls, tl);
         tray = new android.widget.GridLayout(c);
-        tray.setColumnCount(3);
+        tray.setColumnCount(6);
         LinearLayout trayBox = card();
         trayBox.setPadding(Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6));
         trayBox.addView(tray);
-        side.addView(trayBox, new LinearLayout.LayoutParams(-1, -2));
         drawShortcuts();
-        top.addView(side, new LinearLayout.LayoutParams(0, -2, 1f));
         LinearLayout.LayoutParams g1 = new LinearLayout.LayoutParams(-1, -2);
         g1.bottomMargin = Ui.dp(c, 6);
-        root.addView(top, g1);
+        root.addView(trayBox, g1);
 
         // --- box 2: this trip (user's layout, 2026-11-11): one line of energy, 9 small stats, big "Best 10 km"
         LinearLayout en = card();
@@ -197,28 +165,6 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         int m = Ui.dp(c, 3);
         lp.setMargins(m, m, m, m);
         return lp;
-    }
-
-    private void showAssistant(String pkg) { gptText.setText("Opens " + Apps.label(c, pkg)); }
-
-    /** The app the assistant box opens: the one picked by press-and-hold, else found by name, else known package names. */
-    private String chatGpt() {
-        String picked = prefs.assistantPkg();
-        if (picked != null && Apps.installed(c, picked)) return picked;
-        String want = gemini() ? "gemini" : "chatgpt";
-        for (Apps.App a : Apps.all(c)) if (a.label.toLowerCase(java.util.Locale.US).startsWith(want)) return a.pkg;   // e.g. "Gemini (GBox)"
-        for (String p : gemini() ? GEMINI : CHATGPT) if (Apps.installed(c, p)) return p;
-        return null;
-    }
-
-    /** Opens ChatGPT; in GBox it can't be told to start listening, so tap its mic there. */
-    private void openGpt() {
-        String p = chatGpt();
-        if (p == null) {
-            Toast.makeText(c, gemini() ? "Gemini is not installed in GBox" : "ChatGPT is not installed. Install it in GBox (or from the store), then sign in with \"Continue with email\".", Toast.LENGTH_LONG).show();
-            return;
-        }
-        Apps.open(c, p, CarData.get(c).last());
     }
 
     // ---------------------------------------------------------------- helpers
