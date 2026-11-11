@@ -49,7 +49,6 @@ public final class EngineHost {
     private final FrameLayout root;
     private final WebView engine;
     private WebView ghost;
-    private GeckoGhost gecko;
     private final TextView diag;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final HandlerThread carThread = new HandlerThread("engine-car");
@@ -287,16 +286,22 @@ public final class EngineHost {
     @SuppressLint("SetJavaScriptEnabled")
     private void showGhost(boolean show) {
         // First choice: Firefox's engine (the car's WebView leaves Ghost Race's map blank). Settings can switch back.
-        if (show && ghost == null && gecko == null && new Prefs(ctx).ghostGecko()) {
-            try {
-                gecko = new GeckoGhost(ctx, GHOST_URL);
-                root.addView(gecko.view(), 1, new FrameLayout.LayoutParams(-1, -1));
-            } catch (Throwable t) {
-                gecko = null;
-                showDiag("Firefox engine didn't start (" + t.getClass().getSimpleName() + "): using the built-in browser");
-            }
+        // Firefox engine: runs in its own window and process (GhostActivity), so a crash there can't
+        // close the launcher. The launcher goes wide first, then the window is put over that area.
+        if (show && ghost == null && new Prefs(ctx).ghostGecko() && ctx instanceof android.app.Activity) {
+            if (geckoOpen) return;
+            geckoOpen = true;
+            if (!ghostVisible) { ghostVisible = true; if (ghostListener != null) ghostListener.onGhost(true); }
+            root.postDelayed(() -> {
+                if (!geckoOpen) return;
+                int[] l = new int[2];
+                root.getLocationOnScreen(l);
+                try { GhostActivity.open((android.app.Activity) ctx, l[0], l[1], root.getWidth(), root.getHeight()); }
+                catch (Throwable t) { showDiag("Ghost Race window didn't open (" + t.getClass().getSimpleName() + ")"); ghostWindowClosed(); }
+            }, 250);
+            return;
         }
-        if (show && ghost == null && gecko == null) {
+        if (show && ghost == null && !geckoOpen) {
             ghost = newWebView();
             ghost.addJavascriptInterface(new GhostHost(), "AttoHost");
             ghost.setWebViewClient(new WebViewClient() {
@@ -322,7 +327,6 @@ public final class EngineHost {
             ghost.loadUrl(GHOST_URL);
         }
         if (ghost != null) ghost.setVisibility(show ? View.VISIBLE : View.GONE);
-        if (gecko != null) gecko.view().setVisibility(show ? View.VISIBLE : View.GONE);
         if (ghostClose != null) ghostClose.setVisibility(show ? View.VISIBLE : View.GONE);
         boolean changed = ghostVisible != show;
         ghostVisible = show;
@@ -336,6 +340,14 @@ public final class EngineHost {
     public void setGhostListener(GhostListener l) { ghostListener = l; }
     public boolean ghostOpen() { return ghostVisible; }
     public void closeGhost() { showGhost(false); }
+
+    private boolean geckoOpen;
+    /** Called when the launcher comes back to the front: the Firefox-engine window has closed (or crashed). */
+    public void ghostWindowClosed() {
+        if (!geckoOpen) return;
+        geckoOpen = false;
+        showGhost(false);
+    }
 
     /** Small "back to Engine Sound" button on top of Ghost Race (top centre, away from its own buttons). */
     public void addGhostClose(Theme th) {

@@ -162,6 +162,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Ghost Race on Firefox's engine: own process, so a crash can't close the launcher -->
+        <activity
+            android:name=".GhostActivity"
+            android:process=":ghost"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.NoActionBar"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode" />
         <!-- "Now playing" card: needs Notification access, switched on once by the user -->
         <service
             android:name=".NowPlaying"

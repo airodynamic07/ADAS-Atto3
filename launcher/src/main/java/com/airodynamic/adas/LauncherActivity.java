@@ -162,7 +162,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     @Override protected void onResume() {
         super.onResume();
-        if (engineHost != null) engineHost.setForeground(true);
+        if (engineHost != null) { engineHost.setForeground(true); engineHost.ghostWindowClosed(); }
         resumed = true;
         CarData.get(this).addListener(this);
         turnCam.setAllowed(true);

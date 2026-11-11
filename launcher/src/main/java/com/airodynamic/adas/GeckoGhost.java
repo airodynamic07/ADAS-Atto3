@@ -38,4 +38,6 @@ final class GeckoGhost {
     View view() { return view; }
 
     void reload() { session.reload(); }
+
+    void close() { try { view.releaseSession(); session.close(); } catch (Throwable ignored) { } }
 }
