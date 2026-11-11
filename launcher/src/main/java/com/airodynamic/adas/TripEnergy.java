@@ -49,22 +49,24 @@ public final class TripEnergy implements CarData.Listener {
     // ---- today: km and kWh across all trips, starts again each day, saved so a restart keeps it
     private android.content.SharedPreferences store;
     private String day = "";
-    private double dayKm, dayKwh;
+    private double dayKm, dayKwh, daySec;
     private long savedAt;
     public double todayKm() { rollDay(); return dayKm; }
     public double todayKwh() { rollDay(); return dayKwh; }
+    public double todaySec() { rollDay(); return daySec; }
     private static String dayNow() { return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()); }
     private void loadToday() {
         day = store.getString("day", "");
         dayKm = Double.longBitsToDouble(store.getLong("km", 0));
         dayKwh = Double.longBitsToDouble(store.getLong("kwh", 0));
+        daySec = Double.longBitsToDouble(store.getLong("sec", 0));
         rollDay();
     }
-    private void rollDay() { String d = dayNow(); if (!d.equals(day)) { day = d; dayKm = dayKwh = 0; } }
+    private void rollDay() { String d = dayNow(); if (!d.equals(day)) { day = d; dayKm = dayKwh = daySec = 0; } }
     private void saveToday(long now) {
         if (store == null || now - savedAt < 20_000) return;
         savedAt = now;
-        store.edit().putString("day", day).putLong("km", Double.doubleToLongBits(dayKm)).putLong("kwh", Double.doubleToLongBits(dayKwh)).apply();
+        store.edit().putString("day", day).putLong("km", Double.doubleToLongBits(dayKm)).putLong("kwh", Double.doubleToLongBits(dayKwh)).putLong("sec", Double.doubleToLongBits(daySec)).apply();
     }
 
     public long startedAt;
@@ -86,7 +88,8 @@ public final class TripEnergy implements CarData.Listener {
     public double movingSec, stoppedSec;
     private double segMin = Double.NaN, segMax = Double.NaN, segDecel, segMinPower;
     /** Live stamps for the graph (the 100 m being driven now): regen yes/no, brake 0 none, 1 mild, 2 hard. */
-    public boolean liveRegen() { return segMinPower < -2 || (!Double.isNaN(powerKw) && powerKw < -2); }
+    /** Regen stamp only while "Power now" shows a minus number (user, 2026-11-11). */
+    public boolean liveRegen() { return !Double.isNaN(powerKw) && powerKw <= -0.5; }
     public int liveBrake() { double g = segDecel / 9.81; return g >= .4 ? 2 : g >= .15 ? 1 : 0; }
     /** km where the last stored point ends (start of the live stamp). */
     public synchronized double lastPointKm() { return points.isEmpty() ? Math.max(0, km - (km % STEP_KM)) : points.get(points.size() - 1).km; }
@@ -177,7 +180,7 @@ public final class TripEnergy implements CarData.Listener {
                 double gs = segDecel / 9.81;
                 pt.brake = gs >= .4 ? 3 : gs >= .25 ? 2 : gs >= .15 ? 1 : 0;
                 pt.decelG = gs;
-                pt.regen = segMinPower < -2;
+                pt.regen = segPowerN > 0 && segPowerSum / segPowerN <= -0.5;   // the stretch averaged below zero
                 segMinPower = 0;
                 points.add(pt);
                 segDecel = 0;
@@ -197,7 +200,7 @@ public final class TripEnergy implements CarData.Listener {
         segMin = Double.isNaN(segMin) ? v : Math.min(segMin, v);
         segMax = Double.isNaN(segMax) ? v : Math.max(segMax, v);
         if (v > topSpeed) { topSpeed = v; topSpeedKm = km; }
-        if (v > 2) movingSec += dt; else stoppedSec += dt;
+        if (v > 2) { movingSec += dt; daySec += dt; } else stoppedSec += dt;
         // 0–100 km/h: starts when the car moves off from standing still, ends at 100;
         // dropped if the speed falls back 5 km/h or it takes longer than 40 s
         if (v <= 1) { runStart = 0; runArmed = true; }

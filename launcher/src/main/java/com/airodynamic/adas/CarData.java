@@ -276,8 +276,10 @@ public final class CarData {
             if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", a))) s.windowPct[a] = Math.max(0, ((Number) v).intValue());
         }
         if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", 5))) s.sunroofOpen = ((Number) v).intValue() > 0;
-        // Sunroof position/state (Phase 0 found these; values not confirmed yet). Position > 0 is taken as open.
-        if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getSunroofPosition"))) { s.roofPos = ((Number) v).intValue(); if (s.roofPos > 0) s.sunroofOpen = true; }
+        // Sunroof position/state (Phase 0 found these; values not confirmed yet). Position 2 (or 0) is closed.
+        // Position 2 = closed (seen in the car, 2026-11-11). When the position is known it decides, so the
+        // other reading can't make it flicker between closed and open.
+        if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getSunroofPosition"))) { s.roofPos = ((Number) v).intValue(); s.sunroofOpen = s.roofPos != 2 && s.roofPos != 0; }
         if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getSunroofState"))) s.roofState = ((Number) v).intValue();
         // Lock: OTA device's left-front lock state. On the user's Atto 3 (car test 2026-11-10)
         // the raw value is the opposite of OverDrive's note: 1 = unlocked, 2 = locked.

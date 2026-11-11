@@ -54,8 +54,9 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private double smooth(int i, int which) {
         double sum = 0;
         int n = 0;
-        int rad = which == 1 ? 1 : SMOOTH;   // power: 300 m (user, 2026-11-11); speed: 100 m
-        for (int k = Math.max(0, i - rad); k <= Math.min(pts.size() - 1, i + rad); k++) {
+        // power: 200 m = this point and the one before (user, 2026-11-11); speed: 100 m
+        int from = which == 1 ? i - 1 : i - SMOOTH, to = which == 1 ? i : i + SMOOTH;
+        for (int k = Math.max(0, from); k <= Math.min(pts.size() - 1, to); k++) {
             double v = val(pts.get(k), which);
             if (!Double.isNaN(v)) { sum += v; n++; }
         }
@@ -89,7 +90,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         p.setStyle(Paint.Style.FILL);
         float lx = left;
         lx = legend(c, lx, 13 * d, SPEED_COL, "Speed km/h", d);
-        lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (300 m)", d);
+        lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (200 m)", d);
         lx = legend(c, lx, 13 * d, REGEN_STAMP, "Regen", d);
         lx = legend(c, lx, 13 * d, MILD_STAMP, "mild brake", d);
         lx = legend(c, lx, 13 * d, HARD_STAMP, "hard brake", d);
