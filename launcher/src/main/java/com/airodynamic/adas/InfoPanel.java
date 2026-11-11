@@ -170,7 +170,7 @@ public final class InfoPanel implements Panel {
         l.setOrientation(LinearLayout.VERTICAL);
         int p = Ui.dp(c, 9);
         l.setPadding(p, Ui.dp(c, 7), p, Ui.dp(c, 7));
-        l.setBackground(Ui.round(th.panel, th.line, 16, c));
+        l.setBackground(Ui.round(th.card, th.line, 16, c));
         return l;
     }
 
@@ -329,7 +329,7 @@ public final class InfoPanel implements Panel {
 
         // My speed limit: card turns red while over (warning only; SpeedAlert beeps)
         boolean over = SpeedAlert.get(c).over();
-        if (limitCard != null) limitCard.setBackground(over ? Ui.round(Theme.DANGER, Theme.DANGER, 16, c) : Ui.round(th.panel, th.line, 16, c));
+        if (limitCard != null) limitCard.setBackground(over ? Ui.round(Theme.DANGER, Theme.DANGER, 16, c) : Ui.round(th.card, th.line, 16, c));
         limit.setTextColor(over ? 0xFFFFFFFF : th.text);
     }
 

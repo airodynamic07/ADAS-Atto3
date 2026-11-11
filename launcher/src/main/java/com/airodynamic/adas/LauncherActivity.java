@@ -106,7 +106,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         for (int i = 0; i < 3; i++) {
             frames[i] = new LinearLayout(this);
             frames[i].setOrientation(LinearLayout.VERTICAL);
-            frames[i].setBackground(Ui.round(th.panel, th.line, 20, this));
+            frames[i].setBackground(Ui.round(i == 1 ? th.eng : th.panel, th.line, 20, this));
             frames[i].setClipToOutline(true);
             bodies[i] = new FrameLayout(this);
             bodies[i].addView(panels[i].view(), new FrameLayout.LayoutParams(-1, -1));
@@ -124,7 +124,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         turnCam.attach(bodies[1], th);
 
         FrameLayout graphBox = new FrameLayout(this);
-        graphBox.setBackground(Ui.round(th.panel, th.line, 20, this));
+        graphBox.setBackground(Ui.round(th.eng, th.line, 20, this));
         graphBox.setPadding(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 2));
         graphBox.addView(new TripGraph(this, th), new FrameLayout.LayoutParams(-1, -1));
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 132));
@@ -141,7 +141,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     private LinearLayout themeControls(Theme th) {
         LinearLayout box = new LinearLayout(this);
         box.setGravity(Gravity.CENTER_VERTICAL);
-        box.setBackground(Ui.round(th.panel, th.line, 22, this));
+        box.setBackground(Ui.round(th.card, th.line, 14, this));
         box.setPadding(Ui.dp(this, 4), 0, Ui.dp(this, 2), 0);
         for (Theme t : Theme.values()) {
             View dot = new View(this);
@@ -152,11 +152,11 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             hit.setContentDescription(t.name() + " theme");
             hit.addView(dot, new FrameLayout.LayoutParams(Ui.dp(this, 22), Ui.dp(this, 22), Gravity.CENTER));
             hit.setOnClickListener(v -> { prefs.setTheme(t); rebuild(); });
-            box.addView(hit, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+            box.addView(hit, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1f));   // share the width
         }
         android.widget.Button settings = Ui.chip(this, "⚙", false, th, v -> SettingsDialog.show(this, theme, prefs, this));
         settings.setContentDescription("Settings");
-        box.addView(settings, new LinearLayout.LayoutParams(Ui.dp(this, 48), Ui.dp(this, 44)));
+        box.addView(settings, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40)));
         return box;
     }
 

@@ -4,21 +4,25 @@ import android.graphics.Color;
 
 /** The three looks from the design canvas. Status colours are the same in every theme. */
 public enum Theme {
-    BLUE("#000000", "#0E0F12", "#1A1C21", "#2A2D35", "#F4F6FA", "#9AA0AD", "#4DA3FF", "#04101F"),   // black-blue (user, 2026-11-10)
-    WHITE("#F3F5F9", "#FFFFFF", "#EDF1F7", "#D5DCE8", "#0F1726", "#5B6577", "#1F6FEB", "#FFFFFF"),
-    RED("#000000", "#0E0E10", "#1A1A1E", "#2A2A30", "#F4F4F6", "#9A9AA3", "#E5202E", "#FFFFFF");
+    // bg = screen, panel = Info/right windows, card = cards in them, chip = buttons/small tiles,
+    // eng = Engine Sound window and graph (user's layout, 2026-11-11)
+    BLUE("#000000", "#071226", "#0B1A35", "#0E2142", "#22365C", "#EAF1FF", "#8FA0BD", "#4DA3FF", "#04101F", "#05070B"),
+    WHITE("#F3F4F6", "#C9CDD3", "#FFFFFF", "#EEF0F3", "#B8BDC5", "#111418", "#4A505A", "#1F6FEB", "#FFFFFF", "#FFFFFF"),
+    RED("#000000", "#1C0507", "#2A090C", "#3A0E12", "#56181E", "#F6EDEE", "#B79A9D", "#E5202E", "#FFFFFF", "#050304");
 
-    public final int bg, panel, chip, line, text, muted, accent, onAccent;
+    public final int bg, panel, card, chip, line, text, muted, accent, onAccent, eng;
 
-    Theme(String bg, String panel, String chip, String line, String text, String muted, String accent, String onAccent) {
+    Theme(String bg, String panel, String card, String chip, String line, String text, String muted, String accent, String onAccent, String eng) {
         this.bg = Color.parseColor(bg);
         this.panel = Color.parseColor(panel);
+        this.card = Color.parseColor(card);
         this.chip = Color.parseColor(chip);
         this.line = Color.parseColor(line);
         this.text = Color.parseColor(text);
         this.muted = Color.parseColor(muted);
         this.accent = Color.parseColor(accent);
         this.onAccent = Color.parseColor(onAccent);
+        this.eng = Color.parseColor(eng);
     }
 
     public static final int SAFE = Color.parseColor("#3DD9C1");

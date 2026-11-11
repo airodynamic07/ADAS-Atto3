@@ -22,10 +22,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * YouTube Music in the left window: cover, song, ⏮ ⏯ ⏭ and 👍 Like.
+ * Now playing (YouTube Music first): cover, song, ⏮ ⏯ ⏭. Info and controls only; open the
+ * music app yourself (user, 2026-11-11).
  * Reads the music app's media session (needs "Notification access", same as Now playing).
  * YouTube Music first (GBox or normal); any other playing music app if it isn't there.
- * Like: YouTube Music's own "thumbs up" action if it offers one, else a thumbs-up rating.
  */
 public final class MusicCard {
     static final String[] YTM = {"com.gbox.com.google.android.apps.youtube.music", "com.google.android.apps.youtube.music"};
@@ -35,7 +35,8 @@ public final class MusicCard {
     private final LinearLayout root;
     private final ImageView art;
     private final TextView title, artist;
-    private final Button play, like;
+    private final Button play;
+    private final TextView lab;
     private final Handler main = new Handler(Looper.getMainLooper());
     private boolean active;
 
@@ -44,19 +45,18 @@ public final class MusicCard {
         this.th = th;
         root = new LinearLayout(c);
         root.setGravity(Gravity.CENTER_VERTICAL);
-        root.setBackground(Ui.round(th.panel, 0, 12, c));
+        root.setBackground(Ui.round(th.card, th.line, 14, c));
         int p = Ui.dp(c, 8);
         root.setPadding(p, p, p, p);
         art = new ImageView(c);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         art.setBackground(Ui.round(th.chip, 0, 8, c));
         art.setClipToOutline(true);
-        art.setOnClickListener(v -> openApp());
         root.addView(art, new LinearLayout.LayoutParams(Ui.dp(c, 52), Ui.dp(c, 52)));
         LinearLayout txt = new LinearLayout(c);
         txt.setOrientation(LinearLayout.VERTICAL);
         txt.setPadding(Ui.dp(c, 10), 0, Ui.dp(c, 4), 0);
-        TextView lab = Ui.label(c, "YouTube Music", th);
+        lab = Ui.label(c, "Now playing", th);
         txt.addView(lab);
         title = Ui.text(c, "", 14, th.text, true);
         title.setSingleLine(true);
@@ -66,14 +66,11 @@ public final class MusicCard {
         artist.setEllipsize(TextUtils.TruncateAt.END);
         txt.addView(title);
         txt.addView(artist);
-        txt.setOnClickListener(v -> openApp());
         root.addView(txt, new LinearLayout.LayoutParams(0, -2, 1f));
         root.addView(Ui.chip(c, "⏮", false, th, v -> act(0)), sq());
         play = Ui.chip(c, "⏯", true, th, v -> act(1));
         root.addView(play, sq());
         root.addView(Ui.chip(c, "⏭", false, th, v -> act(2)), sq());
-        like = Ui.chip(c, "👍", false, th, v -> act(3));
-        root.addView(like, sq());
         refresh();
     }
 
@@ -115,8 +112,9 @@ public final class MusicCard {
         }
         MediaController mc = session();
         if (mc == null) {
-            title.setText("Not playing");
-            artist.setText("Tap ⏯ to open YouTube Music");
+            title.setText("Nothing playing");
+            artist.setText("Play music in any app; it shows here");
+            lab.setText("Now playing");
             art.setImageBitmap(null);
             return;
         }
@@ -124,20 +122,13 @@ public final class MusicCard {
         String t = md == null ? null : md.getString(MediaMetadata.METADATA_KEY_TITLE);
         String a = md == null ? null : md.getString(MediaMetadata.METADATA_KEY_ARTIST);
         title.setText(t == null || t.isEmpty() ? Apps.label(c, mc.getPackageName()) : t);
+        lab.setText("Now playing · " + Apps.label(c, mc.getPackageName()));
         artist.setText(a == null ? "" : a);
         Bitmap b = md == null ? null : md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
         if (b == null && md != null) b = md.getBitmap(MediaMetadata.METADATA_KEY_ART);
         art.setImageBitmap(b);
         PlaybackState st = mc.getPlaybackState();
         play.setText(st != null && st.getState() == PlaybackState.STATE_PLAYING ? "⏸" : "▶");
-        like.setText(liked(mc) ? "👍✓" : "👍");
-    }
-
-    private static boolean liked(MediaController mc) {
-        MediaMetadata md = mc.getMetadata();
-        if (md == null) return false;
-        Rating r = md.getRating(MediaMetadata.METADATA_KEY_USER_RATING);
-        return r != null && r.isRated() && r.getRatingStyle() == Rating.RATING_THUMB_UP_DOWN && r.isThumbUp();
     }
 
     private void act(int what) {
@@ -147,32 +138,15 @@ public final class MusicCard {
             return;
         }
         MediaController mc = session();
-        if (mc == null) { if (what == 1) openApp(); return; }
+        if (mc == null) return;
         MediaController.TransportControls tc = mc.getTransportControls();
         if (what == 0) tc.skipToPrevious();
         else if (what == 2) tc.skipToNext();
         else if (what == 1) {
             PlaybackState st = mc.getPlaybackState();
             if (st != null && st.getState() == PlaybackState.STATE_PLAYING) tc.pause(); else tc.play();
-        } else {
-            boolean done = false;
-            PlaybackState st = mc.getPlaybackState();
-            if (st != null) for (PlaybackState.CustomAction ca : st.getCustomActions()) {
-                String id = (ca.getAction() + " " + ca.getName()).toLowerCase(Locale.US);
-                if ((id.contains("like") || id.contains("thumb")) && !id.contains("dislike") && !id.contains("down")) {
-                    tc.sendCustomAction(ca, null);
-                    done = true;
-                    break;
-                }
-            }
-            if (!done) tc.setRating(Rating.newThumbRating(true));
-            Toast.makeText(c, "👍 Liked", Toast.LENGTH_SHORT).show();
         }
         main.postDelayed(this::refresh, 600);
     }
 
-    private void openApp() {
-        for (String y : YTM) if (Apps.installed(c, y)) { Apps.open(c, y, CarData.get(c).last()); return; }
-        Toast.makeText(c, "YouTube Music is not installed", Toast.LENGTH_SHORT).show();
-    }
 }
