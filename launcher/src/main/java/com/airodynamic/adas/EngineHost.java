@@ -49,6 +49,7 @@ public final class EngineHost {
     private final FrameLayout root;
     private final WebView engine;
     private WebView ghost;
+    private GeckoGhost gecko;
     private final TextView diag;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final HandlerThread carThread = new HandlerThread("engine-car");
@@ -285,7 +286,17 @@ public final class EngineHost {
 
     @SuppressLint("SetJavaScriptEnabled")
     private void showGhost(boolean show) {
-        if (show && ghost == null) {
+        // First choice: Firefox's engine (the car's WebView leaves Ghost Race's map blank). Settings can switch back.
+        if (show && ghost == null && gecko == null && new Prefs(ctx).ghostGecko()) {
+            try {
+                gecko = new GeckoGhost(ctx, GHOST_URL);
+                root.addView(gecko.view(), 1, new FrameLayout.LayoutParams(-1, -1));
+            } catch (Throwable t) {
+                gecko = null;
+                showDiag("Firefox engine didn't start (" + t.getClass().getSimpleName() + "): using the built-in browser");
+            }
+        }
+        if (show && ghost == null && gecko == null) {
             ghost = newWebView();
             ghost.addJavascriptInterface(new GhostHost(), "AttoHost");
             ghost.setWebViewClient(new WebViewClient() {
@@ -311,6 +322,7 @@ public final class EngineHost {
             ghost.loadUrl(GHOST_URL);
         }
         if (ghost != null) ghost.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (gecko != null) gecko.view().setVisibility(show ? View.VISIBLE : View.GONE);
         if (ghostClose != null) ghostClose.setVisibility(show ? View.VISIBLE : View.GONE);
         boolean changed = ghostVisible != show;
         ghostVisible = show;

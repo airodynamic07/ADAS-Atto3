@@ -47,6 +47,9 @@ android {
 }
 
 dependencies {
+    // Firefox's browser engine (MPL 2.0): Ghost Race's map needs a newer browser than the car's WebView.
+    // ESR 128 line (compileSdk 34 / minSdk 21 fit this project).
+    implementation("org.mozilla.geckoview:geckoview:[128.0,129.0)")
     // Self-update through the car's own ADB (Apache 2.0)
     implementation("dev.mobile:dadb:1.2.8") {
         exclude(group = "org.junit.platform")

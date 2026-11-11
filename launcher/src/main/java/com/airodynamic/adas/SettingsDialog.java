@@ -100,6 +100,12 @@ public final class SettingsDialog {
                 new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
         root.addView(ao);
 
+        section(c, root, th, "Ghost Race browser (takes effect next time the launcher starts)");
+        LinearLayout gk = row(c);
+        gk.addView(Ui.chip(c, "Firefox engine", prefs.ghostGecko(), th, v -> { prefs.setGhostGecko(true); redo.run(); }), weight(c));
+        gk.addView(Ui.chip(c, "Car's built-in", !prefs.ghostGecko(), th, v -> { prefs.setGhostGecko(false); redo.run(); }), weight(c));
+        root.addView(gk);
+
         section(c, root, th, "Left / Right camera picture");
         LinearLayout sc = row(c);
         sc.addView(Ui.chip(c, "Close-up of the side", prefs.sideCloseUp(), th, v -> { prefs.setSideCloseUp(true); redo.run(); }), weight(c));

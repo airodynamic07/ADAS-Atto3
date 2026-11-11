@@ -115,4 +115,8 @@ public final class Prefs {
     /** Info window on the left, ChatGPT/music/energy on the right (default since 2026-11-10). */
     public boolean infoLeft() { return p.getBoolean("infoLeft", true); }
     public void setInfoLeft(boolean v) { p.edit().putBoolean("infoLeft", v).apply(); }
+
+    /** Ghost Race on Firefox's engine (GeckoView) instead of the car's WebView. On by default (2026-11-11). */
+    public boolean ghostGecko() { return p.getBoolean("ghostGecko", true); }
+    public void setGhostGecko(boolean on) { p.edit().putBoolean("ghostGecko", on).apply(); }
 }
