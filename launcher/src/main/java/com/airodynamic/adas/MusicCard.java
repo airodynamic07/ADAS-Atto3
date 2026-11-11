@@ -37,6 +37,8 @@ public final class MusicCard {
     private final TextView title, artist;
     private final Button play, like;
     private final TextView lyPrev, lyNow, lyNext;
+    private final LinearLayout queueRow;
+    private String queueKey = "";
     private final TextView lab;
     private final Handler main = new Handler(Looper.getMainLooper());
     private boolean active;
@@ -88,6 +90,15 @@ public final class MusicCard {
         lyNext = lyricLine(15, th.muted, false);
         ly.addView(lyPrev); ly.addView(lyNow); ly.addView(lyNext);
         root.addView(ly, new LinearLayout.LayoutParams(-1, 0, 1f));
+
+        // up next: the app's queue, swipe sideways, tap a song to play it
+        root.addView(Ui.label(c, "Up next", th));
+        android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(c);
+        hs.setHorizontalScrollBarEnabled(false);
+        queueRow = new LinearLayout(c);
+        queueRow.setGravity(Gravity.CENTER_VERTICAL);
+        hs.addView(queueRow);
+        root.addView(hs, new LinearLayout.LayoutParams(-1, Ui.dp(c, 58)));
         refresh();
     }
 
@@ -133,6 +144,7 @@ public final class MusicCard {
             artist.setText("Play music in any app; it shows here");
             lab.setText("Now playing");
             art.setImageBitmap(null);
+            queueRow.removeAllViews(); queueKey = "";
             return;
         }
         MediaMetadata md = mc.getMetadata();
@@ -147,6 +159,7 @@ public final class MusicCard {
         PlaybackState st = mc.getPlaybackState();
         play.setText(st != null && st.getState() == PlaybackState.STATE_PLAYING ? "⏸" : "▶");
         like.setText(liked(mc) ? "👍✓" : "👍");
+        showQueue(mc, st);
         // lyrics: look the song up once, then follow the playing position
         String key = (t == null ? "" : t) + "|" + (a == null ? "" : a);
         if (!key.equals(lyricsKey)) {
@@ -170,6 +183,55 @@ public final class MusicCard {
             lyNow.setText(i >= 0 ? lyrics.get(i).text : "♪");
             lyNext.setText(i + 1 < lyrics.size() ? lyrics.get(i + 1).text : "");
         }
+    }
+
+    /** Upcoming songs from the app's queue (rebuilt only when it changes). */
+    private void showQueue(MediaController mc, PlaybackState st) {
+        List<android.media.session.MediaSession.QueueItem> q = mc.getQueue();
+        long active = st == null ? -1 : st.getActiveQueueItemId();
+        StringBuilder k = new StringBuilder(mc.getPackageName()).append(active).append('|');
+        if (q != null) for (android.media.session.MediaSession.QueueItem it : q) k.append(it.getQueueId()).append(',');
+        if (k.toString().equals(queueKey)) return;
+        queueKey = k.toString();
+        queueRow.removeAllViews();
+        if (q == null || q.isEmpty()) {
+            queueRow.addView(Ui.text(c, "This app doesn't share its Up next list", 12, th.muted, false));
+            return;
+        }
+        int start = 0;
+        for (int i = 0; i < q.size(); i++) if (q.get(i).getQueueId() == active) { start = i + 1; break; }
+        int shown = 0;
+        for (int i = start; i < q.size() && shown < 30; i++, shown++) {
+            final android.media.session.MediaSession.QueueItem it = q.get(i);
+            android.media.MediaDescription d = it.getDescription();
+            LinearLayout cell = new LinearLayout(c);
+            cell.setGravity(Gravity.CENTER_VERTICAL);
+            cell.setBackground(Ui.round(th.chip, th.line, 10, c));
+            cell.setPadding(Ui.dp(c, 4), Ui.dp(c, 4), Ui.dp(c, 8), Ui.dp(c, 4));
+            ImageView ic = new ImageView(c);
+            ic.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            ic.setClipToOutline(true);
+            ic.setBackground(Ui.round(th.card, 0, 6, c));
+            if (d.getIconBitmap() != null) ic.setImageBitmap(d.getIconBitmap());
+            cell.addView(ic, new LinearLayout.LayoutParams(Ui.dp(c, 42), Ui.dp(c, 42)));
+            LinearLayout tx = new LinearLayout(c);
+            tx.setOrientation(LinearLayout.VERTICAL);
+            tx.setPadding(Ui.dp(c, 6), 0, 0, 0);
+            TextView t1 = Ui.text(c, d.getTitle() == null ? "" : d.getTitle().toString(), 12, th.text, true);
+            t1.setSingleLine(true); t1.setEllipsize(TextUtils.TruncateAt.END); t1.setMaxWidth(Ui.dp(c, 130));
+            TextView t2 = Ui.text(c, d.getSubtitle() == null ? "" : d.getSubtitle().toString(), 11, th.muted, false);
+            t2.setSingleLine(true); t2.setEllipsize(TextUtils.TruncateAt.END); t2.setMaxWidth(Ui.dp(c, 130));
+            tx.addView(t1); tx.addView(t2);
+            cell.addView(tx);
+            cell.setOnClickListener(v -> {
+                mc.getTransportControls().skipToQueueItem(it.getQueueId());
+                main.postDelayed(this::refresh, 600);
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -1);
+            lp.rightMargin = Ui.dp(c, 6);
+            queueRow.addView(cell, lp);
+        }
+        if (shown == 0) queueRow.addView(Ui.text(c, "Nothing more in the queue", 12, th.muted, false));
     }
 
     private String lyricsKey = "";
