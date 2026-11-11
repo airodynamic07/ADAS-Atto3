@@ -175,7 +175,7 @@ public final class TripEnergy implements CarData.Listener {
     }
 
     /**
-     * Top 4 stretches of bestKm with the lowest kWh/100 km, never overlapping:
+     * Top 3 stretches of bestKm with the lowest kWh/100 km, never overlapping:
      * every window of that length along the whole trip, best first, skipping any that overlap one already picked.
      */
     private void findBest() {
@@ -202,7 +202,7 @@ public final class TripEnergy implements CarData.Listener {
                 b.min = lo == Double.MAX_VALUE ? Double.NaN : lo; b.max = hi;
                 b.toKm = segs.get(st + w - 1)[4]; b.fromKm = b.toKm - bestKm;
                 out.add(b);
-                if (out.size() == 4) break;
+                if (out.size() == 3) break;   // top 3 (user, 2026-11-11)
             }
         }
         best = out;

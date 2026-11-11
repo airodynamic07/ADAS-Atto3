@@ -26,8 +26,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private android.widget.GridLayout tray;
     private final Prefs prefs;
     private final TextView used, avg, dist, power, soc, since, gptText, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty;
-    private final TextView[] bestKwh = new TextView[4], bestSpd = new TextView[4], bestRange = new TextView[4], bestKmTxt = new TextView[4];
-    private final LinearLayout[] bestRows = new LinearLayout[4];
+    private final TextView[] bestKwh = new TextView[3], bestSpd = new TextView[3], bestRange = new TextView[3], bestKmTxt = new TextView[3];
+    private final LinearLayout[] bestRows = new LinearLayout[3];
 
     public DrivePanel(Context c, Theme th, Prefs prefs, View themeControls) {
         this.c = c;
@@ -116,28 +116,29 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
             en.addView(r, lp);
         }
 
-        // Best stretches: top 4, never overlapping; tap the title to type the length (km)
+        // Best stretches: top 3 (bigger text), never overlapping; tap the title to type the length (km)
         LinearLayout b10 = col();
         b10.setGravity(Gravity.CENTER_VERTICAL);
         b10.setBackground(Ui.round(th.chip, th.line, 12, c));
         b10.setPadding(Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4));
-        bestTitle = Ui.text(c, "", 11, th.muted, false);
+        bestTitle = Ui.text(c, "", 12, th.muted, false);
         bestTitle.setPadding(0, Ui.dp(c, 2), 0, Ui.dp(c, 3));
         bestTitle.setOnClickListener(v -> editBestKm());
         b10.addView(bestTitle);
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 3; i++) {
             LinearLayout r = new LinearLayout(c);
             r.setGravity(Gravity.BOTTOM);
-            r.addView(Ui.text(c, String.valueOf(i + 1), 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 14), -2));
-            bestKwh[i] = Ui.text(c, "", 14, i == 0 ? Theme.SAFE : th.text, true);
-            r.addView(bestKwh[i], new LinearLayout.LayoutParams(Ui.dp(c, 40), -2));
-            r.addView(Ui.text(c, "kWh/100", 10, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 52), -2));
-            bestSpd[i] = Ui.text(c, "", 14, th.text, true);
-            r.addView(bestSpd[i], new LinearLayout.LayoutParams(Ui.dp(c, 28), -2));
-            r.addView(Ui.text(c, "km/h avg", 10, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 50), -2));
-            bestRange[i] = Ui.text(c, "", 10, th.muted, false);
+            r.setPadding(0, Ui.dp(c, 1), 0, Ui.dp(c, 1));
+            r.addView(Ui.text(c, String.valueOf(i + 1), 13, th.muted, true), new LinearLayout.LayoutParams(Ui.dp(c, 16), -2));
+            bestKwh[i] = Ui.text(c, "", 19, i == 0 ? Theme.SAFE : th.text, true);
+            r.addView(bestKwh[i], new LinearLayout.LayoutParams(Ui.dp(c, 50), -2));
+            r.addView(Ui.text(c, "kWh/100", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 54), -2));
+            bestSpd[i] = Ui.text(c, "", 19, th.text, true);
+            r.addView(bestSpd[i], new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
+            r.addView(Ui.text(c, "km/h", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
+            bestRange[i] = Ui.text(c, "", 12, th.muted, false);
             r.addView(bestRange[i], new LinearLayout.LayoutParams(0, -2, 1f));
-            bestKmTxt[i] = Ui.text(c, "", 10, th.muted, false);
+            bestKmTxt[i] = Ui.text(c, "", 12, th.muted, false);
             r.addView(bestKmTxt[i]);
             bestRows[i] = r;
             b10.addView(r);
@@ -267,7 +268,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         String kmTxt = bk == Math.floor(bk) ? String.valueOf((int) bk) : String.format(Locale.US, "%.1f", bk);
         bestTitle.setText("BEST " + kmTxt + " KM STRETCHES OF THIS TRIP   ✎ tap to change");
         java.util.List<TripEnergy.Best> list = t.best();
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 3; i++) {
             boolean has = i < list.size();
             bestRows[i].setVisibility(has ? View.VISIBLE : View.GONE);
             if (!has) continue;
@@ -277,7 +278,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
             bestRange[i].setText(Double.isNaN(b.min) ? "" : String.format(Locale.US, "%.0f–%.0f km/h", b.min, b.max));
             bestKmTxt[i].setText(String.format(Locale.US, "km %.1f–%.1f", b.fromKm, b.toKm));
         }
-        bestEmpty.setVisibility(list.size() < 4 ? View.VISIBLE : View.GONE);
+        bestEmpty.setVisibility(list.size() < 3 ? View.VISIBLE : View.GONE);
         bestEmpty.setText(list.isEmpty() ? String.format(Locale.US, "shows after %s km (%.1f km so far)", kmTxt, t.km)
                 : "more rows appear as the trip gets longer");
     }
@@ -298,7 +299,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         box.addView(Ui.text(c, " km", 16, th.muted, false));
         android.app.AlertDialog d = new android.app.AlertDialog.Builder(c)
                 .setTitle("Best stretch length")
-                .setMessage("Find the 4 best stretches of this many km (1–100)")
+                .setMessage("Find the 3 best stretches of this many km (1–100)")
                 .setView(box)
                 .setPositiveButton("Save", (dlg, w) -> {
                     try {
