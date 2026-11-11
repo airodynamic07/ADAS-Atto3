@@ -25,6 +25,8 @@ public final class TripEnergy implements CarData.Listener {
         public double decelG;
         /** regen happened in this 100 m (power below −2 kW) */
         public boolean regen;
+        /** average GPS height over this 100 m, metres (NaN when GPS gave none) */
+        public double alt = Double.NaN;
         Point(double km, double speed, double live, double avg, double pedal, double power) {
             this.km = km; this.speed = speed; this.live = live; this.avg = avg; this.pedal = pedal; this.power = power;
         }
@@ -37,8 +39,28 @@ public final class TripEnergy implements CarData.Listener {
             instance.store = c.getApplicationContext().getSharedPreferences("today", Context.MODE_PRIVATE);
             instance.loadToday();
             CarData.get(c).addListener(instance);
+            instance.startGps(c.getApplicationContext());
         }
         return instance;
+    }
+
+    // ---- GPS height for the graph's hill shape (read only; GPS height wobbles a few metres)
+    private double altSum; private int altN;
+    private volatile double lastAlt = Double.NaN; private volatile long lastAltAt;
+    private final android.location.LocationListener gps = new android.location.LocationListener() {
+        @Override public void onLocationChanged(android.location.Location l) {
+            if (l.hasAltitude()) { lastAlt = l.getAltitude(); lastAltAt = System.currentTimeMillis(); }
+        }
+        @Override public void onStatusChanged(String p, int st, android.os.Bundle b) { }
+        @Override public void onProviderEnabled(String p) { }
+        @Override public void onProviderDisabled(String p) { }
+    };
+    @android.annotation.SuppressLint("MissingPermission")
+    private void startGps(Context c) {
+        try {
+            android.location.LocationManager lm = (android.location.LocationManager) c.getSystemService(Context.LOCATION_SERVICE);
+            lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 1000, 0, gps, android.os.Looper.getMainLooper());
+        } catch (Throwable ignored) { }   // no GPS or no permission: the graph simply has no hill shape
     }
 
     public interface Listener { void onTrip(TripEnergy t); }
@@ -164,6 +186,7 @@ public final class TripEnergy implements CarData.Listener {
             segKwh += dKwh;
             if (!Double.isNaN(s.speedKmh)) { segSpeedSum += s.speedKmh; segN++; }
             if (!Double.isNaN(s.pedalPct)) { segPedalSum += s.pedalPct; segPedalN++; }
+            if (!Double.isNaN(lastAlt) && s.at - lastAltAt < 5000) { altSum += lastAlt; altN++; }
             if (!Double.isNaN(s.powerKw)) { segPowerSum += s.powerKw; segPowerN++; segMinPower = Math.min(segMinPower, s.powerKw); }
             liveSpeed = s.speedKmh;
             livePedal = s.pedalPct;
@@ -180,6 +203,8 @@ public final class TripEnergy implements CarData.Listener {
                 double gs = segDecel / 9.81;
                 pt.brake = gs >= .4 ? 3 : gs >= .25 ? 2 : gs >= .15 ? 1 : 0;
                 pt.decelG = gs;
+                pt.alt = altN > 0 ? altSum / altN : Double.NaN;
+                altSum = 0; altN = 0;
                 pt.regen = segPowerN > 0 && segPowerSum / segPowerN <= -0.5;   // the stretch averaged below zero
                 segMinPower = 0;
                 points.add(pt);

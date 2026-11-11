@@ -63,6 +63,16 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         return n == 0 ? Double.NaN : sum / n;
     }
 
+    /** GPS height of point i averaged with its neighbours (300 m), to calm GPS wobble. */
+    private double altSmooth(int i) {
+        double sum = 0; int k = 0;
+        for (int j = Math.max(0, i - 1); j <= Math.min(pts.size() - 1, i + 1); j++) {
+            double a = pts.get(j).alt;
+            if (!Double.isNaN(a)) { sum += a; k++; }
+        }
+        return k == 0 ? Double.NaN : sum / k;
+    }
+
     private double live(int which) { return which == 0 ? liveSpeed : which == 1 ? livePower : livePedal; }
 
     @Override protected void onDraw(Canvas c) {
@@ -84,6 +94,12 @@ public final class TripGraph extends View implements TripEnergy.Listener {
             if (!Double.isNaN(ev)) { eMin = Math.min(eMin, Math.floor(ev / 10) * 10); eMax = Math.max(eMax, Math.ceil(ev / 10) * 10); }
         }
         if (!Double.isNaN(liveSpeed)) sMax = Math.max(sMax, Math.ceil(liveSpeed / 20) * 20);
+        double hLo = Double.MAX_VALUE, hHi = -Double.MAX_VALUE;
+        for (int i = 0; i < n; i++) {
+            if (pts.get(i).km < from) continue;
+            double a = altSmooth(i);
+            if (!Double.isNaN(a)) { hLo = Math.min(hLo, a); hHi = Math.max(hHi, a); }
+        }
         if (!Double.isNaN(livePower)) { eMin = Math.min(eMin, Math.floor(livePower / 10) * 10); eMax = Math.max(eMax, Math.ceil(livePower / 10) * 10); }
 
         p.setTextSize(11 * d);
@@ -91,6 +107,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         float lx = left;
         lx = legend(c, lx, 13 * d, SPEED_COL, "Speed km/h", d);
         lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (200 m)", d);
+        if (hLo <= hHi) lx = legend(c, lx, 13 * d, 0xFF7FA6C9, String.format(java.util.Locale.US, "Height ↕ %.0f m", hHi - hLo), d);
         lx = legend(c, lx, 13 * d, REGEN_STAMP, "Regen", d);
         lx = legend(c, lx, 13 * d, MILD_STAMP, "mild brake", d);
         lx = legend(c, lx, 13 * d, HARD_STAMP, "hard brake", d);
@@ -131,6 +148,33 @@ public final class TripGraph extends View implements TripEnergy.Listener {
             p.setTextSize(13 * d);
             c.drawText("The graph starts when you drive", left + 12 * d, (top + bottom) / 2, p);
             return;
+        }
+
+        // height (GPS): faint hill shape behind the lines. Fitted to what is on screen, at least 10 m
+        // from bottom to top so even Bangkok's small rises show (user, 2026-11-11)
+        if (hLo <= hHi) {
+            double span = Math.max(10, hHi - hLo), mid = (hLo + hHi) / 2, lo = mid - span / 2;
+            float hb = bottom, ht = top + (bottom - top) * .1f;
+            android.graphics.Path hp = new android.graphics.Path(), ridge = new android.graphics.Path();
+            boolean started = false; float firstX = 0, lastX = 0;
+            for (int i = 0; i < n; i++) {
+                TripEnergy.Point q = pts.get(i);
+                if (q.km < from) continue;
+                double a = altSmooth(i);
+                if (Double.isNaN(a)) continue;
+                float x = X(q.km, from, to, left, right), y = (float) (hb - (a - lo) / span * (hb - ht));
+                if (!started) { hp.moveTo(x, hb); hp.lineTo(x, y); ridge.moveTo(x, y); firstX = x; started = true; }
+                else { hp.lineTo(x, y); ridge.lineTo(x, y); }
+                lastX = x;
+            }
+            if (started) {
+                hp.lineTo(lastX, hb); hp.close();
+                p.setStyle(Paint.Style.FILL); p.setColor(0x297FA6C9);
+                c.drawPath(hp, p);
+                p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.4f * d); p.setColor(0x8C7FA6C9);
+                c.drawPath(ridge, p);
+                p.setStyle(Paint.Style.FILL);
+            }
         }
 
         line(c, 1, from, to, eMin, eMax, left, right, top, bottom, POWER_COL, 2.2f * d, 5 * d);
