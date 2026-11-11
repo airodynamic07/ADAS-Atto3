@@ -46,7 +46,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout gpt = card();
         // press and hold: pick exactly which app the box opens
         gpt.setOnLongClickListener(v -> {
-            AppPicker.pickOne(c, th, pkg -> { prefs.setAssistantPkg(pkg); gptText.setText("Opens " + Apps.label(c, pkg)); });
+            AppPicker.pickOne(c, th, pkg -> { prefs.setAssistantPkg(pkg); showAssistant(pkg); });
             return true;
         });
         gpt.addView(Ui.label(c, gemini() ? "Gemini" : "ChatGPT", th));
@@ -198,6 +198,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         lp.setMargins(m, m, m, m);
         return lp;
     }
+
+    private void showAssistant(String pkg) { gptText.setText("Opens " + Apps.label(c, pkg)); }
 
     /** The app the assistant box opens: the one picked by press-and-hold, else found by name, else known package names. */
     private String chatGpt() {
