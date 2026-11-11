@@ -96,6 +96,10 @@ public class ProbeActivity extends Activity {
         button(left, "3  Camera picture via helper", v -> helper("camera", 120));
         button(left, "4  Camera picture from app (no helper)", v -> runTask("app_camera", this::appCamera));
         button(left, "5  Watch signals 30 s  (flick indicators!)", v -> watch());
+        button(left, "5b Watch cruise control 3 min  (ACC on/off while driving)", v -> runTask("app_cruise", r -> {
+            r.info("Read only. While driving: turn adaptive cruise ON, change the set speed, change the gap, then turn it OFF. Note the time of each.");
+            new CarProbe(new BypassContext(getApplicationContext()), r).watchCruise(180);
+        }));
         button(left, "6  Voice test (Thai + English)", v -> runTask("app_voice", this::voiceTest));
         button(left, "7  Open GBox in left window", v -> {
             java.util.List<String> g = SystemProbe.findGbox(this);

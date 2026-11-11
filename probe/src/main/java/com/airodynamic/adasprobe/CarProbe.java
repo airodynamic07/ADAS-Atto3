@@ -341,6 +341,48 @@ public final class CarProbe {
         r.info("watch finished, " + changes + " changes seen");
     }
 
+    /** Devices read in the "watch cruise control" test (read only). */
+    public static final String[] CRUISE_DEVICES = {
+            "android.hardware.bydauto.adas.BYDAutoADASDevice",
+            "android.hardware.bydauto.dipilot.BYDAutoDiPilotDevice",
+            "android.hardware.bydauto.instrument.BYDAutoInstrumentDevice",
+            "android.hardware.bydauto.setting.BYDAutoSettingDevice",
+    };
+
+    /**
+     * READ ONLY. Lists every ADAS / DiPilot reading, then for `seconds` prints each change with the
+     * time, so we can see which numbers follow adaptive cruise (on, set speed, gap, off).
+     * Readings that change all the time are hidden after a few changes.
+     */
+    public void watchCruise(int seconds) {
+        r.section("Cruise control watch (" + seconds + " s): turn ACC ON, change set speed, change gap, turn OFF");
+        long t0 = System.currentTimeMillis();
+        Map<String, String> prev = snapshot(CRUISE_DEVICES);
+        r.info("watching " + prev.size() + " readings (one round " + (System.currentTimeMillis() - t0) + " ms)");
+        for (Map.Entry<String, String> e : prev.entrySet())
+            if (e.getKey().startsWith("ADAS.") || e.getKey().startsWith("DiPilot.")) r.info("  start  " + e.getKey() + " = " + e.getValue());
+        Map<String, Integer> count = new java.util.HashMap<>();
+        long end = System.currentTimeMillis() + seconds * 1000L;
+        int changes = 0;
+        while (System.currentTimeMillis() < end) {
+            try { Thread.sleep(400); } catch (InterruptedException e) { break; }
+            Map<String, String> now = snapshot(CRUISE_DEVICES);
+            double t = (System.currentTimeMillis() - t0) / 1000.0;
+            for (Map.Entry<String, String> e : now.entrySet()) {
+                String before = prev.get(e.getKey());
+                if (before == null || before.equals(e.getValue())) continue;
+                int n = count.containsKey(e.getKey()) ? count.get(e.getKey()) + 1 : 1;
+                count.put(e.getKey(), n);
+                if (n > 8) continue;
+                changes++;
+                r.info(String.format(java.util.Locale.US, "  t=%5.1fs  %s : %s -> %s%s", t, e.getKey(), before, e.getValue(),
+                        n == 8 ? "   (keeps changing: hidden from now on)" : ""));
+            }
+            prev = now;
+        }
+        r.info("cruise watch finished, " + changes + " changes shown");
+    }
+
     // ------------------------------------------------------------------ live helpers
 
     private Object read(String cls, String name, Integer arg) {
