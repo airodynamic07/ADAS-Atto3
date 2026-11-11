@@ -25,7 +25,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private final LinearLayout root;
     private android.widget.GridLayout tray;
     private final Prefs prefs;
-    private final TextView used, avg, dist, power, regen, soc, range, since, gptText;
+    private final TextView used, avg, dist, power, soc, since, gptText, topSpd, peak, zeroTo, avgSpd, driveT, brakes, best10, best10Spd, best10Sub;
 
     public DrivePanel(Context c, Theme th, Prefs prefs, View themeControls) {
         this.c = c;
@@ -72,42 +72,69 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         g1.bottomMargin = Ui.dp(c, 6);
         root.addView(top, g1);
 
-        // --- box 2: this trip's energy
+        // --- box 2: this trip (user's layout, 2026-11-11): one line of energy, 9 small stats, big "Best 10 km"
         LinearLayout en = card();
         LinearLayout head = new LinearLayout(c);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.addView(Ui.label(c, "This trip · energy", th), new LinearLayout.LayoutParams(0, -2, 1f));
+        head.addView(Ui.label(c, "This trip", th), new LinearLayout.LayoutParams(0, -2, 1f));
         since = Ui.text(c, "", 12, th.muted, false);
         head.addView(since);
         TextView reset = Ui.text(c, "  ⟲ reset", 13, th.accent, true);
-        reset.setPadding(Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 2), Ui.dp(c, 6));
+        reset.setPadding(Ui.dp(c, 6), Ui.dp(c, 2), Ui.dp(c, 2), Ui.dp(c, 2));
         reset.setOnClickListener(v -> { TripEnergy.get(c).reset(); Toast.makeText(c, "New trip started", Toast.LENGTH_SHORT).show(); });
         head.addView(reset);
         en.addView(head);
 
-        LinearLayout bigRow = new LinearLayout(c);
-        LinearLayout u = col();
-        u.addView(Ui.text(c, "Used", 12, th.muted, false));
-        used = Ui.text(c, "–", 36, th.text, true);
-        u.addView(used);
-        LinearLayout a = col();
-        a.addView(Ui.text(c, "Average (live)", 12, th.muted, false));
-        avg = Ui.text(c, "–", 36, Theme.CAUTION, true);
-        a.addView(avg);
-        bigRow.addView(u, new LinearLayout.LayoutParams(0, -2, 1f));
-        bigRow.addView(a, new LinearLayout.LayoutParams(0, -2, 1.2f));
-        en.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 1f));
-        en.addView(bigRow);
-        en.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 1f));
+        LinearLayout line = new LinearLayout(c);
+        line.setGravity(Gravity.BOTTOM);
+        line.addView(Ui.text(c, "Used ", 12, th.muted, false));
+        used = Ui.text(c, "–", 24, th.text, true);
+        line.addView(used);
+        line.addView(Ui.text(c, " kWh      Avg ", 12, th.muted, false));
+        avg = Ui.text(c, "–", 24, Theme.CAUTION, true);
+        line.addView(avg);
+        line.addView(Ui.text(c, " kWh/100", 12, th.muted, false));
+        line.setPadding(0, Ui.dp(c, 2), 0, Ui.dp(c, 4));
+        en.addView(line);
 
-        LinearLayout small = new LinearLayout(c);
-        small.setPadding(0, Ui.dp(c, 6), 0, 0);
+        LinearLayout r1 = new LinearLayout(c), r2 = new LinearLayout(c), r3 = new LinearLayout(c);
         LinearLayout t1 = tile("Distance"); dist = big(t1);
-        LinearLayout t2 = tile("Power now"); power = big(t2); regen = sub(t2);
-        LinearLayout t3 = tile("Battery"); soc = big(t3); range = sub(t3);
-        small.addView(t1, w(true)); small.addView(t2, w(true)); small.addView(t3, w(false));
-        en.addView(small);
-        en.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 0.5f));
+        LinearLayout t2 = tile("Power now"); power = big(t2);
+        LinearLayout t3 = tile("Battery"); soc = big(t3);
+        r1.addView(t1, w(true)); r1.addView(t2, w(true)); r1.addView(t3, w(false));
+        LinearLayout t4 = tile("Top speed"); topSpd = big(t4);
+        LinearLayout t5 = tile("Peak / regen"); peak = big(t5);
+        LinearLayout t6 = tile("Best 0–100"); zeroTo = big(t6);
+        r2.addView(t4, w(true)); r2.addView(t5, w(true)); r2.addView(t6, w(false));
+        LinearLayout t7 = tile("Avg speed"); avgSpd = big(t7);
+        LinearLayout t8 = tile("Drive time"); driveT = big(t8);
+        LinearLayout t9 = tile("Hard brakes"); brakes = big(t9);
+        r3.addView(t7, w(true)); r3.addView(t8, w(true)); r3.addView(t9, w(false));
+        for (LinearLayout r : new LinearLayout[]{r1, r2, r3}) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.bottomMargin = Ui.dp(c, 5);
+            en.addView(r, lp);
+        }
+
+        // Best 10 km: fills the rest of the card
+        LinearLayout b10 = col();
+        b10.setGravity(Gravity.CENTER_VERTICAL);
+        b10.setBackground(Ui.round(th.chip, th.line, 12, c));
+        b10.setPadding(Ui.dp(c, 12), Ui.dp(c, 6), Ui.dp(c, 12), Ui.dp(c, 6));
+        b10.addView(Ui.label(c, "Best 10 km of this trip", th));
+        LinearLayout bv = new LinearLayout(c);
+        bv.setGravity(Gravity.BOTTOM);
+        best10 = Ui.text(c, "–", 30, Theme.SAFE, true);
+        bv.addView(best10);
+        bv.addView(Ui.text(c, "  kWh/100 km", 12, th.muted, false));
+        bv.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
+        best10Spd = Ui.text(c, "", 30, th.text, true);
+        bv.addView(best10Spd);
+        bv.addView(Ui.text(c, "  km/h avg", 12, th.muted, false));
+        b10.addView(bv);
+        best10Sub = Ui.text(c, "", 11, th.muted, false);
+        b10.addView(best10Sub);
+        en.addView(b10, new LinearLayout.LayoutParams(-1, 0, 1f));
         root.addView(en, new LinearLayout.LayoutParams(-1, 0, 1f));   // fills the window to the bottom
     }
 
@@ -186,32 +213,54 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
     private LinearLayout tile(String label) {
         LinearLayout l = col();
-        l.setBackground(Ui.round(th.chip, th.line, 12, c));
-        int p = Ui.dp(c, 8);
-        l.setPadding(p, p, p, p);
-        l.addView(Ui.text(c, label, 12, th.muted, false));
+        l.setBackground(Ui.round(th.chip, th.line, 10, c));
+        l.setPadding(Ui.dp(c, 7), Ui.dp(c, 3), Ui.dp(c, 6), Ui.dp(c, 3));   // compact: 3 rows must fit
+        l.addView(Ui.text(c, label, 10.5f, th.muted, false));
         return l;
     }
 
-    private TextView big(LinearLayout t) { TextView v = Ui.text(c, "–", 20, th.text, true); t.addView(v); return v; }
+    private TextView big(LinearLayout t) {
+        TextView v = Ui.text(c, "–", 15, th.text, true);
+        v.setSingleLine(true);
+        v.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t.addView(v);
+        return v;
+    }
     private TextView sub(LinearLayout t) { TextView v = Ui.text(c, "", 11, th.muted, false); t.addView(v); return v; }
 
     private LinearLayout.LayoutParams w(boolean gap) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1f);
-        if (gap) lp.rightMargin = Ui.dp(c, 6);
+        if (gap) lp.rightMargin = Ui.dp(c, 5);
         return lp;
     }
 
     // ---------------------------------------------------------------- data
 
     @Override public void onTrip(TripEnergy t) {
-        used.setText(String.format(Locale.US, "%.1f kWh", t.kwh));
+        used.setText(String.format(Locale.US, "%.1f", t.kwh));
         double a = t.avg();
-        avg.setText(Double.isNaN(a) ? "–" : String.format(Locale.US, "%.1f kWh/100", a));
+        avg.setText(Double.isNaN(a) ? "–" : String.format(Locale.US, "%.1f", a));
         dist.setText(String.format(Locale.US, "%.1f km", t.km));
         power.setText(Double.isNaN(t.powerKw) ? (t.fromRemaining ? "n/a" : "–") : String.format(Locale.US, "%+.0f kW", t.powerKw));
-        regen.setText(t.fromRemaining ? "from battery level" : String.format(Locale.US, "regen %.1f kWh back", t.regenKwh));
         since.setText(t.startedAt == 0 ? "" : "since " + new SimpleDateFormat("HH:mm", Locale.US).format(new Date(t.startedAt)));
+        topSpd.setText(t.topSpeed > 0 ? Math.round(t.topSpeed) + " km/h" : "–");
+        peak.setText(t.peakKw > 0 || t.maxRegenKw < 0 ? Math.round(t.peakKw) + " / " + Math.round(t.maxRegenKw) + " kW" : "–");
+        zeroTo.setText(Double.isNaN(t.best0100) ? "–" : String.format(Locale.US, "%.1f s", t.best0100));
+        double am = t.avgMoving();
+        avgSpd.setText(Double.isNaN(am) ? "–" : Math.round(am) + " km/h");
+        long sec = Math.round(t.movingSec + t.stoppedSec);
+        driveT.setText(sec >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60)
+                : String.format(Locale.US, "%d:%02d", sec / 60, sec % 60));
+        brakes.setText(String.valueOf(t.hardBrakes));
+        if (Double.isNaN(t.best10)) {
+            best10.setText("–");
+            best10Spd.setText("");
+            best10Sub.setText(t.km < 10 ? String.format(Locale.US, "shows after 10 km (%.1f km so far)", t.km) : "");
+        } else {
+            best10.setText(String.format(Locale.US, "%.1f", t.best10));
+            best10Spd.setText(String.valueOf(Math.round(t.best10Speed)));
+            best10Sub.setText(String.format(Locale.US, "km %.1f – %.1f", t.best10From, t.best10From + 10));
+        }
     }
 
     @Override public View view() { return root; }
@@ -221,7 +270,6 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     }
 
     @Override public void onCar(CarData.State s) {
-        soc.setText(Double.isNaN(s.socPct) ? "–" : Math.round(s.socPct) + "%");
-        range.setText(s.rangeKm >= 0 ? s.rangeKm + " km left" : "");
+        soc.setText((Double.isNaN(s.socPct) ? "–" : Math.round(s.socPct) + "%") + (s.rangeKm >= 0 ? " · " + s.rangeKm + " km" : ""));
     }
 }
