@@ -24,7 +24,6 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private final Theme th;
     private final LinearLayout root;
     private android.widget.GridLayout tray;
-    private MusicCard music;
     private final Prefs prefs;
     private final TextView used, avg, dist, power, regen, soc, range, since, gptText;
 
@@ -89,15 +88,17 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout bigRow = new LinearLayout(c);
         LinearLayout u = col();
         u.addView(Ui.text(c, "Used", 12, th.muted, false));
-        used = Ui.text(c, "–", 30, th.text, true);
+        used = Ui.text(c, "–", 36, th.text, true);
         u.addView(used);
         LinearLayout a = col();
         a.addView(Ui.text(c, "Average (live)", 12, th.muted, false));
-        avg = Ui.text(c, "–", 30, Theme.CAUTION, true);
+        avg = Ui.text(c, "–", 36, Theme.CAUTION, true);
         a.addView(avg);
         bigRow.addView(u, new LinearLayout.LayoutParams(0, -2, 1f));
         bigRow.addView(a, new LinearLayout.LayoutParams(0, -2, 1.2f));
+        en.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 1f));
         en.addView(bigRow);
+        en.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 1f));
 
         LinearLayout small = new LinearLayout(c);
         small.setPadding(0, Ui.dp(c, 6), 0, 0);
@@ -106,12 +107,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout t3 = tile("Battery"); soc = big(t3); range = sub(t3);
         small.addView(t1, w(true)); small.addView(t2, w(true)); small.addView(t3, w(false));
         en.addView(small);
-        LinearLayout.LayoutParams el = new LinearLayout.LayoutParams(-1, -2);
-        el.bottomMargin = Ui.dp(c, 6);
-        root.addView(en, el);
-        music = new MusicCard(c, th);
-        root.addView(music.view(), new LinearLayout.LayoutParams(-1, -2));
-        root.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 1f));
+        en.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 0.5f));
+        root.addView(en, new LinearLayout.LayoutParams(-1, 0, 1f));   // fills the window to the bottom
     }
 
     /** App tray: tap an icon to open it full screen, press and hold to remove, + adds. */
@@ -221,7 +218,6 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
     @Override public void setActive(boolean a) {
         if (a) TripEnergy.get(c).addListener(this); else TripEnergy.get(c).removeListener(this);
-        music.setActive(a);
     }
 
     @Override public void onCar(CarData.State s) {

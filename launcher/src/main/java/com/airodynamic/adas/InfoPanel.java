@@ -41,9 +41,9 @@ public final class InfoPanel implements Panel {
     private final TextView[] tyre = new TextView[4];
     private final TextView[] tyreT = new TextView[4];
     private final DoorsView doors;
-    private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub, pm, pmSub, limit, song;
+    private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub, pm, pmSub, limit;
+    private final MusicCard music;
     private LinearLayout limitCard;
-    private final Button play;
 
     public InfoPanel(Context c, Theme th, Prefs prefs) {
         this.c = c;
@@ -132,25 +132,9 @@ public final class InfoPanel implements Panel {
         root.addView(r3);
         showLimit();
 
-        // --- row 4: now playing
-        LinearLayout np = card();
-        np.setOrientation(LinearLayout.HORIZONTAL);
-        np.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout npText = new LinearLayout(c);
-        npText.setOrientation(LinearLayout.VERTICAL);
-        npText.addView(label("Now playing"));
-        song = Ui.text(c, "", 13, th.text, true);
-        song.setSingleLine(true);
-        song.setEllipsize(TextUtils.TruncateAt.END);
-        npText.addView(song);
-        np.addView(npText, new LinearLayout.LayoutParams(0, -2, 1f));
-        np.addView(Ui.chip(c, "⏮", false, th, v -> media(0)), sq());
-        play = Ui.chip(c, "⏯", false, th, v -> media(1));
-        np.addView(play, sq());
-        np.addView(Ui.chip(c, "⏭", false, th, v -> media(2)), sq());
-        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(-1, -2);
-        nlp.bottomMargin = Ui.dp(c, 6);
-        root.addView(np, nlp);
+        // --- row 4: now playing (cover, song, prev/play/next) — moved here from the right window (2026-11-11)
+        music = new MusicCard(c, th);
+        root.addView(music.view(), new LinearLayout.LayoutParams(-1, -2));
 
     }
 
@@ -249,36 +233,9 @@ public final class InfoPanel implements Panel {
                 .setNegativeButton("Cancel", null).show();
     }
 
-    private void media(int what) {
-        if (!NowPlaying.allowed(c)) {
-            Toast.makeText(c, "Turn on 'Notification access' for ADAS Launcher", Toast.LENGTH_LONG).show();
-            Intent i = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try { c.startActivity(i); } catch (Exception ignored) {}
-            return;
-        }
-        MediaController mc = NowPlaying.active(c);
-        if (mc == null) return;
-        MediaController.TransportControls tc = mc.getTransportControls();
-        if (what == 0) tc.skipToPrevious();
-        else if (what == 2) tc.skipToNext();
-        else {
-            PlaybackState st = mc.getPlaybackState();
-            if (st != null && st.getState() == PlaybackState.STATE_PLAYING) tc.pause(); else tc.play();
-        }
-        main.postDelayed(this::refreshMedia, 600);
-    }
-
-    private void refreshMedia() {
-        if (!NowPlaying.allowed(c)) { song.setText("Tap ⏯ to allow"); return; }
-        MediaController mc = NowPlaying.active(c);
-        String t = mc == null ? "" : NowPlaying.title(mc);
-        song.setText(mc == null ? "Nothing playing" : !t.isEmpty() ? t : Apps.label(c, mc.getPackageName()));
-    }
-
     private final Runnable slow = new Runnable() {
         @Override public void run() {
             if (!active) return;
-            refreshMedia();
             main.postDelayed(this, 5000);
         }
     };
@@ -291,6 +248,7 @@ public final class InfoPanel implements Panel {
         active = a;
         main.removeCallbacks(slow);
         if (a) main.post(slow);
+        music.setActive(a);
     }
 
     @Override public void onCar(CarData.State s) {
