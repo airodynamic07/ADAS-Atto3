@@ -24,7 +24,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private List<TripEnergy.Point> pts;
     private double nowKm, liveSpeed = Double.NaN, livePower = Double.NaN, livePedal = Double.NaN;
     private static final int SPEED_COL = 0xFF4DA3FF, POWER_COL = 0xFFFFB020, PEDAL_COL = 0xFFB8A4FF, REGEN_COL = 0x553DD9C1;
-    private static final int SMOOTH = 2;
+    private static final int SMOOTH = 0;   // 100 m: each point is its own 100 m average (user, 2026-11-11; was 500 m)
     private final Paint brakeShade = new Paint();   // average with 2 points each side
 
     public TripGraph(Context c, Theme th) { super(c); this.th = th; }
