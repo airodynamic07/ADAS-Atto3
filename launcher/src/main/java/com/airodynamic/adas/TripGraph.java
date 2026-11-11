@@ -80,7 +80,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         lx = legend(c, lx, 13 * d, PEDAL_COL, "Pedal 0–100%", d);
         lx = legend(c, lx, 13 * d, 0xFF3DD9C1, "Regen", d);
         p.setColor(th.muted);
-        c.drawText("· last 20 km · newest point = right now", lx, 13 * d + 4 * d, p);
+        c.drawText("· trip km · newest point = right now", lx, 13 * d + 4 * d, p);
 
         // grid + axis labels (speed left, kW right)
         p.setStrokeWidth(1 * d);
@@ -98,11 +98,17 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         float y0 = (float) (bottom - (0 - eMin) / (eMax - eMin) * (bottom - top));
         p.setColor(th.muted);
         c.drawLine(left, y0, right, y0, p);   // 0 kW
+        // distance axis: trip km (0–20 at first; after 20 km the window pans and the numbers move);
+        // "now" sits under the live point
         p.setTextAlign(Paint.Align.CENTER);
-        for (int k = 0; k <= 4; k++) {
-            float x = left + (right - left) * k / 4f;
-            c.drawText(k == 4 ? "now" : "−" + (20 - k * 5) + " km", x, h - 3 * d, p);
+        float nowX = X(nowKm, from, to, left, right);
+        for (int km = (int) Math.ceil(from / 5.0) * 5; km <= to + 0.001; km += 5) {
+            float x = X(km, from, to, left, right);
+            if (Math.abs(x - nowX) < 34 * d) continue;   // keep "now" readable
+            c.drawText(km + " km", x, h - 3 * d, p);
         }
+        p.setColor(th.text);
+        c.drawText("now", Math.max(left + 12 * d, Math.min(right, nowX)), h - 3 * d, p);
         p.setTextAlign(Paint.Align.LEFT);
 
         if (n == 0 && Double.isNaN(liveSpeed)) {
