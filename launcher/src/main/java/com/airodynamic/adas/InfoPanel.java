@@ -134,7 +134,7 @@ public final class InfoPanel implements Panel {
 
         // --- row 4: now playing (cover, song, prev/play/next) — moved here from the right window (2026-11-11)
         music = new MusicCard(c, th);
-        root.addView(music.view(), new LinearLayout.LayoutParams(-1, -2));
+        root.addView(music.view(), new LinearLayout.LayoutParams(-1, 0, 1f));   // fills the window to the bottom (lyrics)
 
     }
 

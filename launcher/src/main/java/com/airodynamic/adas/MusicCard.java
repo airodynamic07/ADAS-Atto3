@@ -35,7 +35,8 @@ public final class MusicCard {
     private final LinearLayout root;
     private final ImageView art;
     private final TextView title, artist;
-    private final Button play;
+    private final Button play, like;
+    private final TextView lyPrev, lyNow, lyNext;
     private final TextView lab;
     private final Handler main = new Handler(Looper.getMainLooper());
     private boolean active;
@@ -44,15 +45,18 @@ public final class MusicCard {
         this.c = c;
         this.th = th;
         root = new LinearLayout(c);
-        root.setGravity(Gravity.CENTER_VERTICAL);
+        root.setOrientation(LinearLayout.VERTICAL);
         root.setBackground(Ui.round(th.card, th.line, 14, c));
         int p = Ui.dp(c, 8);
         root.setPadding(p, p, p, p);
+        LinearLayout top = new LinearLayout(c);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(top, new LinearLayout.LayoutParams(-1, -2));
         art = new ImageView(c);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         art.setBackground(Ui.round(th.chip, 0, 8, c));
         art.setClipToOutline(true);
-        root.addView(art, new LinearLayout.LayoutParams(Ui.dp(c, 52), Ui.dp(c, 52)));
+        top.addView(art, new LinearLayout.LayoutParams(Ui.dp(c, 64), Ui.dp(c, 64)));
         LinearLayout txt = new LinearLayout(c);
         txt.setOrientation(LinearLayout.VERTICAL);
         txt.setPadding(Ui.dp(c, 10), 0, Ui.dp(c, 4), 0);
@@ -66,11 +70,24 @@ public final class MusicCard {
         artist.setEllipsize(TextUtils.TruncateAt.END);
         txt.addView(title);
         txt.addView(artist);
-        root.addView(txt, new LinearLayout.LayoutParams(0, -2, 1f));
-        root.addView(Ui.chip(c, "⏮", false, th, v -> act(0)), sq());
+        top.addView(txt, new LinearLayout.LayoutParams(0, -2, 1f));
+        top.addView(Ui.chip(c, "⏮", false, th, v -> act(0)), sq());
         play = Ui.chip(c, "⏯", true, th, v -> act(1));
-        root.addView(play, sq());
-        root.addView(Ui.chip(c, "⏭", false, th, v -> act(2)), sq());
+        top.addView(play, sq());
+        top.addView(Ui.chip(c, "⏭", false, th, v -> act(2)), sq());
+        like = Ui.chip(c, "👍", false, th, v -> act(3));
+        top.addView(like, sq());
+
+        // lyrics (from LRCLIB, matched by title/artist, in time with the song): previous, CURRENT, next lines
+        LinearLayout ly = new LinearLayout(c);
+        ly.setOrientation(LinearLayout.VERTICAL);
+        ly.setGravity(Gravity.CENTER);
+        ly.setPadding(Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6), 0);
+        lyPrev = lyricLine(15, th.muted, false);
+        lyNow = lyricLine(21, th.text, true);
+        lyNext = lyricLine(15, th.muted, false);
+        ly.addView(lyPrev); ly.addView(lyNow); ly.addView(lyNext);
+        root.addView(ly, new LinearLayout.LayoutParams(-1, 0, 1f));
         refresh();
     }
 
@@ -83,7 +100,7 @@ public final class MusicCard {
     }
 
     private final Runnable tick = new Runnable() {
-        @Override public void run() { if (!active) return; refresh(); main.postDelayed(this, 2000); }
+        @Override public void run() { if (!active) return; refresh(); main.postDelayed(this, lyrics.isEmpty() ? 2000 : 400); }
     };
 
     private LinearLayout.LayoutParams sq() {
@@ -129,6 +146,49 @@ public final class MusicCard {
         art.setImageBitmap(b);
         PlaybackState st = mc.getPlaybackState();
         play.setText(st != null && st.getState() == PlaybackState.STATE_PLAYING ? "⏸" : "▶");
+        like.setText(liked(mc) ? "👍✓" : "👍");
+        // lyrics: look the song up once, then follow the playing position
+        String key = (t == null ? "" : t) + "|" + (a == null ? "" : a);
+        if (!key.equals(lyricsKey)) {
+            lyricsKey = key;
+            lyrics = new java.util.ArrayList<>();
+            lyPrev.setText(""); lyNext.setText("");
+            lyNow.setText(t == null ? "" : "Looking for lyrics…");
+            long dur = md == null ? 0 : md.getLong(MediaMetadata.METADATA_KEY_DURATION);
+            if (t != null) Lyrics.find(t, a, dur, (k, lines, note) -> main.post(() -> {
+                if (!k.equals(lyricsKey)) return;
+                lyrics = lines;
+                if (lines.isEmpty()) { lyNow.setText(note); lyPrev.setText(""); lyNext.setText(""); }
+            }), key);
+        }
+        if (!lyrics.isEmpty() && st != null) {
+            long pos = st.getPosition();
+            if (st.getState() == PlaybackState.STATE_PLAYING)
+                pos += (long) ((android.os.SystemClock.elapsedRealtime() - st.getLastPositionUpdateTime()) * st.getPlaybackSpeed());
+            int i = Lyrics.lineAt(lyrics, pos);
+            lyPrev.setText(i > 0 ? lyrics.get(i - 1).text : "");
+            lyNow.setText(i >= 0 ? lyrics.get(i).text : "♪");
+            lyNext.setText(i + 1 < lyrics.size() ? lyrics.get(i + 1).text : "");
+        }
+    }
+
+    private String lyricsKey = "";
+    private java.util.List<Lyrics.Line> lyrics = new java.util.ArrayList<>();
+
+    private TextView lyricLine(float sp, int col, boolean bold) {
+        TextView v = Ui.text(c, "", sp, col, bold);
+        v.setGravity(Gravity.CENTER);
+        v.setMaxLines(2);
+        v.setEllipsize(TextUtils.TruncateAt.END);
+        v.setPadding(0, Ui.dp(c, 3), 0, Ui.dp(c, 3));
+        return v;
+    }
+
+    private static boolean liked(MediaController mc) {
+        MediaMetadata md = mc.getMetadata();
+        if (md == null) return false;
+        android.media.Rating r = md.getRating(MediaMetadata.METADATA_KEY_USER_RATING);
+        return r != null && r.isRated() && r.getRatingStyle() == android.media.Rating.RATING_THUMB_UP_DOWN && r.isThumbUp();
     }
 
     private void act(int what) {
@@ -157,6 +217,22 @@ public final class MusicCard {
         else if (what == 1) {
             PlaybackState st = mc.getPlaybackState();
             if (st != null && st.getState() == PlaybackState.STATE_PLAYING) tc.pause(); else tc.play();
+        } else {
+            // Like = YouTube Music's own thumbs-up action if it offers one (adds to Liked songs), else a thumbs-up rating
+            boolean done = false;
+            PlaybackState st = mc.getPlaybackState();
+            StringBuilder seen = new StringBuilder();
+            if (st != null) for (PlaybackState.CustomAction ca : st.getCustomActions()) {
+                String id = (ca.getAction() + " " + ca.getName()).toLowerCase(java.util.Locale.US);
+                seen.append(ca.getName()).append(", ");
+                if ((id.contains("like") || id.contains("thumb")) && !id.contains("dislike") && !id.contains("down")) {
+                    tc.sendCustomAction(ca, null);
+                    done = true;
+                    break;
+                }
+            }
+            if (!done) tc.setRating(android.media.Rating.newThumbRating(true));
+            Toast.makeText(c, done ? "👍 Liked" : "👍 Sent as a rating" + (seen.length() > 0 ? " (app offers: " + seen + ")" : ""), Toast.LENGTH_LONG).show();
         }
         main.postDelayed(this::refresh, 600);
     }
