@@ -25,7 +25,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private double nowKm, liveSpeed = Double.NaN, livePower = Double.NaN, livePedal = Double.NaN;
     private static final int SPEED_COL = 0xFF4DA3FF, POWER_COL = 0xFFFFB020, PEDAL_COL = 0xFFB8A4FF, REGEN_COL = 0x553DD9C1;
     private static final int SMOOTH = 2;
-    private static final int[] BRAKE_COL = {0xFF8FC8FF, 0xFFFFD21F, 0xFFFF4D3D};   // light, medium, hard   // average with 2 points each side
+    private final Paint brakeShade = new Paint();   // average with 2 points each side
 
     public TripGraph(Context c, Theme th) { super(c); this.th = th; }
 
@@ -79,9 +79,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         lx = legend(c, lx, 13 * d, SPEED_COL, "Speed km/h", d);
         lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (+ use, − regen)", d);
         lx = legend(c, lx, 13 * d, 0xFF3DD9C1, "Regen", d);
-        lx = legend(c, lx, 13 * d, BRAKE_COL[0], "Braking: light", d);
-        lx = legend(c, lx, 13 * d, BRAKE_COL[1], "medium", d);
-        lx = legend(c, lx, 13 * d, BRAKE_COL[2], "hard", d);
+        lx = legend(c, lx, 13 * d, 0xFFFF3C32, "Braking (fainter = lighter)", d);
         p.setColor(th.muted);
         c.drawText("· now = live", lx, 13 * d + 4 * d, p);
 
@@ -131,15 +129,24 @@ public final class TripGraph extends View implements TripEnergy.Listener {
             float x = X(q.km, from, to, left, right);
             c.drawRect(x - stepPx, y0, x, Y(ev, eMin, eMax, top, bottom), p);
         }
-        // braking: shaded bands behind the lines (blue light, yellow medium, red hard)
+        // braking: red shading behind the lines, fainter for light braking, nearly solid for hard (≥0.4 g),
+        // smoothed over neighbouring points and blended between them so it fades in and out
+        float prevA = 0, prevX = Float.NaN;
         for (int i = 0; i < n; i++) {
             TripEnergy.Point q = pts.get(i);
-            if (q.km < from || q.brake == 0) continue;
+            if (q.km < from) continue;
+            double sum = 0; int cnt = 0;
+            for (int k = Math.max(0, i - 1); k <= Math.min(n - 1, i + 1); k++) { sum += (k == i ? 2 : 1) * pts.get(k).decelG; cnt += (k == i ? 2 : 1); }
+            double gsm = Math.max(q.decelG * .8, sum / cnt);
+            float a = (float) Math.max(0, Math.min(1, (gsm - .1) / .3));   // 0.1 g → none, 0.4 g → full
             float x = X(q.km, from, to, left, right);
-            p.setColor(BRAKE_COL[q.brake - 1]);
-            p.setAlpha(q.brake == 3 ? 110 : 80);
-            c.drawRect(x - stepPx, top, x, bottom, p);
-            p.setAlpha(255);
+            if (!Float.isNaN(prevX) && (a > 0 || prevA > 0)) {
+                brakeShade.setShader(new android.graphics.LinearGradient(prevX, 0, x, 0,
+                        android.graphics.Color.argb((int) (prevA * 200), 255, 60, 50), android.graphics.Color.argb((int) (a * 200), 255, 60, 50),
+                        android.graphics.Shader.TileMode.CLAMP));
+                c.drawRect(prevX, top, x, bottom, brakeShade);
+            }
+            prevA = a; prevX = x;
         }
         line(c, 1, from, to, eMin, eMax, left, right, top, bottom, POWER_COL, 2.2f * d, 5 * d);
         line(c, 0, from, to, 0, sMax, left, right, top, bottom, SPEED_COL, 3.75f * d, 6 * d);   // 1.5x thicker

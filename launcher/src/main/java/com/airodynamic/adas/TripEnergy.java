@@ -21,6 +21,8 @@ public final class TripEnergy implements CarData.Listener {
         public final double km, speed, live, avg, pedal, power;
         /** strongest braking in this 100 m: 0 none, 1 light (≥0.15 g), 2 medium (≥0.25 g), 3 hard (≥0.4 g) */
         public int brake;
+        /** strongest slowing-down in this 100 m, in g */
+        public double decelG;
         Point(double km, double speed, double live, double avg, double pedal, double power) {
             this.km = km; this.speed = speed; this.live = live; this.avg = avg; this.pedal = pedal; this.power = power;
         }
@@ -140,6 +142,7 @@ public final class TripEnergy implements CarData.Listener {
                         segPowerN > 0 ? segPowerSum / segPowerN : Double.NaN);
                 double gs = segDecel / 9.81;
                 pt.brake = gs >= .4 ? 3 : gs >= .25 ? 2 : gs >= .15 ? 1 : 0;
+                pt.decelG = gs;
                 points.add(pt);
                 segDecel = 0;
                 segKm = segKwh = segSpeedSum = segPedalSum = segPowerSum = 0;
