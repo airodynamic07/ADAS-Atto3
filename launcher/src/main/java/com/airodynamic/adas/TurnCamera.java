@@ -98,7 +98,7 @@ public final class TurnCamera {
         feed.start(new CameraFeed.Listener() {
             @Override public void onFrame(Bitmap b) {
                 if (side == 0) return;
-                drawGuides(b, feed.crop(slice));
+                // distance lines removed (user, 2026-11-11): plain camera picture
                 img.setImageBitmap(b);
             }
             @Override public void onError(String msg) { label.setText("Camera: " + msg); }
