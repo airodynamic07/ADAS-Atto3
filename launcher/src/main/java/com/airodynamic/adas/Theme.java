@@ -5,10 +5,10 @@ import android.graphics.Color;
 /** The three looks from the design canvas. Status colours are the same in every theme. */
 public enum Theme {
     // bg = screen, panel = Info/right windows, card = cards in them, chip = buttons/small tiles,
-    // eng = Engine Sound window and graph (user's layout, 2026-11-11)
-    BLUE("#000000", "#071226", "#030915", "#0A1A33", "#22365C",   // darker cards (user, 2026-11-11) "#EAF1FF", "#8FA0BD", "#4DA3FF", "#04101F", "#05070B"),
+    // eng = Engine Sound window and graph (user's layout, 2026-11-11); blue/red cards darker (2026-11-11)
+    BLUE("#000000", "#071226", "#030915", "#0A1A33", "#22365C", "#EAF1FF", "#8FA0BD", "#4DA3FF", "#04101F", "#05070B"),
     WHITE("#F3F4F6", "#C9CDD3", "#FFFFFF", "#EEF0F3", "#B8BDC5", "#111418", "#4A505A", "#1F6FEB", "#FFFFFF", "#FFFFFF"),
-    RED("#000000", "#1C0507", "#0C0203", "#2A090C", "#56181E",   // darker cards (user, 2026-11-11) "#F6EDEE", "#B79A9D", "#E5202E", "#FFFFFF", "#050304");
+    RED("#000000", "#1C0507", "#0C0203", "#2A090C", "#56181E", "#F6EDEE", "#B79A9D", "#E5202E", "#FFFFFF", "#050304");
 
     public final int bg, panel, card, chip, line, text, muted, accent, onAccent, eng;
 
