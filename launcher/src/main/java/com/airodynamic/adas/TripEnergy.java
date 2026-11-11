@@ -18,9 +18,9 @@ public final class TripEnergy implements CarData.Listener {
     private static final long NEW_TRIP_GAP_MS = 10 * 60_000L;
 
     public static final class Point {
-        public final double km, speed, live, avg, pedal;
-        Point(double km, double speed, double live, double avg, double pedal) {
-            this.km = km; this.speed = speed; this.live = live; this.avg = avg; this.pedal = pedal;
+        public final double km, speed, live, avg, pedal, power;
+        Point(double km, double speed, double live, double avg, double pedal, double power) {
+            this.km = km; this.speed = speed; this.live = live; this.avg = avg; this.pedal = pedal; this.power = power;
         }
     }
 
@@ -44,8 +44,10 @@ public final class TripEnergy implements CarData.Listener {
     private double startRemain = Double.NaN;
     private long lastAt;
     private double segKm, segKwh, segSpeedSum;
-    private int segN, segPedalN;
-    private double segPedalSum;
+    private int segN, segPedalN, segPowerN;
+    private double segPedalSum, segPowerSum;
+    /** Right now (every reading, ~3 times a second): for the graph's live point. */
+    public double liveSpeed = Double.NaN, livePedal = Double.NaN;
     private final ArrayList<Point> points = new ArrayList<>();
 
     public synchronized List<Point> points() { return new ArrayList<>(points); }
@@ -90,12 +92,16 @@ public final class TripEnergy implements CarData.Listener {
             segKwh += dKwh;
             if (!Double.isNaN(s.speedKmh)) { segSpeedSum += s.speedKmh; segN++; }
             if (!Double.isNaN(s.pedalPct)) { segPedalSum += s.pedalPct; segPedalN++; }
+            if (!Double.isNaN(s.powerKw)) { segPowerSum += s.powerKw; segPowerN++; }
+            liveSpeed = s.speedKmh;
+            livePedal = s.pedalPct;
             if (segKm >= STEP_KM) {
                 double live = segKwh / segKm * 100;
                 points.add(new Point(km, segN > 0 ? segSpeedSum / segN : 0, live, avg(),
-                        segPedalN > 0 ? segPedalSum / segPedalN : Double.NaN));
-                segKm = segKwh = segSpeedSum = segPedalSum = 0;
-                segN = segPedalN = 0;
+                        segPedalN > 0 ? segPedalSum / segPedalN : Double.NaN,
+                        segPowerN > 0 ? segPowerSum / segPowerN : Double.NaN));
+                segKm = segKwh = segSpeedSum = segPedalSum = segPowerSum = 0;
+                segN = segPedalN = segPowerN = 0;
                 while (!points.isEmpty() && points.get(0).km < km - WINDOW_KM - 1) points.remove(0);
             }
         }
