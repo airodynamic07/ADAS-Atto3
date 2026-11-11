@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * Bottom graph across the screen: the last 20 km of this trip (user's spec, 2026-11-11).
  * Blue = speed (scale 0–80 km/h, grows when faster), orange = power in kW (+ using, − regen;
- * scale −30 to +50, grows when beyond), green shading = regen, thin purple = accelerator 0–100 %.
+ * scale −30 to +50, grows when beyond), green shading = regen (pedal line removed 2026-11-11).
  * The line is smoothed (each 100 m averaged with its neighbours); the newest point is the
  * real-time reading (about 3 times a second) and blinks. Scales go back to their starting size
  * once the big values have scrolled out of the last 20 km.
@@ -77,7 +77,6 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         float lx = left;
         lx = legend(c, lx, 13 * d, SPEED_COL, "Speed km/h", d);
         lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (+ use, − regen)", d);
-        lx = legend(c, lx, 13 * d, PEDAL_COL, "Pedal 0–100%", d);
         lx = legend(c, lx, 13 * d, 0xFF3DD9C1, "Regen", d);
         p.setColor(th.muted);
         c.drawText("· trip km · newest point = right now", lx, 13 * d + 4 * d, p);
@@ -128,7 +127,6 @@ public final class TripGraph extends View implements TripEnergy.Listener {
             float x = X(q.km, from, to, left, right);
             c.drawRect(x - stepPx, y0, x, Y(ev, eMin, eMax, top, bottom), p);
         }
-        line(c, 2, from, to, 0, 100, left, right, top, bottom, PEDAL_COL, 1.5f * d, 3.5f * d);
         line(c, 1, from, to, eMin, eMax, left, right, top, bottom, POWER_COL, 2.2f * d, 5 * d);
         line(c, 0, from, to, 0, sMax, left, right, top, bottom, SPEED_COL, 3.75f * d, 6 * d);   // 1.5x thicker
         removeCallbacks(blink);
