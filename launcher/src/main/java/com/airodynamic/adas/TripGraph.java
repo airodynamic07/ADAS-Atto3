@@ -13,7 +13,7 @@ import java.util.List;
  * Bottom graph across the screen: the last 20 km of this trip (user's spec, 2026-11-11).
  * Blue = speed (scale 0–80 km/h, grows when faster), orange = power in kW (+ using, − regen;
  * scale −30 to +50, grows when beyond), green shading = regen (pedal line removed 2026-11-11).
- * The line is smoothed (each 100 m averaged with its neighbours); the newest point is the
+ * Each point is the average over 100 m (no extra smoothing); the newest point is the
  * real-time reading (about 3 times a second) and blinks. Scales go back to their starting size
  * once the big values have scrolled out of the last 20 km.
  */
