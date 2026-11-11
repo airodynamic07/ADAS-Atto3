@@ -55,21 +55,25 @@ public final class TripEnergy implements CarData.Listener {
     public double best0100 = Double.NaN;                          // seconds
     public int runs0100, hardBrakes;
     public double movingSec, stoppedSec;
-    public double best10 = Double.NaN, best10Speed = Double.NaN, best10From = Double.NaN;   // kWh/100, km/h, trip km
-    public double best10Min = Double.NaN, best10Max = Double.NaN;                             // speed range in that stretch
     private double segMin = Double.NaN, segMax = Double.NaN;
+
+    /** One of the best (lowest kWh/100 km) stretches of the chosen length; stretches never overlap. */
+    public static final class Best { public double kwh100, speed, min, max, fromKm, toKm; }
+    private volatile List<Best> best = new ArrayList<>();
+    private double bestKm = 10;
+    private final ArrayList<double[]> segs = new ArrayList<>();   // whole trip, per 100 m: {kWh, s, min km/h, max km/h, end km}
+    public List<Best> best() { return best; }
+    public double bestKm() { return bestKm; }
+    public synchronized void setBestKm(double k) { bestKm = Math.max(1, Math.min(100, k)); findBest(); for (Listener l : listeners) l.onTrip(this); }
     private long runStart; private double runMax; private boolean runArmed, brakeArmed = true;
     private double prevV = Double.NaN, segSec;
-    private final java.util.ArrayDeque<double[]> win = new java.util.ArrayDeque<>();   // last 10 km: {kWh, s} per 100 m
-    private double winKwh, winSec;
 
     private void clearStats() {
         topSpeed = topSpeedKm = peakKw = maxRegenKw = 0;
         best0100 = Double.NaN; runs0100 = hardBrakes = 0; movingSec = stoppedSec = 0;
-        best10 = best10Speed = best10From = best10Min = best10Max = Double.NaN;
+        best = new ArrayList<>(); segs.clear();
         segMin = segMax = Double.NaN;
         runStart = 0; runMax = 0; runArmed = false; brakeArmed = true; prevV = Double.NaN; segSec = 0;
-        win.clear(); winKwh = winSec = 0;
     }
 
     /** Average speed while moving (km/h). */
@@ -125,18 +129,8 @@ public final class TripEnergy implements CarData.Listener {
             stats(s, dt);
             if (segKm >= STEP_KM) {
                 double live = segKwh / segKm * 100;
-                // best 10 km: slide a 10 km window (100 x 100 m) along the trip, keep the lowest kWh/100
-                win.addLast(new double[]{segKwh, segSec, segMin, segMax}); winKwh += segKwh; winSec += segSec;
-                if (win.size() > 100) { double[] o = win.removeFirst(); winKwh -= o[0]; winSec -= o[1]; }
-                if (win.size() == 100 && winSec > 0) {
-                    double c = winKwh * 10;   // kWh per 10 km -> per 100 km
-                    if (Double.isNaN(best10) || c < best10) {
-                        best10 = c; best10Speed = 10 / (winSec / 3600.0); best10From = km - 10;
-                        double lo = Double.MAX_VALUE, hi = 0;
-                        for (double[] w : win) { if (!Double.isNaN(w[2])) lo = Math.min(lo, w[2]); if (!Double.isNaN(w[3])) hi = Math.max(hi, w[3]); }
-                        best10Min = lo == Double.MAX_VALUE ? Double.NaN : lo; best10Max = hi;
-                    }
-                }
+                segs.add(new double[]{segKwh, segSec, segMin, segMax, km});
+                findBest();
                 segSec = 0; segMin = segMax = Double.NaN;
                 points.add(new Point(km, segN > 0 ? segSpeedSum / segN : 0, live, avg(),
                         segPedalN > 0 ? segPedalSum / segPedalN : Double.NaN,
@@ -178,5 +172,39 @@ public final class TripEnergy implements CarData.Listener {
             else if (decel < 1.5) brakeArmed = true;
         }
         prevV = v;
+    }
+
+    /**
+     * Top 4 stretches of bestKm with the lowest kWh/100 km, never overlapping:
+     * every window of that length along the whole trip, best first, skipping any that overlap one already picked.
+     */
+    private void findBest() {
+        int w = (int) Math.round(bestKm / STEP_KM), n = segs.size();
+        List<Best> out = new ArrayList<>();
+        if (n >= w && w > 0) {
+            double[] e = new double[n + 1], t = new double[n + 1];
+            for (int i = 0; i < n; i++) { e[i + 1] = e[i] + segs.get(i)[0]; t[i + 1] = t[i] + segs.get(i)[1]; }
+            Integer[] idx = new Integer[n - w + 1];
+            for (int i = 0; i < idx.length; i++) idx[i] = i;
+            java.util.Arrays.sort(idx, (a, b) -> Double.compare(e[a + w] - e[a], e[b + w] - e[b]));
+            List<Integer> picked = new ArrayList<>();
+            for (int st : idx) {
+                boolean clash = false;
+                for (int p : picked) if (st < p + w && p < st + w) { clash = true; break; }
+                if (clash) continue;
+                picked.add(st);
+                Best b = new Best();
+                b.kwh100 = (e[st + w] - e[st]) / bestKm * 100;
+                double sec = t[st + w] - t[st];
+                b.speed = sec > 0 ? bestKm / (sec / 3600.0) : Double.NaN;
+                double lo = Double.MAX_VALUE, hi = 0;
+                for (int k = st; k < st + w; k++) { double[] g = segs.get(k); if (!Double.isNaN(g[2])) lo = Math.min(lo, g[2]); if (!Double.isNaN(g[3])) hi = Math.max(hi, g[3]); }
+                b.min = lo == Double.MAX_VALUE ? Double.NaN : lo; b.max = hi;
+                b.toKm = segs.get(st + w - 1)[4]; b.fromKm = b.toKm - bestKm;
+                out.add(b);
+                if (out.size() == 4) break;
+            }
+        }
+        best = out;
     }
 }

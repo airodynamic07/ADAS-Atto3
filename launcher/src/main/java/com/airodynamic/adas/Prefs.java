@@ -119,4 +119,8 @@ public final class Prefs {
     /** Ghost Race on Firefox's engine (GeckoView) instead of the car's WebView. On by default (2026-11-11). */
     public boolean ghostGecko() { return p.getBoolean("ghostGecko", true); }
     public void setGhostGecko(boolean on) { p.edit().putBoolean("ghostGecko", on).apply(); }
+
+    /** Length of the "best stretches" on the trip card, km (user can type it; default 10). */
+    public float bestKm() { return p.getFloat("bestKm", 10f); }
+    public void setBestKm(float km) { p.edit().putFloat("bestKm", km).apply(); }
 }
