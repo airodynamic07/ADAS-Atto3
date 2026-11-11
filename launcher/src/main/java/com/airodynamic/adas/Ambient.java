@@ -104,8 +104,8 @@ public final class Ambient implements CarData.Listener {
         boolean first = lastGear < 0;
         lastGear = g;
         if (first) return;   // only on a real gear change, never at start-up
-        if (!prefs.ambientGear()) { gearReport = "gear " + Prefs.GEARS[g] + ": 'Ambient light by gear' is Off"; return; }
-        if (overLimit) return;
+        if (!prefs.ambientGear()) { gearReport = "gear " + Prefs.GEARS[g] + ": 'Ambient light by gear' is Off"; toast("Ambient: " + gearReport); return; }
+        if (overLimit) { toast("Ambient: gear " + Prefs.GEARS[g] + " skipped (over-speed blink active)"); return; }
         final int col = prefs.ambientColour(g), gi = g;
         apply(col, prefs.ambientStyle());
         // the car may set its own colour just after a gear change: send ours again a moment later
@@ -114,8 +114,12 @@ public final class Ambient implements CarData.Listener {
             Object back = CarData.get(c).ambient("getIALColor", 1);
             gearReport = "gear " + Prefs.GEARS[gi] + " at " + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(new java.util.Date())
                     + ": sent colour " + col + ", car now reports " + back;
+            toast("Ambient: " + gearReport);   // temporary, to see what the car does (2026-11-11)
         }, 1800);
     }
+
+    private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+    private void toast(String m) { ui.post(() -> android.widget.Toast.makeText(c, m, android.widget.Toast.LENGTH_LONG).show()); }
 
     /** Switching "Ambient light by gear" on: show the current gear's colour straight away. */
     public void applyCurrentGear() {
