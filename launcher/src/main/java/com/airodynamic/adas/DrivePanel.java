@@ -132,7 +132,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         bv.addView(best10Spd);
         bv.addView(Ui.text(c, "  km/h avg", 12, th.muted, false));
         b10.addView(bv);
-        best10Sub = Ui.text(c, "", 11, th.muted, false);
+        best10Sub = Ui.text(c, "", 12, th.muted, false);
         b10.addView(best10Sub);
         en.addView(b10, new LinearLayout.LayoutParams(-1, 0, 1f));
         root.addView(en, new LinearLayout.LayoutParams(-1, 0, 1f));   // fills the window to the bottom
@@ -259,7 +259,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         } else {
             best10.setText(String.format(Locale.US, "%.1f", t.best10));
             best10Spd.setText(String.valueOf(Math.round(t.best10Speed)));
-            best10Sub.setText(String.format(Locale.US, "km %.1f – %.1f", t.best10From, t.best10From + 10));
+            best10Sub.setText(String.format(Locale.US, "km %.1f – %.1f  ·  speed %.0f – %.0f km/h",
+                    t.best10From, t.best10From + 10, t.best10Min, t.best10Max));
         }
     }
 

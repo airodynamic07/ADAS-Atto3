@@ -56,6 +56,8 @@ public final class TripEnergy implements CarData.Listener {
     public int runs0100, hardBrakes;
     public double movingSec, stoppedSec;
     public double best10 = Double.NaN, best10Speed = Double.NaN, best10From = Double.NaN;   // kWh/100, km/h, trip km
+    public double best10Min = Double.NaN, best10Max = Double.NaN;                             // speed range in that stretch
+    private double segMin = Double.NaN, segMax = Double.NaN;
     private long runStart; private double runMax; private boolean runArmed, brakeArmed = true;
     private double prevV = Double.NaN, segSec;
     private final java.util.ArrayDeque<double[]> win = new java.util.ArrayDeque<>();   // last 10 km: {kWh, s} per 100 m
@@ -64,7 +66,8 @@ public final class TripEnergy implements CarData.Listener {
     private void clearStats() {
         topSpeed = topSpeedKm = peakKw = maxRegenKw = 0;
         best0100 = Double.NaN; runs0100 = hardBrakes = 0; movingSec = stoppedSec = 0;
-        best10 = best10Speed = best10From = Double.NaN;
+        best10 = best10Speed = best10From = best10Min = best10Max = Double.NaN;
+        segMin = segMax = Double.NaN;
         runStart = 0; runMax = 0; runArmed = false; brakeArmed = true; prevV = Double.NaN; segSec = 0;
         win.clear(); winKwh = winSec = 0;
     }
@@ -123,13 +126,18 @@ public final class TripEnergy implements CarData.Listener {
             if (segKm >= STEP_KM) {
                 double live = segKwh / segKm * 100;
                 // best 10 km: slide a 10 km window (100 x 100 m) along the trip, keep the lowest kWh/100
-                win.addLast(new double[]{segKwh, segSec}); winKwh += segKwh; winSec += segSec;
+                win.addLast(new double[]{segKwh, segSec, segMin, segMax}); winKwh += segKwh; winSec += segSec;
                 if (win.size() > 100) { double[] o = win.removeFirst(); winKwh -= o[0]; winSec -= o[1]; }
                 if (win.size() == 100 && winSec > 0) {
                     double c = winKwh * 10;   // kWh per 10 km -> per 100 km
-                    if (Double.isNaN(best10) || c < best10) { best10 = c; best10Speed = 10 / (winSec / 3600.0); best10From = km - 10; }
+                    if (Double.isNaN(best10) || c < best10) {
+                        best10 = c; best10Speed = 10 / (winSec / 3600.0); best10From = km - 10;
+                        double lo = Double.MAX_VALUE, hi = 0;
+                        for (double[] w : win) { if (!Double.isNaN(w[2])) lo = Math.min(lo, w[2]); if (!Double.isNaN(w[3])) hi = Math.max(hi, w[3]); }
+                        best10Min = lo == Double.MAX_VALUE ? Double.NaN : lo; best10Max = hi;
+                    }
                 }
-                segSec = 0;
+                segSec = 0; segMin = segMax = Double.NaN;
                 points.add(new Point(km, segN > 0 ? segSpeedSum / segN : 0, live, avg(),
                         segPedalN > 0 ? segPedalSum / segPedalN : Double.NaN,
                         segPowerN > 0 ? segPowerSum / segPowerN : Double.NaN));
@@ -146,6 +154,8 @@ public final class TripEnergy implements CarData.Listener {
         if (!Double.isNaN(s.powerKw)) { peakKw = Math.max(peakKw, s.powerKw); maxRegenKw = Math.min(maxRegenKw, s.powerKw); }
         if (Double.isNaN(s.speedKmh)) return;
         double v = s.speedKmh;
+        segMin = Double.isNaN(segMin) ? v : Math.min(segMin, v);
+        segMax = Double.isNaN(segMax) ? v : Math.max(segMax, v);
         if (v > topSpeed) { topSpeed = v; topSpeedKm = km; }
         if (v > 2) movingSec += dt; else stoppedSec += dt;
         // 0–100 km/h: starts when the car moves off from standing still, ends at 100;
