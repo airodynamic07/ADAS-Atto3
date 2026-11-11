@@ -42,6 +42,7 @@ android {
         checkReleaseBuilds = false
     }
     packaging {
+        jniLibs.useLegacyPackaging = true   // compress the Firefox engine's native files (APK ~3x smaller)
         resources.excludes += setOf("META-INF/*.kotlin_module", "META-INF/versions/**", "META-INF/LICENSE*", "META-INF/NOTICE*")
     }
 }
