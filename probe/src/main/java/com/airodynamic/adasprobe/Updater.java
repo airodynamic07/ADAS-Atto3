@@ -34,7 +34,7 @@ public final class Updater {
 
     /** Downloads the newest adas-launcher.apk and installs it through the car's ADB. */
     public static void installLauncher(Context ctx, Report r) throws Exception {
-        r.info("Looking for the ADAS Launcher on GitHub...");
+        r.info("Looking for the NATEE Launcher on GitHub...");
         HttpURLConnection c = open(LATEST);
         String json;
         try (InputStream in = c.getInputStream()) {
@@ -65,7 +65,7 @@ public final class Updater {
         apk.setReadable(true, false);
         r.ok("downloaded", (apk.length() / 1024) + " KB");
         if (HelperLauncher.installOther(ctx, apk, r)) {
-            r.ok("ADAS Launcher", "installed. Press the car's Home button and choose ADAS Launcher, or open it from the app list.");
+            r.ok("NATEE Launcher", "installed. Press the car's Home button and choose NATEE Launcher, or open it from the app list.");
         }
     }
 

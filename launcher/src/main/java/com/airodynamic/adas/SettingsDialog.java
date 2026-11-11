@@ -133,7 +133,7 @@ public final class SettingsDialog {
         section(c, root, th, "About");
         String ver = "?";
         try { ver = c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName; } catch (Exception ignored) {}
-        TextView about = Ui.text(c, "ADAS Launcher v" + ver + " · github.com/airodynamic07/ADAS-Atto3\n"
+        TextView about = Ui.text(c, "NATEE Launcher v" + ver + " · github.com/airodynamic07/ADAS-Atto3\n"
                 + "Camera and car-data methods from OverDrive (MIT). AI model YOLO26n (AGPL-3.0).", 13, th.muted, false);
         root.addView(about);
         LinearLayout up = row(c);

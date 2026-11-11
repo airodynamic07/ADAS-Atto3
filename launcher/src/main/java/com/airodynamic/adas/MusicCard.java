@@ -133,7 +133,7 @@ public final class MusicCard {
 
     private void act(int what) {
         if (!NowPlaying.allowed(c)) {
-            Toast.makeText(c, "Turn on 'Notification access' for ADAS Launcher", Toast.LENGTH_LONG).show();
+            Toast.makeText(c, "Turn on 'Notification access' for NATEE Launcher", Toast.LENGTH_LONG).show();
             try { c.startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception ignored) {}
             return;
         }
