@@ -81,6 +81,7 @@ public class ProbeActivity extends Activity {
         Button r2b = button(left, "▶  ROUND 2 — after restart", v -> runTask("answers3", this::round2AfterRestart));
         r2b.setTextColor(ACCENT);
         Button inst = button(left, "⬇  Install / update NATEE Launcher", v -> runTask("app_install_launcher", rep -> Updater.installLauncher(this, rep)));
+        button(left, "⬇  Install / update Engine Sound", v -> runTask("app_install_engine", rep -> Updater.installEngineSound(this, rep)));
         inst.setTextColor(ACCENT);
         inst.setTypeface(Typeface.DEFAULT_BOLD);
         Button usbInst = button(left, "⬇  Install an APK from the USB stick", v -> pickUsbApk());

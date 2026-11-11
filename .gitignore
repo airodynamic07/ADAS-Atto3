@@ -5,3 +5,6 @@ local.properties
 .idea/
 captures/
 *.apk
+
+# The Engine Sound APK copy that ADAS Probe downloads (user chose a public download, 2026-11-11)
+!engine-sound/Atto3EngineSound.apk

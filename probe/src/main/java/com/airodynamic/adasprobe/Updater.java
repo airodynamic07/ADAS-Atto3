@@ -69,6 +69,33 @@ public final class Updater {
         }
     }
 
+    /** Public copy of the newest Engine Sound APK (user's choice 2026-11-11), kept in this repo's engine-sound folder. */
+    static final String ENGINE_URL = "https://raw.githubusercontent.com/airodynamic07/ADAS-Atto3/main/engine-sound/Atto3EngineSound.apk";
+
+    /** Downloads the newest Engine Sound APK and installs it through the car's ADB (settings in Engine Sound are kept). */
+    public static void installEngineSound(Context ctx, Report r) throws Exception {
+        r.info("Downloading Engine Sound from GitHub...");
+        File apk = new File(ctx.getExternalFilesDir(null), "engine-sound.apk");
+        try {
+            HttpURLConnection d = open(ENGINE_URL);
+            d.setRequestProperty("Accept", "application/octet-stream");
+            try (InputStream in = d.getInputStream(); FileOutputStream out = new FileOutputStream(apk)) {
+                byte[] buf = new byte[65536];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            }
+        } catch (Exception e) {
+            r.fail("internet", "cannot download Engine Sound (" + e.getClass().getSimpleName()
+                    + "). Connect the car to Wi-Fi, e.g. your phone's hotspot, and try again.");
+            return;
+        }
+        apk.setReadable(true, false);
+        r.ok("downloaded", (apk.length() / 1024) + " KB");
+        if (HelperLauncher.installOther(ctx, apk, r)) {
+            r.ok("Engine Sound", "installed. The launcher's middle window uses it the next time it opens (press Home).");
+        }
+    }
+
     public static void update(Context ctx, Report r) throws Exception {
         PackageInfo pi = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
         int mine = pi.versionCode;
