@@ -41,9 +41,8 @@ public final class InfoPanel implements Panel {
     private final TextView[] tyre = new TextView[4];
     private final TextView[] tyreT = new TextView[4];
     private final DoorsView doors;
-    private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub, pm, pmSub, limit;
+    private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub;
     private final MusicCard music;
-    private LinearLayout limitCard;
 
     public InfoPanel(Context c, Theme th, Prefs prefs) {
         this.c = c;
@@ -54,83 +53,50 @@ public final class InfoPanel implements Panel {
         int pad = Ui.dp(c, 8);
         root.setPadding(pad, pad, pad, pad);
 
-        // --- row 1: tyres + doors & windows
-        LinearLayout r1 = row();
-        LinearLayout ty = card();
-        String unit = prefs.tyreUnit();
-        ty.addView(label("Tyres · " + (unit.equals("bar") ? "bar" : unit.equals("kpa") ? "kPa" : "psi") + " / °C"));
-        GridLayout g = new GridLayout(c);
-        g.setColumnCount(2);
-        for (int i = 0; i < 4; i++) {
-            LinearLayout cell = new LinearLayout(c);
-            cell.setOrientation(LinearLayout.VERTICAL);
-            cell.setGravity(Gravity.CENTER);
-            cell.setBackground(Ui.round(th.chip, 0, 10, c));
-            cell.setPadding(0, Ui.dp(c, 3), 0, Ui.dp(c, 3));
-            tyre[i] = Ui.text(c, "–", 16, th.text, true);
-            tyreT[i] = Ui.text(c, "", 10, th.muted, false);
-            cell.addView(tyre[i]);
-            cell.addView(tyreT[i]);
-            GridLayout.LayoutParams lp = new GridLayout.LayoutParams(GridLayout.spec(i / 2), GridLayout.spec(i % 2, 1f));
-            lp.width = 0;
-            lp.setMargins(Ui.dp(c, 2), Ui.dp(c, 4), Ui.dp(c, 2), 0);
-            g.addView(cell, lp);
-        }
-        ty.addView(g);
-        r1.addView(ty, weight(1, true));
-        LinearLayout dw = card();
-        dw.setGravity(Gravity.CENTER_HORIZONTAL);
-        TextView dl = label("Doors & windows");
-        dw.addView(dl, new LinearLayout.LayoutParams(-1, -2));
-        doors = new DoorsView(c, th);
-        dw.addView(doors, new LinearLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 66)));
-        doorsText = Ui.text(c, "", 11, Theme.SAFE, false);
-        dw.addView(doorsText);
-        r1.addView(dw, weight(1, false));
-        root.addView(r1);
-
-        // --- row 2: trip, battery health, odometer
-        LinearLayout r2 = row();
-        LinearLayout t1 = tile("Trip");
-        trip = big(t1); tripSub = small(t1);
+        // --- top (user's layout, 2026-11-11): [battery health | trip] over [odometer] on the left;
+        //     doors · windows · tyres drawing on the right, tyre pressure/temperature beside each wheel
+        LinearLayout top = new LinearLayout(c);
+        LinearLayout leftCol = new LinearLayout(c);
+        leftCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout r2 = new LinearLayout(c);
         LinearLayout t2 = tile("Battery health");
         health = big(t2); healthSub = small(t2); healthSub.setText("from the car");
+        LinearLayout t1 = tile("Trip");
+        trip = big(t1); tripSub = small(t1);
+        r2.addView(t2, weight(1, true)); r2.addView(t1, weight(1, false));
+        LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(-1, -2);
+        r2lp.bottomMargin = Ui.dp(c, 6);
+        leftCol.addView(r2, r2lp);
         LinearLayout t3 = tile("Odometer");
         odo = big(t3); odoSub = small(t3);
         t3.setOnClickListener(v -> serviceDialog());
-        r2.addView(t1, weight(1, true)); r2.addView(t2, weight(1, true)); r2.addView(t3, weight(1, false));
-        root.addView(r2);
+        leftCol.addView(t3, new LinearLayout.LayoutParams(-1, 0, 1f));
+        LinearLayout.LayoutParams lcl = new LinearLayout.LayoutParams(0, -1, 1.6f);
+        lcl.rightMargin = Ui.dp(c, 6);
+        top.addView(leftCol, lcl);
 
-        // --- row 3: PM2.5 and my speed limit laid out side to side (one line each)
-        LinearLayout r3 = row();
-        LinearLayout p = tile("PM2.5 out / in");
-        LinearLayout pl = new LinearLayout(c);
-        pl.setGravity(Gravity.BOTTOM);
-        pm = Ui.text(c, "–", 18, th.text, true);
-        pmSub = Ui.text(c, "", 10, th.muted, false);
-        pmSub.setSingleLine(true);
-        pmSub.setEllipsize(TextUtils.TruncateAt.END);
-        pmSub.setPadding(Ui.dp(c, 6), 0, 0, Ui.dp(c, 2));
-        pl.addView(pm);
-        pl.addView(pmSub, new LinearLayout.LayoutParams(0, -2, 1f));
-        pl.setPadding(0, Ui.dp(c, 4), 0, 0);
-        p.addView(pl);
-        LinearLayout l = tile("My speed limit");
-        LinearLayout lb = new LinearLayout(c);
-        lb.setGravity(Gravity.CENTER_VERTICAL);
-        limit = Ui.text(c, "–", 18, th.text, true);
-        lb.addView(limit, new LinearLayout.LayoutParams(0, -2, 1f));
-        LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(Ui.dp(c, 36), Ui.dp(c, 32));
-        pb.leftMargin = Ui.dp(c, 4);
-        lb.addView(small(Ui.chip(c, "−", false, th, v -> { prefs.setSpeedLimit(Math.max(30, prefs.speedLimit() - 10)); showLimit(); })), pb);
-        lb.addView(small(Ui.chip(c, "+", false, th, v -> { prefs.setSpeedLimit(Math.min(180, prefs.speedLimit() + 10)); showLimit(); })), pb);
-        lb.setPadding(0, Ui.dp(c, 2), 0, 0);
-        l.addView(lb);
-        limit.setOnClickListener(v -> { prefs.setSpeedVoice(!prefs.speedVoice()); showLimit(); });
-        r3.addView(p, weight(1, true)); r3.addView(l, weight(1.3f, false));
-        limitCard = l;
-        root.addView(r3);
-        showLimit();
+        LinearLayout dw = card();
+        dw.setGravity(Gravity.CENTER_HORIZONTAL);
+        dw.setPadding(Ui.dp(c, 5), Ui.dp(c, 5), Ui.dp(c, 5), Ui.dp(c, 5));
+        String unit = prefs.tyreUnit();
+        TextView dl = label("Doors · tyres " + (unit.equals("bar") ? "bar" : unit.equals("kpa") ? "kPa" : "psi"));
+        dl.setGravity(Gravity.CENTER);
+        dw.addView(dl, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout carRow = new LinearLayout(c);
+        carRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout lt = tyreCol(0, 2, Gravity.START), rt = tyreCol(1, 3, Gravity.END);   // FL/RL left, FR/RR right
+        carRow.addView(lt, new LinearLayout.LayoutParams(0, -1, 1f));
+        doors = new DoorsView(c, th);
+        carRow.addView(doors, new LinearLayout.LayoutParams(Ui.dp(c, 70), Ui.dp(c, 92)));
+        carRow.addView(rt, new LinearLayout.LayoutParams(0, -1, 1f));
+        dw.addView(carRow, new LinearLayout.LayoutParams(-1, -2));
+        doorsText = Ui.text(c, "", 10, Theme.SAFE, false);
+        doorsText.setGravity(Gravity.CENTER);
+        dw.addView(doorsText, new LinearLayout.LayoutParams(-1, -2));
+        top.addView(dw, new LinearLayout.LayoutParams(0, -2, 1.25f));
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(-1, -2);
+        tlp.bottomMargin = Ui.dp(c, 6);
+        root.addView(top, tlp);
 
         // --- row 4: now playing (cover, song, prev/play/next) — moved here from the right window (2026-11-11)
         music = new MusicCard(c, th);
@@ -139,6 +105,23 @@ public final class InfoPanel implements Panel {
     }
 
     // ---------------------------------------------------------------- building helpers
+
+    /** Two tyres stacked (front over rear) beside the car drawing. */
+    private LinearLayout tyreCol(int front, int rear, int gravity) {
+        LinearLayout col = new LinearLayout(c);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(gravity | Gravity.CENTER_VERTICAL);
+        for (int i : new int[]{front, rear}) {
+            tyre[i] = Ui.text(c, "–", 16, th.text, true);
+            tyre[i].setGravity(gravity);
+            tyreT[i] = Ui.text(c, "", 10, th.muted, false);
+            tyreT[i].setGravity(gravity);
+            col.addView(tyre[i], new LinearLayout.LayoutParams(-1, -2));
+            col.addView(tyreT[i], new LinearLayout.LayoutParams(-1, -2));
+            if (i == front) col.addView(new View(c), new LinearLayout.LayoutParams(1, Ui.dp(c, 14)));
+        }
+        return col;
+    }
 
     private LinearLayout row() {
         LinearLayout r = new LinearLayout(c);
@@ -205,9 +188,6 @@ public final class InfoPanel implements Panel {
         return lp;
     }
 
-    private void showLimit() {
-        limit.setText(prefs.speedLimit() + (prefs.speedVoice() ? " 🔊" : " 🔇"));
-    }
 
     // ---------------------------------------------------------------- actions
 
@@ -258,12 +238,12 @@ public final class InfoPanel implements Panel {
             boolean low = !Double.isNaN(b) && b < LOW_BAR;
             tyre[i].setText(Double.isNaN(b) ? "–" : pressure(b, prefs.tyreUnit()));
             tyre[i].setTextColor(low ? Theme.CAUTION : th.text);
-            tyreT[i].setText(s.tyreC[i] == Integer.MIN_VALUE ? names[i] : s.tyreC[i] + "°");
+            tyreT[i].setText(s.tyreC[i] == Integer.MIN_VALUE ? names[i] : s.tyreC[i] + "°C");
         }
         doors.set(s);
         boolean open = s.anyOpen();
         String lock = s.lock == 1 ? " · 🔒 Locked" : s.lock == 2 ? " · Unlocked" : "";
-        doorsText.setText((s.sunroofOpen ? "Sunroof open" : open ? "Something is open" : "All closed") + lock
+        doorsText.setText((s.sunroofOpen ? "Sunroof open" : open ? "Something open" : "All closed") + lock
                 + (s.roofPos != Integer.MIN_VALUE || s.roofState != Integer.MIN_VALUE
                     ? "\nroof " + (s.roofPos == Integer.MIN_VALUE ? "–" : s.roofPos) + " / " + (s.roofState == Integer.MIN_VALUE ? "–" : s.roofState) : ""));   // raw values, temporary
         doorsText.setTextColor(open || s.lock == 2 ? Theme.CAUTION : Theme.SAFE);
@@ -283,14 +263,6 @@ public final class InfoPanel implements Panel {
             odoSub.setTextColor(th.muted);
         }
 
-        pm.setText((s.pmOut < 0 ? "–" : String.valueOf(s.pmOut)) + " / " + (s.pmIn < 0 ? "–" : String.valueOf(s.pmIn)));
-        pm.setTextColor(s.pmOut > 50 ? Theme.DANGER : s.pmOut > 25 ? Theme.CAUTION : th.text);
-        pmSub.setText(level(s.pmOut) + " / " + level(s.pmIn));
-
-        // My speed limit: card turns red while over (warning only; SpeedAlert beeps)
-        boolean over = SpeedAlert.get(c).over();
-        if (limitCard != null) limitCard.setBackground(over ? Ui.round(Theme.DANGER, Theme.DANGER, 16, c) : Ui.round(th.card, th.line, 16, c));
-        limit.setTextColor(over ? 0xFFFFFFFF : th.text);
     }
 
     /** Pressure in the chosen unit: PSI (default), bar or kPa. */

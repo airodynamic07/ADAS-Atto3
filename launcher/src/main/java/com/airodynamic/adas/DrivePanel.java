@@ -23,6 +23,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private final LinearLayout root;
     private android.widget.GridLayout tray;
     private final Prefs prefs;
+    private TextView outside, pm, limit, today;
+    private LinearLayout limitCard;
     private final TextView used, avg, dist, power, soc, since, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty;
     private final TextView[] bestKwh = new TextView[3], bestSpd = new TextView[3], bestRange = new TextView[3], bestKmTxt = new TextView[3];
     private final LinearLayout[] bestRows = new LinearLayout[3];
@@ -36,19 +38,51 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         int pad = Ui.dp(c, 8);
         root.setPadding(pad, pad, pad, pad);
 
-        // --- top (2026-11-11, AI box removed): theme dots + Settings in one row, app tray full width below
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
-        tl.bottomMargin = Ui.dp(c, 6);
-        root.addView(themeControls, tl);
+        // --- top (user's layout, 2026-11-11): [outside · PM2.5 / my speed limit / today] | [theme row / app tray, 4 per row]
+        LinearLayout top = new LinearLayout(c);
+        LinearLayout info = new LinearLayout(c);
+        info.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout ir = new LinearLayout(c);
+        LinearLayout to = tile("Outside"); outside = big(to);
+        LinearLayout tp = tile("PM2.5 out / in"); pm = big(tp);
+        ir.addView(to, w(true)); ir.addView(tp, new LinearLayout.LayoutParams(0, -2, 1.3f));
+        info.addView(ir, gap());
+        limitCard = tile("My speed limit");
+        LinearLayout lb = new LinearLayout(c);
+        lb.setGravity(Gravity.CENTER_VERTICAL);
+        limit = big(new LinearLayout(c));
+        ((android.view.ViewGroup) limit.getParent()).removeView(limit);
+        lb.addView(limit, new LinearLayout.LayoutParams(0, -2, 1f));
+        LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(Ui.dp(c, 36), Ui.dp(c, 32));
+        pb.leftMargin = Ui.dp(c, 4);
+        android.widget.Button minus = Ui.chip(c, "−", false, th, v -> { prefs.setSpeedLimit(Math.max(30, prefs.speedLimit() - 10)); showLimit(); });
+        android.widget.Button plus = Ui.chip(c, "+", false, th, v -> { prefs.setSpeedLimit(Math.min(180, prefs.speedLimit() + 10)); showLimit(); });
+        for (android.widget.Button bt : new android.widget.Button[]{minus, plus}) { bt.setMinHeight(0); bt.setMinimumHeight(0); lb.addView(bt, pb); }
+        limit.setOnClickListener(v -> { prefs.setSpeedVoice(!prefs.speedVoice()); showLimit(); });
+        limitCard.addView(lb);
+        info.addView(limitCard, gap());
+        LinearLayout td = tile("Today");
+        today = big(td);
+        info.addView(td);
+        showLimit();
+        LinearLayout.LayoutParams il = new LinearLayout.LayoutParams(0, -2, .95f);
+        il.rightMargin = Ui.dp(c, 6);
+        top.addView(info, il);
+
+        LinearLayout side = new LinearLayout(c);
+        side.setOrientation(LinearLayout.VERTICAL);
+        side.addView(themeControls, gap());
         tray = new android.widget.GridLayout(c);
-        tray.setColumnCount(6);
+        tray.setColumnCount(4);
         LinearLayout trayBox = card();
         trayBox.setPadding(Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6));
         trayBox.addView(tray);
+        side.addView(trayBox, new LinearLayout.LayoutParams(-1, -2));
         drawShortcuts();
+        top.addView(side, new LinearLayout.LayoutParams(0, -2, 1.25f));
         LinearLayout.LayoutParams g1 = new LinearLayout.LayoutParams(-1, -2);
         g1.bottomMargin = Ui.dp(c, 6);
-        root.addView(trayBox, g1);
+        root.addView(top, g1);
 
         // --- box 2: this trip (user's layout, 2026-11-11): one line of energy, 9 small stats, big "Best 10 km"
         LinearLayout en = card();
@@ -201,6 +235,18 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     }
     private TextView sub(LinearLayout t) { TextView v = Ui.text(c, "", 11, th.muted, false); t.addView(v); return v; }
 
+    private LinearLayout.LayoutParams gap() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = Ui.dp(c, 6);
+        return lp;
+    }
+
+    private void showLimit() {
+        limit.setText(prefs.speedLimit() + (prefs.speedVoice() ? " 🔊" : " 🔇"));
+    }
+
+    private static String pmLevel(int v) { return v < 0 ? "" : v <= 25 ? " good" : v <= 50 ? " moderate" : " unhealthy"; }
+
     private LinearLayout.LayoutParams w(boolean gap) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1f);
         if (gap) lp.rightMargin = Ui.dp(c, 5);
@@ -225,6 +271,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         driveT.setText(sec >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60)
                 : String.format(Locale.US, "%d:%02d", sec / 60, sec % 60));
         brakes.setText(String.valueOf(t.hardBrakes));
+        today.setText(String.format(Locale.US, "%.1f km · %.1f kWh", t.todayKm(), t.todayKwh()));
         double bk = t.bestKm();
         String kmTxt = bk == Math.floor(bk) ? String.valueOf((int) bk) : String.format(Locale.US, "%.1f", bk);
         bestTitle.setText("BEST " + kmTxt + " KM STRETCHES OF THIS TRIP   ✎ tap to change");
@@ -287,6 +334,13 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     }
 
     @Override public void onCar(CarData.State s) {
+        outside.setText(s.outsideC == Integer.MIN_VALUE ? "–" : s.outsideC + "°C");
+        pm.setText((s.pmOut < 0 ? "–" : String.valueOf(s.pmOut)) + " / " + (s.pmIn < 0 ? "–" : String.valueOf(s.pmIn)) + pmLevel(s.pmOut));
+        pm.setTextColor(s.pmOut > 50 ? Theme.DANGER : s.pmOut > 25 ? Theme.CAUTION : th.text);
+        // My speed limit: card turns red while over (warning only; SpeedAlert beeps)
+        boolean over = SpeedAlert.get(c).over();
+        limitCard.setBackground(over ? Ui.round(Theme.DANGER, Theme.DANGER, 10, c) : Ui.round(th.chip, th.line, 10, c));
+        limit.setTextColor(over ? 0xFFFFFFFF : th.text);
         soc.setText((Double.isNaN(s.socPct) ? "–" : Math.round(s.socPct) + "%") + (s.rangeKm >= 0 ? " · " + s.rangeKm + " km" : ""));
     }
 }

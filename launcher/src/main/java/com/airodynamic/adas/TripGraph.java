@@ -22,10 +22,15 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     private List<TripEnergy.Point> pts;
+    private boolean liveRegen;
+    private int liveBrake;
+    private double liveFromKm;
+    private float liveX0, liveX1;
+    private static final int REGEN_STAMP = 0xFF2EE59D, MILD_STAMP = 0xFFFF9A1F, HARD_STAMP = 0xFFFF3B30;
     private double nowKm, liveSpeed = Double.NaN, livePower = Double.NaN, livePedal = Double.NaN;
     private static final int SPEED_COL = 0xFF4DA3FF, POWER_COL = 0xFFFFB020, PEDAL_COL = 0xFFB8A4FF, REGEN_COL = 0x553DD9C1;
     private static final int SMOOTH = 0;   // 100 m: each point is its own 100 m average (user, 2026-11-11; was 500 m)
-    private final Paint brakeShade = new Paint();   // average with 2 points each side
+   // average with 2 points each side
 
     public TripGraph(Context c, Theme th) { super(c); this.th = th; }
 
@@ -35,6 +40,9 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         liveSpeed = t.liveSpeed;
         livePower = t.powerKw;
         livePedal = t.livePedal;
+        liveRegen = t.liveRegen();
+        liveBrake = t.liveBrake();
+        liveFromKm = t.lastPointKm();
         postInvalidate();
     }
 
@@ -46,7 +54,8 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private double smooth(int i, int which) {
         double sum = 0;
         int n = 0;
-        for (int k = Math.max(0, i - SMOOTH); k <= Math.min(pts.size() - 1, i + SMOOTH); k++) {
+        int rad = which == 1 ? 1 : SMOOTH;   // power: 300 m (user, 2026-11-11); speed: 100 m
+        for (int k = Math.max(0, i - rad); k <= Math.min(pts.size() - 1, i + rad); k++) {
             double v = val(pts.get(k), which);
             if (!Double.isNaN(v)) { sum += v; n++; }
         }
@@ -58,8 +67,11 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     @Override protected void onDraw(Canvas c) {
         float d = getResources().getDisplayMetrics().density;
         float w = getWidth(), h = getHeight();
-        float left = 46 * d, right = w - 46 * d, top = 22 * d, bottom = h - 16 * d;
+        float left = 46 * d, right = w - 46 * d, top = 22 * d, bottom = h - 16 * d - 20 * d;   // 2 stamp rows below the lines
+        float regenY = bottom + 4 * d, brakeY = bottom + 12 * d, rowH = 6 * d;
         double from = Math.max(0, nowKm - TripEnergy.WINDOW_KM), to = from + TripEnergy.WINDOW_KM;
+        liveX0 = X(Math.max(from, liveFromKm), from, to, left, right);
+        liveX1 = X(nowKm, from, to, left, right);
 
         // scales: starting size, grown to fit what is on screen (and the live reading)
         double sMax = 80, eMin = -30, eMax = 50;
@@ -77,11 +89,12 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         p.setStyle(Paint.Style.FILL);
         float lx = left;
         lx = legend(c, lx, 13 * d, SPEED_COL, "Speed km/h", d);
-        lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (+ use, − regen)", d);
-        lx = legend(c, lx, 13 * d, 0xFF3DD9C1, "Regen", d);
-        lx = legend(c, lx, 13 * d, 0xFFFF3C32, "Braking (fainter = lighter)", d);
+        lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (300 m)", d);
+        lx = legend(c, lx, 13 * d, REGEN_STAMP, "Regen", d);
+        lx = legend(c, lx, 13 * d, MILD_STAMP, "mild brake", d);
+        lx = legend(c, lx, 13 * d, HARD_STAMP, "hard brake", d);
         p.setColor(th.muted);
-        c.drawText("· now = live", lx, 13 * d + 4 * d, p);
+        c.drawText("· stamps are live", lx, 13 * d + 4 * d, p);
 
         // grid + axis labels (speed left, kW right)
         p.setStrokeWidth(1 * d);
@@ -119,37 +132,28 @@ public final class TripGraph extends View implements TripEnergy.Listener {
             return;
         }
 
-        // regen: green shading under the 0 kW line where the (smoothed) power goes negative
+        line(c, 1, from, to, eMin, eMax, left, right, top, bottom, POWER_COL, 2.2f * d, 5 * d);
+        line(c, 0, from, to, 0, sMax, left, right, top, bottom, SPEED_COL, 3.75f * d, 6 * d);   // 1.5x thicker
+        // stamp rows (live): regen green; braking orange (mild ≥0.15 g) / red (hard ≥0.4 g)
+        p.setTextSize(9 * d);
+        p.setTextAlign(Paint.Align.RIGHT);
+        p.setColor(REGEN_STAMP); c.drawText("regen", left - 5 * d, regenY + rowH, p);
+        p.setColor(MILD_STAMP); c.drawText("brake", left - 5 * d, brakeY + rowH, p);
+        p.setTextAlign(Paint.Align.LEFT);
         float stepPx = (float) (TripEnergy.STEP_KM / TripEnergy.WINDOW_KM * (right - left));
-        p.setColor(REGEN_COL);
-        for (int i = 0; i < n; i++) {
-            TripEnergy.Point q = pts.get(i);
-            double ev = smooth(i, 1);
-            if (q.km < from || !(ev < 0)) continue;
-            float x = X(q.km, from, to, left, right);
-            c.drawRect(x - stepPx, y0, x, Y(ev, eMin, eMax, top, bottom), p);
-        }
-        // braking: red shading behind the lines, fainter for light braking, nearly solid for hard (≥0.4 g),
-        // smoothed over neighbouring points and blended between them so it fades in and out
-        float prevA = 0, prevX = Float.NaN;
         for (int i = 0; i < n; i++) {
             TripEnergy.Point q = pts.get(i);
             if (q.km < from) continue;
-            double sum = 0; int cnt = 0;
-            for (int k = Math.max(0, i - 1); k <= Math.min(n - 1, i + 1); k++) { sum += (k == i ? 2 : 1) * pts.get(k).decelG; cnt += (k == i ? 2 : 1); }
-            double gsm = Math.max(q.decelG * .8, sum / cnt);
-            float a = (float) Math.max(0, Math.min(1, (gsm - .1) / .3));   // 0.1 g → none, 0.4 g → full
             float x = X(q.km, from, to, left, right);
-            if (!Float.isNaN(prevX) && (a > 0 || prevA > 0)) {
-                brakeShade.setShader(new android.graphics.LinearGradient(prevX, 0, x, 0,
-                        android.graphics.Color.argb((int) (prevA * 200), 255, 60, 50), android.graphics.Color.argb((int) (a * 200), 255, 60, 50),
-                        android.graphics.Shader.TileMode.CLAMP));
-                c.drawRect(prevX, top, x, bottom, brakeShade);
-            }
-            prevA = a; prevX = x;
+            if (q.regen) { p.setColor(REGEN_STAMP); c.drawRect(x - stepPx, regenY, x, regenY + rowH, p); }
+            int bl = q.decelG >= .4 ? 2 : q.decelG >= .15 ? 1 : 0;
+            if (bl > 0) { p.setColor(bl == 2 ? HARD_STAMP : MILD_STAMP); c.drawRect(x - stepPx, brakeY, x, brakeY + rowH, p); }
         }
-        line(c, 1, from, to, eMin, eMax, left, right, top, bottom, POWER_COL, 2.2f * d, 5 * d);
-        line(c, 0, from, to, 0, sMax, left, right, top, bottom, SPEED_COL, 3.75f * d, 6 * d);   // 1.5x thicker
+        {   // the 100 m being driven right now: stamps appear at once
+            float x1 = liveX1, x0 = Math.min(liveX0, x1 - 3 * d);
+            if (liveRegen) { p.setColor(REGEN_STAMP); c.drawRect(x0, regenY, x1, regenY + rowH, p); }
+            if (liveBrake > 0) { p.setColor(liveBrake == 2 ? HARD_STAMP : MILD_STAMP); c.drawRect(x0, brakeY, x1, brakeY + rowH, p); }
+        }
         removeCallbacks(blink);
         postDelayed(blink, 500);
     }

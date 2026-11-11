@@ -98,7 +98,7 @@ public final class MusicCard {
         queueRow = new LinearLayout(c);
         queueRow.setGravity(Gravity.CENTER_VERTICAL);
         hs.addView(queueRow);
-        root.addView(hs, new LinearLayout.LayoutParams(-1, Ui.dp(c, 58)));
+        root.addView(hs, new LinearLayout.LayoutParams(-1, Ui.dp(c, 34)));
         refresh();
     }
 
@@ -204,25 +204,20 @@ public final class MusicCard {
         for (int i = start; i < q.size() && shown < 30; i++, shown++) {
             final android.media.session.MediaSession.QueueItem it = q.get(i);
             android.media.MediaDescription d = it.getDescription();
+            // text only, one line: "Title · Artist" (user, 2026-11-11: no pictures, shorter)
             LinearLayout cell = new LinearLayout(c);
             cell.setGravity(Gravity.CENTER_VERTICAL);
             cell.setBackground(Ui.round(th.chip, th.line, 10, c));
-            cell.setPadding(Ui.dp(c, 4), Ui.dp(c, 4), Ui.dp(c, 8), Ui.dp(c, 4));
-            ImageView ic = new ImageView(c);
-            ic.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            ic.setClipToOutline(true);
-            ic.setBackground(Ui.round(th.card, 0, 6, c));
-            if (d.getIconBitmap() != null) ic.setImageBitmap(d.getIconBitmap());
-            cell.addView(ic, new LinearLayout.LayoutParams(Ui.dp(c, 42), Ui.dp(c, 42)));
-            LinearLayout tx = new LinearLayout(c);
-            tx.setOrientation(LinearLayout.VERTICAL);
-            tx.setPadding(Ui.dp(c, 6), 0, 0, 0);
-            TextView t1 = Ui.text(c, d.getTitle() == null ? "" : d.getTitle().toString(), 12, th.text, true);
-            t1.setSingleLine(true); t1.setEllipsize(TextUtils.TruncateAt.END); t1.setMaxWidth(Ui.dp(c, 130));
-            TextView t2 = Ui.text(c, d.getSubtitle() == null ? "" : d.getSubtitle().toString(), 11, th.muted, false);
-            t2.setSingleLine(true); t2.setEllipsize(TextUtils.TruncateAt.END); t2.setMaxWidth(Ui.dp(c, 130));
-            tx.addView(t1); tx.addView(t2);
-            cell.addView(tx);
+            cell.setPadding(Ui.dp(c, 9), 0, Ui.dp(c, 9), 0);
+            String ti = d.getTitle() == null ? "" : d.getTitle().toString(), ar = d.getSubtitle() == null ? "" : d.getSubtitle().toString();
+            TextView t1 = Ui.text(c, ti, 12, th.text, true);
+            t1.setSingleLine(true); t1.setEllipsize(TextUtils.TruncateAt.END); t1.setMaxWidth(Ui.dp(c, 120));
+            cell.addView(t1);
+            if (!ar.isEmpty()) {
+                TextView t2 = Ui.text(c, " · " + ar, 11, th.muted, false);
+                t2.setSingleLine(true); t2.setEllipsize(TextUtils.TruncateAt.END); t2.setMaxWidth(Ui.dp(c, 90));
+                cell.addView(t2);
+            }
             cell.setOnClickListener(v -> {
                 mc.getTransportControls().skipToQueueItem(it.getQueueId());
                 main.postDelayed(this::refresh, 600);
