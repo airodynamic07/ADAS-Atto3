@@ -8,4 +8,4 @@ The owner chose to make the app download public (2026-11-11); the app's source s
 To update: replace this file with the newest `Atto3EngineSound.apk` from the Engine Sound
 repository's `latest` release and push.
 
-Current copy: Engine Sound commit 59efc07 (build 78).
+Current copy: Engine Sound commit 79c0ad2 (build 79).
