@@ -258,7 +258,8 @@ public final class InfoPanel implements Panel {
         String lock = s.lock == 1 ? " · 🔒 Locked" : s.lock == 2 ? " · Unlocked" : "";
         doorsText.setText((s.sunroofOpen ? "Sunroof open" : open ? "Something open" : "All closed") + lock
                 + (s.roofPos != Integer.MIN_VALUE || s.roofState != Integer.MIN_VALUE
-                    ? "\nroof " + (s.roofPos == Integer.MIN_VALUE ? "–" : s.roofPos) + " / " + (s.roofState == Integer.MIN_VALUE ? "–" : s.roofState) : ""));   // raw values, temporary
+                    ? "\nroof " + (s.roofPos == Integer.MIN_VALUE ? "–" : s.roofPos) + " / " + (s.roofState == Integer.MIN_VALUE ? "–" : s.roofState) : "")
+                + (s.bootRaw.isEmpty() ? "" : "\nboot " + s.bootRaw));   // raw values, temporary
         doorsText.setTextColor(open || s.lock == 2 ? Theme.CAUTION : Theme.SAFE);
 
         trip.setText(Double.isNaN(s.tripKm) ? "–" : String.format(Locale.US, "%.0f km", s.tripKm));
@@ -305,7 +306,7 @@ public final class InfoPanel implements Panel {
         private CarData.State s;
         // animated opening 0..1 for: FR, FL, RR, RL (car areas 1..4), boot
         private final float[] cur = new float[5];
-        private static final int[] WIN_FOR_DOOR = {2, 1, 4, 3};
+        private static final int[] WIN_FOR_DOOR = {2, 1, 3, 4};   // window on the same side as the drawn door
         private long lastFrame;
 
         DoorsView(Context c, Theme th) { super(c); this.th = th; }
@@ -353,7 +354,8 @@ public final class InfoPanel implements Panel {
             cv.drawRoundRect(r, 3 * d, 3 * d, p);
 
             // doors: {area index 0..3, right side?, hinge y, end y} — FR/FL front, RR/RL rear
-            float[][] door = {{0, 1, 0.28f, 0.52f}, {1, 0, 0.28f, 0.52f}, {2, 1, 0.55f, 0.78f}, {3, 0, 0.55f, 0.78f}};
+            // rear doors: area 3 is drawn on the left, area 4 on the right (user, 2026-11-12: they were swapped)
+            float[][] door = {{0, 1, 0.28f, 0.52f}, {1, 0, 0.28f, 0.52f}, {2, 0, 0.55f, 0.78f}, {3, 1, 0.55f, 0.78f}};
             p.setStrokeCap(Paint.Cap.ROUND);
             for (float[] dr : door) {
                 int i = (int) dr[0];

@@ -146,7 +146,7 @@ public final class TripEnergy implements CarData.Listener {
         topSpeed = topSpeedKm = peakKw = maxRegenKw = 0;
         best0100 = Double.NaN; runs0100 = hardBrakes = 0; movingSec = stoppedSec = 0;
         synchronized (this) { fine.clear(); fineKm = -1; }
-        best = new ArrayList<>(); segs.clear(); segDecel = 0; hn = 0;
+        best = new ArrayList<>(); latest = null; segs.clear(); segDecel = 0; hn = 0;
         segMin = segMax = Double.NaN;
         runStart = 0; runMax = 0; runArmed = false; brakeArmed = true; prevV = Double.NaN; segSec = 0;
     }
@@ -321,5 +321,20 @@ public final class TripEnergy implements CarData.Listener {
             }
         }
         best = out;
+        // the latest stretch: the last bestKm just driven (shown in blue above the list)
+        Best lt = null;
+        if (n >= w && w > 0) {
+            int st = n - w;
+            double e = 0, t = 0, lo = Double.MAX_VALUE, hi = 0;
+            for (int k = st; k < n; k++) { double[] g = segs.get(k); e += g[0]; t += g[1]; if (!Double.isNaN(g[2])) lo = Math.min(lo, g[2]); if (!Double.isNaN(g[3])) hi = Math.max(hi, g[3]); }
+            lt = new Best();
+            lt.kwh100 = e / bestKm * 100;
+            lt.speed = t > 0 ? bestKm / (t / 3600.0) : Double.NaN;
+            lt.min = lo == Double.MAX_VALUE ? Double.NaN : lo; lt.max = hi;
+            lt.toKm = segs.get(n - 1)[4]; lt.fromKm = lt.toKm - bestKm;
+        }
+        latest = lt;
     }
+    private volatile Best latest;
+    public Best latest() { return latest; }
 }

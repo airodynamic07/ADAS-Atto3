@@ -38,6 +38,7 @@ public final class CarData {
         public final int[] windowPct = {0, 0, 0, 0, 0};       // 0 unused, 1..4 windows
         public boolean sunroofOpen;
         public int roofPos = Integer.MIN_VALUE, roofState = Integer.MIN_VALUE;   // raw sunroof readings (meaning still to confirm)
+        public String bootRaw = "";             // raw back-door readings (which one works is still to confirm)
         public int lock;                        // 0 unknown, 1 locked, 2 unlocked
         public double lat = Double.NaN, lng = Double.NaN;
         public double pedalPct = Double.NaN;    // accelerator 0-100
@@ -276,6 +277,19 @@ public final class CarData {
             if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", a))) s.windowPct[a] = Math.max(0, ((Number) v).intValue());
         }
         if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getWindowOpenPercent", 5))) s.sunroofOpen = ((Number) v).intValue() > 0;
+        // Back door (tailgate): getDoorState(5) never changed (2026-11-12), so try the other likely readings too
+        // and keep the raw values on screen until we know which one the Atto 3 uses. Read only.
+        StringBuilder boot = new StringBuilder();
+        String[][] bootCalls = {{"getDoorState", "5"}, {"getDoorState", "6"}, {"getTrunkState", ""}, {"getBackDoorState", ""},
+                {"getTailgateState", ""}, {"getTrunkDoorState", ""}, {"getElectricTailgateState", ""}};
+        for (String[] bc : bootCalls) {
+            v = bc[1].isEmpty() ? call("bodywork.BYDAutoBodyworkDevice", bc[0]) : call("bodywork.BYDAutoBodyworkDevice", bc[0], Integer.parseInt(bc[1]));
+            if (!ok(v) || !(v instanceof Number)) continue;
+            int iv = ((Number) v).intValue();
+            boot.append(bc[0].replace("get", "").replace("State", "")).append(bc[1]).append('=').append(iv).append(' ');
+            if (iv == 1) s.doorOpen[5] = true;
+        }
+        s.bootRaw = boot.toString().trim();
         // Sunroof position/state (Phase 0 found these; values not confirmed yet). Position 2 (or 0) is closed.
         // Position 2 = closed (seen in the car, 2026-11-11). When the position is known it decides, so the
         // other reading can't make it flicker between closed and open.

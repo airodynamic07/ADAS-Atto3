@@ -40,63 +40,55 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         int pad = Ui.dp(c, 8);
         root.setPadding(pad, pad, pad, pad);
 
-        // --- top (user's layout, 2026-11-11): [PM2.5 / my speed limit / today] | [outside · theme row / app tray, 4 per row]
-        LinearLayout top = new LinearLayout(c);
-        LinearLayout info = new LinearLayout(c);
-        info.setOrientation(LinearLayout.VERTICAL);
-        // (user, 2026-11-11) PM2.5 gets the whole first row so "Moderate" fits; these cards use the Trip card colour
+        // --- top (user's layout, 2026-11-12): three compact rows
+        //     [PM2.5 | Outside | theme dots]  /  [My speed limit | apps in one row]  /  [Today in one line]
+        LinearLayout row1 = new LinearLayout(c);
         LinearLayout tp = infoTile("PM2.5 out / in"); pm = big(tp);
-        info.addView(tp, gap());
+        LinearLayout to = infoTile("Outside"); outside = big(to);
+        row1.addView(tp, wgap(1.1f));
+        row1.addView(to, wgap(.7f));
+        row1.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1f));
+        root.addView(row1, gap());
+
+        LinearLayout row2 = new LinearLayout(c);
         limitCard = infoTile("My speed limit");
         LinearLayout lb = new LinearLayout(c);
         lb.setGravity(Gravity.CENTER_VERTICAL);
         limit = big(new LinearLayout(c));
         ((android.view.ViewGroup) limit.getParent()).removeView(limit);
         lb.addView(limit, new LinearLayout.LayoutParams(0, -2, 1f));
-        LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(Ui.dp(c, 36), Ui.dp(c, 32));
+        LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 30));
         pb.leftMargin = Ui.dp(c, 4);
         android.widget.Button minus = Ui.chip(c, "−", false, th, v -> { prefs.setSpeedLimit(Math.max(30, prefs.speedLimit() - 10)); showLimit(); });
         android.widget.Button plus = Ui.chip(c, "+", false, th, v -> { prefs.setSpeedLimit(Math.min(180, prefs.speedLimit() + 10)); showLimit(); });
         for (android.widget.Button bt : new android.widget.Button[]{minus, plus}) { bt.setMinHeight(0); bt.setMinimumHeight(0); lb.addView(bt, pb); }
         limit.setOnClickListener(v -> { prefs.setSpeedVoice(!prefs.speedVoice()); showLimit(); });
         limitCard.addView(lb);
-        info.addView(limitCard, gap());
-        // Today: taller, fills down to the bottom of the app box; 2 lines of 2 values
-        LinearLayout td = infoTile("Today");
-        td.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout tr1 = new LinearLayout(c), tr2 = new LinearLayout(c);
-        todayKm = pair(tr1, "Distance "); todayKwh = pair(tr1, "Used ");
-        todayAvg = pair(tr2, "Avg "); todayDrive = pair(tr2, "Drive ");
-        td.addView(tr1); td.addView(tr2);
-        info.addView(td, new LinearLayout.LayoutParams(-1, 0, 1f));
-        showLimit();
-        LinearLayout.LayoutParams il = new LinearLayout.LayoutParams(0, -1, 1.4f);   // wider so Today fits (user, 2026-11-11)
-        il.rightMargin = Ui.dp(c, 6);
-        top.addView(info, il);
-
-        LinearLayout side = new LinearLayout(c);
-        side.setOrientation(LinearLayout.VERTICAL);
-        // outside temperature sits in the theme row; the theme dots get narrower
-        LinearLayout themeRow = new LinearLayout(c);
-        LinearLayout to = infoTile("Outside"); outside = big(to);
-        to.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams ol = new LinearLayout.LayoutParams(-2, -1);
-        ol.rightMargin = Ui.dp(c, 6);
-        themeRow.addView(to, ol);
-        themeRow.addView(themeControls, new LinearLayout.LayoutParams(0, -2, 1f));
-        side.addView(themeRow, gap());
+        row2.addView(limitCard, wgap(1f));
         tray = new android.widget.GridLayout(c);
-        tray.setColumnCount(4);
+        tray.setColumnCount(TRAY_N + 1);   // apps in one row + "＋"
         LinearLayout trayBox = card();
         trayBox.setGravity(Gravity.CENTER_VERTICAL);
-        trayBox.setPadding(Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6));
+        trayBox.setPadding(Ui.dp(c, 4), Ui.dp(c, 3), Ui.dp(c, 4), Ui.dp(c, 3));
         trayBox.addView(tray);
-        side.addView(trayBox, new LinearLayout.LayoutParams(-1, 0, 1f));   // bottom lines up with Today
+        row2.addView(trayBox, new LinearLayout.LayoutParams(0, -1, 1.35f));
         drawShortcuts();
-        top.addView(side, new LinearLayout.LayoutParams(0, -1, 1f));   // narrower app box + theme dots; Outside keeps its size
+        root.addView(row2, gap());
+        showLimit();
+
+        // Today in one line: Distance · Used · Avg · Drive
+        LinearLayout td = new LinearLayout(c);
+        td.setGravity(Gravity.CENTER_VERTICAL);
+        td.setBackground(Ui.round(th.card, th.line, 12, c));
+        td.setPadding(Ui.dp(c, 9), Ui.dp(c, 5), Ui.dp(c, 6), Ui.dp(c, 5));
+        TextView tl = Ui.label(c, "Today", th);
+        tl.setTextSize(10);
+        td.addView(tl, new LinearLayout.LayoutParams(-2, -2));
+        todayKm = pair(td, "  Distance "); todayKwh = pair(td, "Used ");
+        todayAvg = pair(td, "Avg "); todayDrive = pair(td, "Drive ");
         LinearLayout.LayoutParams g1 = new LinearLayout.LayoutParams(-1, -2);
         g1.bottomMargin = Ui.dp(c, 6);
-        root.addView(top, g1);
+        root.addView(td, g1);
 
         // --- box 2: this trip (user's layout, 2026-11-11): one line of energy, 9 small stats, big "Best 10 km"
         LinearLayout en = card();
@@ -136,9 +128,9 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout t9 = tile("Today route 🗺"); brakes = big(t9);
         t9.setOnClickListener(v -> openRoute());
         r3.addView(t7, w(true)); r3.addView(t8, w(true)); r3.addView(t9, w(false));
-        for (LinearLayout r : new LinearLayout[]{r1, r2, r3}) {
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-            lp.bottomMargin = Ui.dp(c, 4);
+        for (LinearLayout r : new LinearLayout[]{r1, r2, r3}) {   // the 9 cards share the free height
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, 0, 1f);
+            lp.bottomMargin = Ui.dp(c, 7);
             en.addView(r, lp);
         }
 
@@ -147,10 +139,37 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         b10.setGravity(Gravity.CENTER_VERTICAL);
         b10.setBackground(Ui.round(th.chip, th.line, 12, c));
         b10.setPadding(Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4));
+        // title + a real button to change the length (user, 2026-11-12)
+        LinearLayout bh = new LinearLayout(c);
+        bh.setGravity(Gravity.CENTER_VERTICAL);
         bestTitle = Ui.text(c, "", 12, th.muted, false);
-        bestTitle.setPadding(0, Ui.dp(c, 2), 0, Ui.dp(c, 3));
-        bestTitle.setOnClickListener(v -> editBestKm());
-        b10.addView(bestTitle);
+        bh.addView(bestTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        bestBtn = Ui.chip(c, "✎ km", false, th, v -> editBestKm());
+        bestBtn.setMinHeight(0); bestBtn.setMinimumHeight(0); bestBtn.setMinWidth(0); bestBtn.setMinimumWidth(0);
+        bestBtn.setPadding(Ui.dp(c, 10), 0, Ui.dp(c, 10), 0);
+        bestBtn.setTextSize(12);
+        bh.addView(bestBtn, new LinearLayout.LayoutParams(-2, Ui.dp(c, 26)));
+        bh.setPadding(0, Ui.dp(c, 2), 0, Ui.dp(c, 3));
+        b10.addView(bh);
+        // the latest stretch (the last N km just driven), blue, always visible
+        latestRow = new LinearLayout(c);
+        latestRow.setGravity(Gravity.BOTTOM);
+        latestRow.setBackground(Ui.round((th.accent & 0x00FFFFFF) | 0x33000000, th.accent, 8, c));
+        latestRow.setPadding(Ui.dp(c, 4), Ui.dp(c, 1), Ui.dp(c, 4), Ui.dp(c, 1));
+        latestRow.addView(Ui.text(c, "Latest", 12, th.accent, true), new LinearLayout.LayoutParams(Ui.dp(c, 48), -2));
+        latKwh = Ui.text(c, "", 16, th.accent, true);
+        latestRow.addView(latKwh, new LinearLayout.LayoutParams(Ui.dp(c, 42), -2));
+        latestRow.addView(Ui.text(c, "kWh/100", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 54), -2));
+        latSpd = Ui.text(c, "", 16, th.accent, true);
+        latestRow.addView(latSpd, new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
+        latestRow.addView(Ui.text(c, "km/h", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
+        latRange = Ui.text(c, "", 12, th.muted, false);
+        latestRow.addView(latRange, new LinearLayout.LayoutParams(0, -2, 1f));
+        latKm = Ui.text(c, "", 12, th.muted, false);
+        latestRow.addView(latKm);
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-1, -2);
+        ll.bottomMargin = Ui.dp(c, 2);
+        b10.addView(latestRow, ll);
         // the rows scroll; the title stays put. Best is always on top; 1–3 in green.
         LinearLayout list = col();
         android.widget.ScrollView sv = new android.widget.ScrollView(c);
@@ -158,15 +177,15 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         sv.setFillViewport(true);
         sv.addView(list, new android.widget.ScrollView.LayoutParams(-1, -2));
         for (int i = 0; i < BEST_N; i++) {
-            int fg = i < 3 ? TOP_GREEN : th.text;
+            int fg = i == 0 ? TOP_GREEN : th.text;   // only the best one in green (user, 2026-11-12)
             LinearLayout r = new LinearLayout(c);
             r.setGravity(Gravity.BOTTOM);
             r.setPadding(0, Ui.dp(c, 1), 0, Ui.dp(c, 1));
-            r.addView(Ui.text(c, String.valueOf(i + 1), 13, i < 3 ? TOP_GREEN : th.muted, true), new LinearLayout.LayoutParams(Ui.dp(c, 20), -2));
-            bestKwh[i] = Ui.text(c, "", 17, fg, true);
-            r.addView(bestKwh[i], new LinearLayout.LayoutParams(Ui.dp(c, 50), -2));
+            r.addView(Ui.text(c, String.valueOf(i + 1), 13, i == 0 ? TOP_GREEN : th.muted, true), new LinearLayout.LayoutParams(Ui.dp(c, 48), -2));
+            bestKwh[i] = Ui.text(c, "", 16, fg, true);
+            r.addView(bestKwh[i], new LinearLayout.LayoutParams(Ui.dp(c, 42), -2));
             r.addView(Ui.text(c, "kWh/100", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 54), -2));
-            bestSpd[i] = Ui.text(c, "", 17, fg, true);
+            bestSpd[i] = Ui.text(c, "", 16, fg, true);
             r.addView(bestSpd[i], new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
             r.addView(Ui.text(c, "km/h", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
             bestRange[i] = Ui.text(c, "", 12, th.muted, false);
@@ -179,7 +198,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         bestEmpty = Ui.text(c, "", 11, th.muted, false);
         list.addView(bestEmpty);
         b10.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1f));
-        en.addView(b10, new LinearLayout.LayoutParams(-1, 0, 1f));
+        en.addView(b10, new LinearLayout.LayoutParams(-1, Ui.dp(c, 150)));   // fixed: Latest + 4 rows, scroll for more
         TripEnergy.get(c).setBestKm(prefs.bestKm());
         root.addView(en, new LinearLayout.LayoutParams(-1, 0, 1f));   // fills the window to the bottom
     }
@@ -189,7 +208,9 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         tray.removeAllViews();
         android.content.pm.PackageManager pm = c.getPackageManager();
         java.util.List<String> list = prefs.shortcuts(c);
+        int shown = 0;
         for (String pkg : list) {
+            if (shown >= TRAY_N) break;
             android.widget.ImageView icon = new android.widget.ImageView(c);
             try { icon.setImageDrawable(pm.getApplicationIcon(pkg)); } catch (Exception e) { continue; }
             int ip = Ui.dp(c, 3);
@@ -205,6 +226,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
                 return true;
             });
             tray.addView(icon, cell());
+            shown++;
         }
         tray.addView(Ui.chip(c, "＋", false, th, v -> AppPicker.pickOne(c, th, pkg -> {
             java.util.List<String> l = prefs.shortcuts(c);
@@ -219,8 +241,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED),
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f));
         lp.width = 0;
-        lp.height = Ui.dp(c, 40);
-        int m = Ui.dp(c, 3);
+        lp.height = Ui.dp(c, 36);
+        int m = Ui.dp(c, 2);
         lp.setMargins(m, m, m, m);
         return lp;
     }
@@ -280,6 +302,14 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     }
     private TextView sub(LinearLayout t) { TextView v = Ui.text(c, "", 11, th.muted, false); t.addView(v); return v; }
 
+    private static final int TRAY_N = 5;   // apps shown in the one-row tray (user, 2026-11-12)
+
+    private LinearLayout.LayoutParams wgap(float w) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, w);
+        lp.rightMargin = Ui.dp(c, 6);
+        return lp;
+    }
+
     private LinearLayout.LayoutParams gap() {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.bottomMargin = Ui.dp(c, 6);
@@ -293,8 +323,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private static String pmLevel(int v) { return v < 0 ? "" : v <= 25 ? " good" : v <= 50 ? " moderate" : " unhealthy"; }
 
     private LinearLayout.LayoutParams w(boolean gap) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1f);
-        if (gap) lp.rightMargin = Ui.dp(c, 5);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, 1f);
+        if (gap) lp.rightMargin = Ui.dp(c, 8);   // more room between the 9 cards (user, 2026-11-12)
         return lp;
     }
 
@@ -325,7 +355,16 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         todayDrive.setText(String.format(Locale.US, "%d:%02d", ts / 3600, ts / 60 % 60));
         double bk = t.bestKm();
         String kmTxt = bk == Math.floor(bk) ? String.valueOf((int) bk) : String.format(Locale.US, "%.1f", bk);
-        bestTitle.setText("BEST " + kmTxt + " KM STRETCHES OF THIS TRIP   ✎ tap to change");
+        bestTitle.setText("BEST " + kmTxt + " KM STRETCHES OF THIS TRIP");
+        bestBtn.setText("✎ " + kmTxt + " km");
+        TripEnergy.Best lt = t.latest();
+        latestRow.setVisibility(lt == null ? View.GONE : View.VISIBLE);
+        if (lt != null) {
+            latKwh.setText(String.format(Locale.US, "%.1f", lt.kwh100));
+            latSpd.setText(Double.isNaN(lt.speed) ? "–" : String.valueOf(Math.round(lt.speed)));
+            latRange.setText(Double.isNaN(lt.min) ? "" : String.format(Locale.US, "%.0f–%.0f km/h", lt.min, lt.max));
+            latKm.setText(String.format(Locale.US, "km %.1f–%.1f", lt.fromKm, lt.toKm));
+        }
         java.util.List<TripEnergy.Best> list = t.best();
         for (int i = 0; i < BEST_N; i++) {
             boolean has = i < list.size();
@@ -383,6 +422,9 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     /** Set by the launcher: opens Today's route map in the middle window. */
     public void setRouteOpener(Runnable r) { routeOpener = r; }
     private Runnable routeOpener;
+    private android.widget.Button bestBtn;
+    private LinearLayout latestRow;
+    private TextView latKwh, latSpd, latRange, latKm;
     private void openRoute() { if (routeOpener != null) routeOpener.run(); }
 
     @Override public void setActive(boolean a) {

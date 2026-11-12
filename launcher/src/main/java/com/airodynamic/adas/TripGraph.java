@@ -86,8 +86,11 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     @Override protected void onDraw(Canvas c) {
         float d = getResources().getDisplayMetrics().density;
         float w = getWidth(), h = getHeight();
-        float left = 46 * d, right = w - 46 * d, top = 22 * d, bottom = h - 16 * d - 20 * d;   // 2 stamp rows below the lines
-        float regenY = bottom + 4 * d, brakeY = bottom + 12 * d, rowH = 6 * d;
+        // (user, 2026-11-12) legend: one column at the right; stamps sit on the 0 line, so the lines get the height
+        p.setTextSize(10 * d);
+        float legW = 15 * d + p.measureText("Power kW (real time)") + 6 * d;
+        float left = 46 * d, right = w - 40 * d - legW, top = 8 * d, bottom = h - 16 * d;
+        float rowH = 5 * d, brakeY = bottom - rowH - 1 * d, regenY = brakeY - rowH - 1 * d;
         double from = Math.max(0, nowKm - TripEnergy.WINDOW_KM), to = from + TripEnergy.WINDOW_KM;
         liveX0 = X(Math.max(from, liveFromKm), from, to, left, right);
         liveX1 = X(nowKm, from, to, left, right);
@@ -110,18 +113,14 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         }
         if (!Double.isNaN(livePower)) { eMin = Math.min(eMin, Math.floor(livePower / 10) * 10); eMax = Math.max(eMax, Math.ceil(livePower / 10) * 10); }
 
-        p.setTextSize(11 * d);
+        p.setTextSize(10 * d);
         p.setStyle(Paint.Style.FILL);
-        float lx = left;
         int ms = avgM(0), mp = avgM(1);
-        lx = legend(c, lx, 13 * d, speedCol(), "Speed km/h (" + (ms == 0 ? "real time" : ms + " m") + ")", d);
-        lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (" + (mp == 0 ? "real time" : mp + " m") + ")", d);
-        if (hLo <= hHi) lx = legend(c, lx, 13 * d, 0xFF7FA6C9, String.format(java.util.Locale.US, "Height ↕ %.0f m", hHi - hLo), d);
-        lx = legend(c, lx, 13 * d, REGEN_STAMP, "Regen", d);
-        lx = legend(c, lx, 13 * d, MILD_STAMP, "mild brake", d);
-        lx = legend(c, lx, 13 * d, HARD_STAMP, "hard brake", d);
-        p.setColor(th.muted);
-        c.drawText("· stamps are live", lx, 13 * d + 4 * d, p);
+        String[] lt = {"Speed (" + (ms == 0 ? "real time" : ms + " m") + ")", "Power kW (" + (mp == 0 ? "real time" : mp + " m") + ")",
+                hLo <= hHi ? String.format(java.util.Locale.US, "Height ↕ %.0f m", hHi - hLo) : null, "Regen", "mild", "hard brake"};
+        int[] lc = {speedCol(), POWER_COL, 0xFF7FA6C9, REGEN_STAMP, MILD_STAMP, HARD_STAMP};
+        float lx = w - legW, rowY = (h - 6 * d) / 6f, ly = 3 * d + rowY / 2;
+        for (int i = 0; i < lt.length; i++) if (lt[i] != null) { legend(c, lx, ly, lc[i], lt[i], d); ly += rowY; }
 
         // grid + axis labels (speed left, kW right)
         p.setStrokeWidth(1 * d);
@@ -189,11 +188,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         line(c, 1, from, to, eMin, eMax, left, right, top, bottom, POWER_COL, 2.2f * d, 5 * d);
         line(c, 0, from, to, 0, sMax, left, right, top, bottom, speedCol(), 3.75f * d, 6 * d);   // 1.5x thicker
         // stamp rows (live): regen green; braking orange (mild ≥0.15 g) / red (hard ≥0.4 g)
-        p.setTextSize(9 * d);
-        p.setTextAlign(Paint.Align.RIGHT);
-        p.setColor(REGEN_STAMP); c.drawText("regen", left - 5 * d, regenY + rowH, p);
-        p.setColor(MILD_STAMP); c.drawText("brake", left - 5 * d, brakeY + rowH, p);
-        p.setTextAlign(Paint.Align.LEFT);
+
         float stepPx = (float) (TripEnergy.STEP_KM / TripEnergy.WINDOW_KM * (right - left));
         for (int i = 0; i < n; i++) {
             TripEnergy.Point q = pts.get(i);
@@ -219,11 +214,11 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         p.setColor(col);
         p.setStrokeWidth(3 * d);
         p.setStyle(Paint.Style.STROKE);
-        c.drawLine(x, y, x + 16 * d, y, p);
+        c.drawLine(x, y, x + 11 * d, y, p);
         p.setStyle(Paint.Style.FILL);
         p.setColor(th.muted);
-        c.drawText(s, x + 21 * d, y + 4 * d, p);
-        return x + 21 * d + p.measureText(s) + 14 * d;
+        c.drawText(s, x + 15 * d, y + 3.5f * d, p);
+        return x + 15 * d + p.measureText(s) + 9 * d;
     }
 
     /** Smoothed line through the stored points, then on to the real-time point (which blinks). */
