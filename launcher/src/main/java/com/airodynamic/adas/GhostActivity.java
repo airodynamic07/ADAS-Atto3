@@ -94,11 +94,44 @@ public class GhostActivity extends Activity {
         FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         cl.topMargin = Ui.dp(this, 4);
         root.addView(close, cl);
+        // ⟳: load Ghost Race again (e.g. the map didn't load because the internet wasn't up yet)
+        android.widget.Button again = Ui.chip(this, "⟳", false, th, v -> { if (gecko != null) gecko.reload(); });
+        again.setAlpha(0.85f);
+        FrameLayout.LayoutParams al = new FrameLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        al.topMargin = Ui.dp(this, 4);
+        al.leftMargin = Ui.dp(this, 210);
+        root.addView(again, al);
         setContentView(root);
+        reloadWhenOnline();
+    }
+
+    /**
+     * Right after the car starts, its internet isn't up yet: Ghost Race's map then fails ("NetworkError",
+     * 2026-11-12). If the window opens without working internet, load the page again once it is there.
+     * Only for that first load: a dropout later (a tunnel) never reloads, so a race in progress is safe.
+     */
+    private android.net.ConnectivityManager.NetworkCallback netCb;
+    private void reloadWhenOnline() {
+        try {
+            final android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            android.net.Network n = cm.getActiveNetwork();
+            android.net.NetworkCapabilities caps = n == null ? null : cm.getNetworkCapabilities(n);
+            if (caps != null && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return;
+            netCb = new android.net.ConnectivityManager.NetworkCallback() {
+                @Override public void onCapabilitiesChanged(android.net.Network net, android.net.NetworkCapabilities nc) {
+                    if (!nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return;
+                    try { cm.unregisterNetworkCallback(this); } catch (Exception ignored) { }
+                    netCb = null;
+                    runOnUiThread(() -> { if (gecko != null) gecko.reload(); });
+                }
+            };
+            cm.registerDefaultNetworkCallback(netCb);
+        } catch (Throwable ignored) { }
     }
 
     @Override protected void onDestroy() {
         try { unregisterReceiver(themeRx); } catch (Exception ignored) { }
+        if (netCb != null) try { ((android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE)).unregisterNetworkCallback(netCb); } catch (Exception ignored) { }
         if (gecko != null) gecko.close();
         super.onDestroy();
         // the Firefox engine is set up once per process: end this one so a new size applies next time
