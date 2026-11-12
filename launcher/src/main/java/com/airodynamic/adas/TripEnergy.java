@@ -125,7 +125,7 @@ public final class TripEnergy implements CarData.Listener {
     private double segMin = Double.NaN, segMax = Double.NaN, segDecel, segMinPower;
     /** Live stamps for the graph (the 100 m being driven now): regen yes/no, brake 0 none, 1 mild, 2 hard. */
     /** Regen stamp only while "Power now" shows a minus number (user, 2026-11-11). */
-    public boolean liveRegen() { return !Double.isNaN(powerKw) && powerKw <= -0.5; }
+    public boolean liveRegen() { return !Double.isNaN(powerKw) && powerKw <= -0.5 && liveSpeed > 1; }   // not while charging
     public int liveBrake() { double g = segDecel / 9.81; return g >= .4 ? 2 : g >= .15 ? 1 : 0; }
     /** km where the last stored point ends (start of the live stamp). */
     public synchronized double lastPointKm() { return points.isEmpty() ? Math.max(0, km - (km % STEP_KM)) : points.get(points.size() - 1).km; }
@@ -249,7 +249,11 @@ public final class TripEnergy implements CarData.Listener {
 
     /** Top speed, peak power/regen, 0–100 runs, moving/stopped time, hard brakes (> 0.4 g). */
     private void stats(CarData.State s, double dt) {
-        if (!Double.isNaN(s.powerKw)) { peakKw = Math.max(peakKw, s.powerKw); maxRegenKw = Math.min(maxRegenKw, s.powerKw); }
+        if (!Double.isNaN(s.powerKw)) {
+            peakKw = Math.max(peakKw, s.powerKw);
+            // regen only while rolling: standing still with energy going in is charging (station / home), not regen
+            if (s.speedKmh > 1) maxRegenKw = Math.min(maxRegenKw, s.powerKw);
+        }
         if (Double.isNaN(s.speedKmh)) return;
         double v = s.speedKmh;
         segMin = Double.isNaN(segMin) ? v : Math.min(segMin, v);
