@@ -85,7 +85,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         liveX1 = X(nowKm, from, to, left, right);
 
         // scales: starting size, grown to fit what is on screen (and the live reading)
-        double sMax = 80, eMin = -30, eMax = 50;
+        double sMax = 80, eMin = -10, eMax = 30;   // power: −10…30 kW so the line isn't flat (user, 2026-11-12)
         int n = pts == null ? 0 : pts.size();
         for (int i = 0; i < n; i++) {
             if (pts.get(i).km < from) continue;
