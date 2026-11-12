@@ -73,7 +73,7 @@ public class GhostActivity extends Activity {
         root.setPadding(bw, bw, bw, bw);
         try {
             // size: Android's own scale times the Settings choice (60–150 %); 100 % = Android's own
-            int zoom = new Prefs(this).ghostZoom();
+            int zoom = 100;   // fixed: Ghost Race always fits its window in landscape (size setting removed, 2026-11-12)
             float density = zoom == 100 ? 0 : getResources().getDisplayMetrics().density * zoom / 100f;
             // landscape from the start, in the launcher's colour (Ghost Race reads both from the address)
             String t = in.getStringExtra(THEME);

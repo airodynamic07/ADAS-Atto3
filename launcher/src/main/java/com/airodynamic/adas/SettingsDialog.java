@@ -112,12 +112,6 @@ public final class SettingsDialog {
                 new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
         root.addView(ad);
 
-        section(c, root, th, "Ghost Race browser (takes effect next time the launcher starts)");
-        LinearLayout gk = row(c);
-        gk.addView(Ui.chip(c, "Firefox engine", prefs.ghostGecko(), th, v -> { prefs.setGhostGecko(true); redo.run(); }), weight(c));
-        gk.addView(Ui.chip(c, "Car's built-in", !prefs.ghostGecko(), th, v -> { prefs.setGhostGecko(false); redo.run(); }), weight(c));
-        root.addView(gk);
-
         section(c, root, th, "Left / Right camera picture");
         LinearLayout sc = row(c);
         sc.addView(Ui.chip(c, "Close-up of the side", prefs.sideCloseUp(), th, v -> { prefs.setSideCloseUp(true); redo.run(); }), weight(c));
@@ -146,13 +140,6 @@ public final class SettingsDialog {
             }
             root.addView(sm);
         }
-
-        section(c, root, th, "Ghost Race size: " + prefs.ghostZoom() + "% (applies next time Ghost Race opens)");
-        LinearLayout gz = row(c);
-        gz.addView(Ui.chip(c, "−  smaller", false, th, v -> { prefs.setGhostZoom(prefs.ghostZoom() - 10); redo.run(); }), weight(c));
-        gz.addView(Ui.chip(c, "100%", prefs.ghostZoom() == 100, th, v -> { prefs.setGhostZoom(100); redo.run(); }), weight(c));
-        gz.addView(Ui.chip(c, "+  bigger", false, th, v -> { prefs.setGhostZoom(prefs.ghostZoom() + 10); redo.run(); }), weight(c));
-        root.addView(gz);
 
         section(c, root, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
