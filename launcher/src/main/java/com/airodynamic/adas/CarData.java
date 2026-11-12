@@ -38,7 +38,9 @@ public final class CarData {
         public final int[] windowPct = {0, 0, 0, 0, 0};       // 0 unused, 1..4 windows
         public boolean sunroofOpen;
         public int roofPos = Integer.MIN_VALUE, roofState = Integer.MIN_VALUE;   // raw sunroof readings (meaning still to confirm)
-        public String bootRaw = "";             // raw back-door readings (which one works is still to confirm)
+        public String bootRaw = "";
+        public int drl = -1;                    // daytime running lights: 1 on, 0 off, -1 unknown (read only)
+        public String drlRaw = "";             // raw back-door readings (which one works is still to confirm)
         public int lock;                        // 0 unknown, 1 locked, 2 unlocked
         public double lat = Double.NaN, lng = Double.NaN;
         public double pedalPct = Double.NaN;    // accelerator 0-100
@@ -247,6 +249,22 @@ public final class CarData {
             v = call("tyre.BYDAutoTyreDevice", "getTyrePressureValue", i + 1);
             if (ok(v) && ((Number) v).intValue() > 0) s.tyreBar[i] = ((Number) v).intValue() / 100.0;   // kPa -> bar
         }
+        // Daytime running lights: which reading the Atto 3 uses is still to confirm, so try the likely ones
+        // and show the raw values (2026-11-12). READ ONLY: NATEE never switches the lights.
+        StringBuilder drl = new StringBuilder();
+        String[][] drlCalls = {{"light.BYDAutoLightDevice", "getDaytimeRunningLightState"}, {"light.BYDAutoLightDevice", "getDRLState"},
+                {"light.BYDAutoLightDevice", "getDayRunningLightState"}, {"light.BYDAutoLightDevice", "getDaytimeRunningLampState"},
+                {"setting.BYDAutoSettingDevice", "getDaytimeRunningLightOnOff"}, {"setting.BYDAutoSettingDevice", "getDRLOnOff"},
+                {"setting.BYDAutoSettingDevice", "getDaytimeRunningLight"}};
+        s.drl = -1;
+        for (String[] dc : drlCalls) {
+            v = call(dc[0], dc[1]);
+            if (!ok(v) || !(v instanceof Number)) continue;
+            int iv = ((Number) v).intValue();
+            drl.append(dc[1].replace("get", "").replace("Daytime", "Day").replace("State", "")).append('=').append(iv).append(' ');
+            if (s.drl < 0) s.drl = iv == 1 ? 1 : 0;
+        }
+        s.drlRaw = drl.toString().trim();
         // Flash state (confirmed): 1 off, 2/3 left, 4/5 right, 6/7 hazard
         if (ok(v = call("light.BYDAutoLightDevice", "getTurnLightFlashState"))) {
             int f = ((Number) v).intValue();

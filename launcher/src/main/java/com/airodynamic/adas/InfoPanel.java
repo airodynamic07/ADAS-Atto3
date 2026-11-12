@@ -41,6 +41,7 @@ public final class InfoPanel implements Panel {
     private final TextView[] tyre = new TextView[4];
     private final TextView[] tyreT = new TextView[4];
     private final DoorsView doors;
+    private TextView drlBtn;
     private final TextView doorsText, trip, tripSub, health, healthSub, odo, odoSub, serviceLabel;
     private final MusicCard music;
 
@@ -103,6 +104,16 @@ public final class InfoPanel implements Panel {
         carRow.addView(doors, new LinearLayout.LayoutParams(Ui.dp(c, 70), Ui.dp(c, 92)));
         carRow.addView(rt, new LinearLayout.LayoutParams(0, -1, 1f));
         dw.addView(carRow, new LinearLayout.LayoutParams(-1, -2));
+        // DRL status (read only); tap = BYD's own settings, where the DRL is switched (user, 2026-11-12)
+        LinearLayout dr = new LinearLayout(c);
+        dr.setGravity(Gravity.CENTER);
+        drlBtn = Ui.text(c, "◐ DRL –", 12, th.muted, true);
+        drlBtn.setGravity(Gravity.CENTER);
+        drlBtn.setPadding(Ui.dp(c, 9), Ui.dp(c, 2), Ui.dp(c, 9), Ui.dp(c, 2));
+        drlBtn.setBackground(Ui.round(th.chip, th.line, 14, c));
+        drlBtn.setOnClickListener(v -> openLightSettings());
+        dr.addView(drlBtn, new LinearLayout.LayoutParams(-2, -2));
+        dw.addView(dr, new LinearLayout.LayoutParams(-1, -2));
         doorsText = Ui.text(c, "", 10, Theme.SAFE, false);
         doorsText.setGravity(Gravity.CENTER);
         dw.addView(doorsText, new LinearLayout.LayoutParams(-1, -2));
@@ -244,6 +255,18 @@ public final class InfoPanel implements Panel {
         music.setActive(a);
     }
 
+    /** BYD's own settings (the DRL switch is there); if no BYD settings app is found, Android's Settings. */
+    private void openLightSettings() {
+        android.content.pm.PackageManager pm = c.getPackageManager();
+        for (String pkg : new String[]{"com.byd.vehiclesetting", "com.byd.carsetting", "com.byd.carsettings", "com.byd.setting",
+                "com.byd.settings", "com.byd.bydsetting", "com.byd.vehiclesettings", "com.byd.autosetting"}) {
+            android.content.Intent i = pm.getLaunchIntentForPackage(pkg);
+            if (i != null) { try { c.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); return; } catch (Exception ignored) { } }
+        }
+        try { c.startActivity(new android.content.Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); }
+        catch (Exception e) { android.widget.Toast.makeText(c, "Couldn't open the car's settings", android.widget.Toast.LENGTH_SHORT).show(); }
+    }
+
     @Override public void onCar(CarData.State s) {
         String[] names = {"FL", "FR", "RL", "RR"};
         for (int i = 0; i < 4; i++) {
@@ -259,7 +282,12 @@ public final class InfoPanel implements Panel {
         doorsText.setText((s.sunroofOpen ? "Sunroof open" : open ? "Something open" : "All closed") + lock
                 + (s.roofPos != Integer.MIN_VALUE || s.roofState != Integer.MIN_VALUE
                     ? "\nroof " + (s.roofPos == Integer.MIN_VALUE ? "–" : s.roofPos) + " / " + (s.roofState == Integer.MIN_VALUE ? "–" : s.roofState) : "")
-                + (s.bootRaw.isEmpty() ? "" : "\nboot " + s.bootRaw));   // raw values, temporary
+                + (s.bootRaw.isEmpty() ? "" : "\nboot " + s.bootRaw)
+                + (s.drlRaw.isEmpty() ? "" : "\ndrl " + s.drlRaw));   // raw values, temporary
+        boolean drlOn = s.drl == 1;
+        drlBtn.setText(s.drl < 0 ? "◐ DRL ? ›" : drlOn ? "◐ DRL ON ›" : "◐ DRL OFF ›");
+        drlBtn.setTextColor(drlOn ? Theme.SAFE : th.muted);
+        drlBtn.setBackground(Ui.round(drlOn ? (Theme.SAFE & 0x00FFFFFF) | 0x33000000 : th.chip, drlOn ? Theme.SAFE : th.line, 14, c));
         doorsText.setTextColor(open || s.lock == 2 ? Theme.CAUTION : Theme.SAFE);
 
         trip.setText(Double.isNaN(s.tripKm) ? "–" : String.format(Locale.US, "%.0f km", s.tripKm));
@@ -378,6 +406,14 @@ public final class InfoPanel implements Panel {
                     float ix = right ? hx - 4 * d : hx + 4 * d;
                     cv.drawLine(ix, hy + len * 0.25f, ix, hy + len * 0.75f, p);
                 }
+            }
+            // DRL on: a small glowing arc at the front of the car
+            if (s != null && s.drl == 1) {
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(3f * d);
+                p.setStrokeCap(Paint.Cap.ROUND);
+                p.setColor(Theme.SAFE);
+                cv.drawArc(new android.graphics.RectF(x0 + bw * .15f, top - d, x1 - bw * .15f, top + bw * .5f), 205, 130, false, p);
             }
             // boot: lid slides out behind the car when open
             float kb = ease(cur[4]);
