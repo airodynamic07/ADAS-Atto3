@@ -37,6 +37,12 @@ public final class Prefs {
     public boolean speedVoice() { return p.getBoolean("speedVoice", true); }
     public void setSpeedVoice(boolean on) { p.edit().putBoolean("speedVoice", on).apply(); }
 
+    /** Graph moving average in metres for the speed / power line: 0 = real time, 100…500; default 200 (user, 2026-11-12). */
+    public int smoothSpeed() { return p.getInt("smoothSpeed", 200); }
+    public void setSmoothSpeed(int m) { p.edit().putInt("smoothSpeed", m).apply(); }
+    public int smoothPower() { return p.getInt("smoothPower", 200); }
+    public void setSmoothPower(int m) { p.edit().putInt("smoothPower", m).apply(); }
+
     /** Tyre pressure unit: "psi" (default), "bar" or "kpa". */
     public String tyreUnit() { return p.getString("tyreUnit", "psi"); }
     public void setTyreUnit(String u) { p.edit().putString("tyreUnit", u).apply(); }

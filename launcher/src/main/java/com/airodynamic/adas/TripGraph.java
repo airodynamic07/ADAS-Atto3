@@ -29,7 +29,6 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private static final int REGEN_STAMP = 0xFF2EE59D, MILD_STAMP = 0xFFFF9A1F, HARD_STAMP = 0xFFFF3B30;
     private double nowKm, liveSpeed = Double.NaN, livePower = Double.NaN, livePedal = Double.NaN;
     private static final int SPEED_COL = 0xFF4DA3FF, POWER_COL = 0xFFFFB020, PEDAL_COL = 0xFFB8A4FF, REGEN_COL = 0x553DD9C1;
-    private static final int SMOOTH = 0;   // 100 m: each point is its own 100 m average (user, 2026-11-11; was 500 m)
    // average with 2 points each side
 
     public TripGraph(Context c, Theme th) { super(c); this.th = th; }
@@ -50,12 +49,18 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         return which == 0 ? q.speed : which == 1 ? q.power : q.pedal;
     }
 
-    /** Smoothed value of point i (average of its neighbours, ignoring missing ones). */
+    /** Moving average set in Settings, in metres (0 = real time). */
+    private int avgM(int which) {
+        Prefs pr = new Prefs(getContext());
+        return which == 0 ? pr.smoothSpeed() : which == 1 ? pr.smoothPower() : 100;
+    }
+
+    /** Value of point i averaged over the last N metres (Settings; each point is 100 m), ignoring missing ones. */
     private double smooth(int i, int which) {
         double sum = 0;
         int n = 0;
-        // power: 200 m = this point and the one before (user, 2026-11-11); speed: 100 m
-        int from = which == 1 ? i - 1 : i - SMOOTH, to = which == 1 ? i : i + SMOOTH;
+        int back = Math.max(1, avgM(which) / 100) - 1;
+        int from = i - back, to = i;
         for (int k = Math.max(0, from); k <= Math.min(pts.size() - 1, to); k++) {
             double v = val(pts.get(k), which);
             if (!Double.isNaN(v)) { sum += v; n++; }
@@ -105,8 +110,9 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         p.setTextSize(11 * d);
         p.setStyle(Paint.Style.FILL);
         float lx = left;
-        lx = legend(c, lx, 13 * d, SPEED_COL, "Speed km/h", d);
-        lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (200 m)", d);
+        int ms = avgM(0), mp = avgM(1);
+        lx = legend(c, lx, 13 * d, SPEED_COL, "Speed km/h (" + (ms == 0 ? "real time" : ms + " m") + ")", d);
+        lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (" + (mp == 0 ? "real time" : mp + " m") + ")", d);
         if (hLo <= hHi) lx = legend(c, lx, 13 * d, 0xFF7FA6C9, String.format(java.util.Locale.US, "Height ↕ %.0f m", hHi - hLo), d);
         lx = legend(c, lx, 13 * d, REGEN_STAMP, "Regen", d);
         lx = legend(c, lx, 13 * d, MILD_STAMP, "mild brake", d);
@@ -223,6 +229,16 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         path.reset();
         boolean started = false;
         int n = pts == null ? 0 : pts.size();
+        if (which < 2 && avgM(which) == 0) {   // real time: every 10 m sample as it came
+            for (double[] f : TripEnergy.get(getContext()).fine()) {
+                if (f[0] < from) continue;
+                double v = f[1 + which];
+                if (Double.isNaN(v)) { started = false; continue; }
+                float x = X(f[0], from, to, l, r), y = Y(Math.max(lo, Math.min(hi, v)), lo, hi, t, b);
+                if (!started) { path.moveTo(x, y); started = true; } else path.lineTo(x, y);
+            }
+            n = 0;
+        }
         for (int i = 0; i < n; i++) {
             TripEnergy.Point q = pts.get(i);
             if (q.km < from) continue;

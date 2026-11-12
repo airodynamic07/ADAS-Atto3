@@ -71,6 +71,11 @@ public final class TripEnergy implements CarData.Listener {
         } catch (Throwable ignored) { }   // no GPS or no permission: the graph simply has no hill shape
     }
 
+    // ---- fine samples for the graph's "real time" lines: one every 10 m, last 21 km
+    private final java.util.ArrayDeque<double[]> fine = new java.util.ArrayDeque<>();   // {km, speed, power}
+    private double fineKm = -1;
+    public synchronized java.util.List<double[]> fine() { return new java.util.ArrayList<>(fine); }
+
     public interface Listener { void onTrip(TripEnergy t); }
     private final List<Listener> listeners = new ArrayList<>();
     public void addListener(Listener l) { if (!listeners.contains(l)) listeners.add(l); l.onTrip(this); }
@@ -140,6 +145,7 @@ public final class TripEnergy implements CarData.Listener {
     private void clearStats() {
         topSpeed = topSpeedKm = peakKw = maxRegenKw = 0;
         best0100 = Double.NaN; runs0100 = hardBrakes = 0; movingSec = stoppedSec = 0;
+        synchronized (this) { fine.clear(); fineKm = -1; }
         best = new ArrayList<>(); segs.clear(); segDecel = 0; hn = 0;
         segMin = segMax = Double.NaN;
         runStart = 0; runMax = 0; runArmed = false; brakeArmed = true; prevV = Double.NaN; segSec = 0;
@@ -207,6 +213,11 @@ public final class TripEnergy implements CarData.Listener {
             if (!Double.isNaN(s.pedalPct)) { segPedalSum += s.pedalPct; segPedalN++; }
             if (!Double.isNaN(lastAlt) && s.at - lastAltAt < 5000) { altSum += lastAlt; altN++; }
             if (!Double.isNaN(s.powerKw)) { segPowerSum += s.powerKw; segPowerN++; segMinPower = Math.min(segMinPower, s.powerKw); }
+            if (fineKm < 0 || km - fineKm >= 0.01) synchronized (this) {
+                fine.addLast(new double[]{km, s.speedKmh, s.powerKw});
+                fineKm = km;
+                while (!fine.isEmpty() && fine.peekFirst()[0] < km - WINDOW_KM - 1) fine.removeFirst();
+            }
             liveSpeed = s.speedKmh;
             livePedal = s.pedalPct;
             segSec += dt;

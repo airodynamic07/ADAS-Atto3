@@ -112,6 +112,21 @@ public final class SettingsDialog {
         sc.addView(Ui.chip(c, "Whole picture", !prefs.sideCloseUp(), th, v -> { prefs.setSideCloseUp(false); redo.run(); }), weight(c));
         root.addView(sc);
 
+        // graph moving average (user, 2026-11-12): real time or over 100–500 m, separately for each line
+        for (int which = 0; which < 2; which++) {
+            final boolean spd = which == 0;
+            section(c, root, th, spd ? "Graph: speed line average" : "Graph: power line average");
+            LinearLayout sm = row(c);
+            int cur = spd ? prefs.smoothSpeed() : prefs.smoothPower();
+            for (int m : new int[]{0, 100, 200, 300, 400, 500}) {
+                sm.addView(Ui.chip(c, m == 0 ? "Real time" : m + " m", cur == m, th, v -> {
+                    if (spd) prefs.setSmoothSpeed(m); else prefs.setSmoothPower(m);
+                    redo.run();
+                }), weight(c));
+            }
+            root.addView(sm);
+        }
+
         section(c, root, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
         for (String[] u : new String[][]{{"psi", "PSI"}, {"bar", "bar"}, {"kpa", "kPa"}}) {
