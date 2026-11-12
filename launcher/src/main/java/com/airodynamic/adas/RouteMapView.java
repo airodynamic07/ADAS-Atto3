@@ -29,7 +29,8 @@ import java.util.concurrent.Executors;
  * Today's route on a dark street map (user, 2026-11-12): blue line, green start dot, red "now" dot,
  * white arrows moving along the line in the driving direction. Fits the whole route when it opens,
  * then keeps the car in view; drag / pinch to look around (it follows again 10 s later, or tap the dot).
- * Map pictures: CARTO basemaps (OpenStreetMap data), kept on disk so places seen before load at once.
+ * Map pictures: OpenStreetMap's standard map (CARTO started asking for a key, 2026-11-12), turned dark
+ * for the blue and red themes, kept on disk so places seen before load at once and OSM isn't asked again.
  */
 final class RouteMapView extends View {
     private static final int TILE = 256;
@@ -41,7 +42,7 @@ final class RouteMapView extends View {
         @Override protected int sizeOf(String k, Bitmap b) { return b.getByteCount(); }
     };
     private final Set<String> loading = new HashSet<>();
-    private static final ExecutorService NET = Executors.newFixedThreadPool(3);
+    private static final ExecutorService NET = Executors.newFixedThreadPool(2);   // OSM asks for few at a time
     private final File cacheDir;
 
     private double zoom = 15;            // map zoom (fractional)
@@ -60,6 +61,22 @@ final class RouteMapView extends View {
         this.th = th;
         d = c.getResources().getDisplayMetrics().density;
         light = th == Theme.WHITE;
+        if (!light) {   // night map: flip light to dark, soften the colours, a touch of blue
+            android.graphics.ColorMatrix m = new android.graphics.ColorMatrix(new float[]{
+                    -1, 0, 0, 0, 255,
+                    0, -1, 0, 0, 255,
+                    0, 0, -1, 0, 255,
+                    0, 0, 0, 1, 0});
+            android.graphics.ColorMatrix sat = new android.graphics.ColorMatrix();
+            sat.setSaturation(0.35f);
+            m.postConcat(sat);
+            m.postConcat(new android.graphics.ColorMatrix(new float[]{
+                    0.80f, 0, 0, 0, 0,
+                    0, 0.85f, 0, 0, 4,
+                    0, 0, 0.95f, 0, 14,
+                    0, 0, 0, 1, 0}));
+            tileP.setColorFilter(new android.graphics.ColorMatrixColorFilter(m));
+        }
         cacheDir = new File(c.getCacheDir(), "tiles");
         //noinspection ResultOfMethodCallIgnored
         cacheDir.mkdirs();
@@ -144,15 +161,14 @@ final class RouteMapView extends View {
         final int fx = x;
         NET.execute(() -> {
             Bitmap bm = null;
-            String style = light ? "light_all" : "dark_all";
-            File f = new File(cacheDir, style + "_" + key.replace('/', '_') + ".png");
+            File f = new File(cacheDir, "osm_" + key.replace('/', '_') + ".png");
             try {
                 if (f.exists()) bm = BitmapFactory.decodeFile(f.getPath());
                 if (bm == null) {
-                    char sub = "abcd".charAt((fx + y) & 3);
-                    HttpURLConnection con = (HttpURLConnection) new URL("https://" + sub + ".basemaps.cartocdn.com/"
-                            + style + "/" + z + "/" + fx + "/" + y + "@2x.png").openConnection();
-                    con.setRequestProperty("User-Agent", "NATEE-Launcher/1.0 (car home screen)");
+                    HttpURLConnection con = (HttpURLConnection) new URL("https://tile.openstreetmap.org/"
+                            + z + "/" + fx + "/" + y + ".png").openConnection();
+                    // OSM's rule: say who is asking; pictures are kept on disk so each is fetched once
+                    con.setRequestProperty("User-Agent", "NATEE-Launcher/1.0 (private car home screen, Android)");
                     con.setConnectTimeout(8000); con.setReadTimeout(10000);
                     ByteArrayOutputStream buf = new ByteArrayOutputStream();
                     try (InputStream in = con.getInputStream()) {
@@ -252,7 +268,7 @@ final class RouteMapView extends View {
 
         // map credit (required by the map's licence)
         p.setTextSize(9 * d); p.setColor(th.muted); p.setTextAlign(Paint.Align.RIGHT);
-        c.drawText("© OpenStreetMap · © CARTO", w - 6 * d, h - 6 * d, p);
+        c.drawText("© OpenStreetMap contributors", w - 6 * d, h - 6 * d, p);
         p.setTextAlign(Paint.Align.LEFT);
 
         // keep the arrows moving (about 25 frames a second, only while shown)

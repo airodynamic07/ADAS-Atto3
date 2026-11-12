@@ -49,6 +49,6 @@ final class RouteOverlay extends FrameLayout implements TripEnergy.Listener {
         long s = Math.round(t.todaySec());
         double k = t.todayKm();
         head.setText(String.format(Locale.US, "%.1f km · %d:%02d · %s kWh/100", k, s / 3600, s / 60 % 60,
-                k >= 0.5 ? String.format(Locale.US, "%.1f", t.todayKwh() / k * 100) : "–"));
+                k >= 0.5 && t.todayKwh() > 0 ? String.format(Locale.US, "%.1f", t.todayKwh() / k * 100) : "–"));
     }
 }

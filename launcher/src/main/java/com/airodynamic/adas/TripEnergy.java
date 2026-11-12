@@ -90,6 +90,7 @@ public final class TripEnergy implements CarData.Listener {
         dayKm = Double.longBitsToDouble(store.getLong("km", 0));
         dayKwh = Double.longBitsToDouble(store.getLong("kwh", 0));
         daySec = Double.longBitsToDouble(store.getLong("sec", 0));
+        if (dayKwh < 0) dayKwh = 0;   // charging counted by an older version
         rollDay();
     }
     private void rollDay() { String d = dayNow(); if (!d.equals(day)) { day = d; dayKm = dayKwh = daySec = 0; } }
@@ -177,7 +178,10 @@ public final class TripEnergy implements CarData.Listener {
             double dKwh;
             // Charging (parked and energy going in) is not driving: it doesn't count as trip or today energy
             // (user, 2026-11-12: "Used −0.3 kWh" while charging).
-            boolean charging = s.parked() && !Double.isNaN(s.powerKw) && s.powerKw < 0;
+            // standing still with energy going in = charging (regen needs the wheels turning); the gear can
+            // read "unknown" while the car is off and charging, so don't rely on P (2026-11-12: −5555 kWh/100)
+            boolean still = Double.isNaN(s.speedKmh) || s.speedKmh < 1;
+            boolean charging = still && !Double.isNaN(s.powerKw) && s.powerKw < 0;
             if (charging) {
                 fromRemaining = false;
                 dKwh = 0;
@@ -189,7 +193,7 @@ public final class TripEnergy implements CarData.Listener {
                 fromRemaining = true;
                 if (Double.isNaN(startRemain)) startRemain = s.remainKwh;
                 dKwh = (startRemain - s.remainKwh) - kwh;
-                if (dKwh < 0 && s.parked()) { startRemain = s.remainKwh + kwh; dKwh = 0; }   // charged while parked
+                if (dKwh < 0 && still) { startRemain = s.remainKwh + kwh; dKwh = 0; }   // charged while standing
             } else dKwh = 0;
             km += dKm;
             kwh += dKwh;

@@ -320,7 +320,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         double tk = t.todayKm(), te = t.todayKwh();
         todayKm.setText(String.format(Locale.US, "%.1f km", tk));
         todayKwh.setText(String.format(Locale.US, "%.1f kWh", te));
-        todayAvg.setText(tk >= 0.5 ? String.format(Locale.US, "%.1f /100", te / tk * 100) : "–");
+        todayAvg.setText(tk >= 0.5 && te > 0 ? String.format(Locale.US, "%.1f /100", te / tk * 100) : "–");
         long ts = Math.round(t.todaySec());
         todayDrive.setText(String.format(Locale.US, "%d:%02d", ts / 3600, ts / 60 % 60));
         double bk = t.bestKm();
