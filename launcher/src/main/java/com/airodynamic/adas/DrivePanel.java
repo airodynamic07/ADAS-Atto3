@@ -121,9 +121,9 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         // 8 cards in 2 rows x 4, lined up across and down; Peak / regen and Today route wider (user, 2026-11-12)
         LinearLayout r1 = new LinearLayout(c), r2 = new LinearLayout(c);
         LinearLayout t1 = tile("Distance"); dist = big(t1);
-        LinearLayout t2 = tile("Power now"); power = big(t2);
+        LinearLayout t2 = tile("Peak power"); power = big(t2);   // was Power now (shown on the graph) (2026-11-12)
         LinearLayout t6 = tile("Best 0–100"); zeroTo = big(t6);
-        LinearLayout t5 = tile("Peak · Regen"); peak = big(t5);   // peak power · energy regenerated this trip (2026-11-12)
+        LinearLayout t5 = tile("Total regen"); peak = big(t5);   // energy regenerated this trip (2026-11-12)
         r1.addView(t1, w(true)); r1.addView(t2, w(true)); r1.addView(t6, w(true)); r1.addView(t5, wide());
         LinearLayout t8 = tile("Drive time"); driveT = big(t8);
         LinearLayout t7 = tile("Avg speed"); avgSpd = big(t7);
@@ -341,10 +341,10 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         double a = t.avg();
         avg.setText(Double.isNaN(a) ? "–" : String.format(Locale.US, "%.1f", a));
         dist.setText(String.format(Locale.US, "%.1f km", t.km));
-        power.setText(Double.isNaN(t.powerKw) ? (t.fromRemaining ? "n/a" : "–") : String.format(Locale.US, "%+.0f kW", t.powerKw));
         since.setText(t.startedAt == 0 ? "" : "since " + new SimpleDateFormat("HH:mm", Locale.US).format(new Date(t.startedAt)));
         topSpd.setText(t.topSpeed > 0 ? Math.round(t.topSpeed) + " km/h" : "–");
-        peak.setText((t.peakKw > 0 ? Math.round(t.peakKw) + " kW" : "–") + " · " + String.format(Locale.US, "%.1f kWh", t.regenKwh));
+        peak.setText(String.format(Locale.US, "%.1f kWh", t.regenKwh));
+        power.setText(t.peakKw > 0 ? Math.round(t.peakKw) + " kW" : "–");
         zeroTo.setText(Double.isNaN(t.best0100) ? "–" : String.format(Locale.US, "%.1f s", t.best0100));
         double am = t.avgMoving();
         avgSpd.setText(Double.isNaN(am) ? "–" : Math.round(am) + " km/h");
