@@ -50,7 +50,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     }
 
     /** Speed line in the theme's card colour, bright enough to see: blue / red / black (user, 2026-11-12). */
-    private int speedCol() { return th == Theme.RED ? 0xFFC8202E : th == Theme.WHITE ? 0xFF8A9099 : 0xFF3A78E8;   // white theme: grey (user, 2026-11-12) }
+    private int speedCol() { return th == Theme.RED ? 0xFFC8202E : th == Theme.WHITE ? 0xFF8A9099 : 0xFF3A78E8; }   // white theme: grey (user, 2026-11-12)
 
     /** Moving average set in Settings, in metres (0 = real time). */
     private int avgM(int which) {

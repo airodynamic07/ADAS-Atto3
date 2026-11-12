@@ -178,7 +178,9 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
         setContentView(root);
         for (int i = 0; i < 3; i++) panels[i].onCar(CarData.get(this).last());
-        if (resumed) for (Panel p : panels) p.setActive(true);
+        // also while Ghost Race's window is on top (the launcher is paused but the right window is visible):
+        // a theme change rebuilt the panels and they stayed empty until Ghost Race closed (2026-11-12)
+        if (resumed || engineHost().ghostInWindow()) for (Panel p : panels) p.setActive(true);
         sendTheme();
     }
 
