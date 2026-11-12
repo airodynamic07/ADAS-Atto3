@@ -131,6 +131,12 @@ public final class Prefs {
     public int ambientOverColour() { return p.getInt("ambOverCol", 1); }
     public void setAmbientOverColour(int v) { p.edit().putInt("ambOverCol", v).apply(); }
 
+    /** Ambient light while a door is open: on/off (off until switched on), colour. Blinks like over-speed. */
+    public boolean ambientDoor() { return p.getBoolean("ambDoor", false); }
+    public void setAmbientDoor(boolean on) { p.edit().putBoolean("ambDoor", on).apply(); }
+    public int ambientDoorColour() { return p.getInt("ambDoorCol", 1); }
+    public void setAmbientDoorColour(int v) { p.edit().putInt("ambDoorCol", v).apply(); }
+
     /** Info window on the left, ChatGPT/music/energy on the right (default since 2026-11-10). */
     public boolean infoLeft() { return p.getBoolean("infoLeft", true); }
     public void setInfoLeft(boolean v) { p.edit().putBoolean("infoLeft", v).apply(); }

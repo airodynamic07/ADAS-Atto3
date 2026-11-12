@@ -100,6 +100,18 @@ public final class SettingsDialog {
                 new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
         root.addView(ao);
 
+        section(c, root, th, "Ambient light when a door is open: " + (prefs.ambientDoor() ? "on" : "off")
+                + " · blinks like over-speed, back to normal when all doors are closed");
+        LinearLayout ad = row(c);
+        ad.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        ad.addView(Ui.chip(c, prefs.ambientDoor() ? "On" : "Off", prefs.ambientDoor(), th, v -> { prefs.setAmbientDoor(!prefs.ambientDoor()); redo.run(); }),
+                new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
+        ad.addView(colourBar(c, th, prefs.ambientDoorColour(), v -> { prefs.setAmbientDoorColour(v); Ambient.get(c).apply(v, 0); }),
+                new LinearLayout.LayoutParams(0, Ui.dp(c, 48), 1f));
+        ad.addView(Ui.chip(c, "Try", false, th, v -> Ambient.get(c).apply(prefs.ambientDoorColour(), 2)),
+                new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
+        root.addView(ad);
+
         section(c, root, th, "Ghost Race browser (takes effect next time the launcher starts)");
         LinearLayout gk = row(c);
         gk.addView(Ui.chip(c, "Firefox engine", prefs.ghostGecko(), th, v -> { prefs.setGhostGecko(true); redo.run(); }), weight(c));

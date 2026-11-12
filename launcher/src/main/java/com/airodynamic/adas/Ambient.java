@@ -47,7 +47,36 @@ public final class Ambient implements CarData.Listener {
         switch (gear) { case 0: case 1: return 0; case 2: return 1; case 3: return 2; case 4: return 3; default: return -1; }
     }
 
-    private volatile boolean overLimit;
+    private volatile boolean overLimit, doorWarn;
+    private long lastDoorBlink;
+
+    /**
+     * A door (or the back door) open: blink the door colour like the over-speed warning, again every
+     * 20 s while it stays open; all closed: back to the colour before (user, 2026-11-12).
+     * Interior ambient light only.
+     */
+    private void checkDoors(CarData.State s) {
+        boolean open = false;
+        for (int i = 1; i < s.doorOpen.length; i++) open |= s.doorOpen[i];
+        long now = System.currentTimeMillis();
+        if (open && prefs.ambientDoor()) {
+            if (!doorWarn) {
+                doorWarn = true;
+                lastDoorBlink = now;
+                h.post(() -> {   // remember the colour first, then blink
+                    Object v = CarData.get(c).ambient("getIALColor", 1);
+                    if (v instanceof Number && before < 0) before = ((Number) v).intValue();
+                    apply(prefs.ambientDoorColour(), 2);
+                });
+            } else if (now - lastDoorBlink >= 20_000) {
+                lastDoorBlink = now;
+                apply(prefs.ambientDoorColour(), 2);
+            }
+        } else if (doorWarn) {
+            doorWarn = false;
+            if (overLimit) apply(prefs.ambientOverColour(), 0); else restore();
+        }
+    }
     private volatile int before = -1;   // the colour before the over-limit warning, put back afterwards
 
     private long lastBlink;
@@ -86,7 +115,7 @@ public final class Ambient implements CarData.Listener {
             }
         } else if (overLimit) {
             overLimit = false;
-            restore();
+            if (doorWarn) apply(prefs.ambientDoorColour(), 0); else restore();
         }
     }
 
@@ -99,13 +128,14 @@ public final class Ambient implements CarData.Listener {
 
     @Override public void onCar(CarData.State s) {
         checkSpeed(s);
+        checkDoors(s);
         int g = slot(s.gear);
         if (g < 0 || g == lastGear) return;
         boolean first = lastGear < 0;
         lastGear = g;
         if (first) return;   // only on a real gear change, never at start-up
         if (!prefs.ambientGear()) { gearReport = "gear " + Prefs.GEARS[g] + ": 'Ambient light by gear' is Off"; toast("Ambient: " + gearReport); return; }
-        if (overLimit) { toast("Ambient: gear " + Prefs.GEARS[g] + " skipped (over-speed blink active)"); return; }
+        if (overLimit || doorWarn) { toast("Ambient: gear " + Prefs.GEARS[g] + " skipped (warning colour active)"); return; }
         final int col = prefs.ambientColour(g), gi = g;
         apply(col, prefs.ambientStyle());
         // the car may set its own colour just after a gear change: send ours again a moment later
