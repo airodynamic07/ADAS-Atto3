@@ -21,10 +21,20 @@ public class GhostActivity extends Activity {
     /** Sent by the launcher when its colour changes (theme dots or Auto Sport). */
     static final String ACTION_THEME = "com.airodynamic.adas.GHOST_THEME";
     private String baseUrl;
+    private FrameLayout frame;
+    /** Window frame in the launcher's colour: blue, red, or black for the white theme (user, 2026-11-12). */
+    private void setFrame(String t) {
+        int col = "red".equals(t) ? 0xFFE5202E : "white".equals(t) ? 0xFF000000 : 0xFF4DA3FF;
+        if (frame == null) return;
+        android.graphics.drawable.GradientDrawable g = Ui.round(Color.BLACK, 0, 18, this);
+        g.setStroke(Ui.dp(this, 3), col);
+        frame.setBackground(g);
+    }
     private final android.content.BroadcastReceiver themeRx = new android.content.BroadcastReceiver() {
         @Override public void onReceive(android.content.Context c, Intent i) {
             String t = i.getStringExtra(THEME);
             if (gecko != null && t != null) gecko.load(baseUrl + "#natee=" + t);
+            if (t != null) setFrame(t);
         }
     };
     private GeckoGhost gecko;
@@ -56,14 +66,15 @@ public class GhostActivity extends Activity {
         setFinishOnTouchOutside(false);
 
         Theme th = new Prefs(this).theme();
-        FrameLayout root = new FrameLayout(this);
+        frame = new FrameLayout(this);
+        FrameLayout root = frame;
         int bw = Ui.dp(this, 3);
-        root.setBackground(Ui.round(Color.BLACK, Theme.SAFE, 18, this));
+        setFrame(in.getStringExtra(THEME));
         root.setPadding(bw, bw, bw, bw);
         try {
-            // Ghost Race's side panel is about 440 web pixels tall: scale so it fills this window's height
-            int hPx = in.getIntExtra(H, 0);
-            float density = hPx > 0 ? Math.max(.75f, Math.min(3f, hPx / 440f)) : 0;
+            // size: Android's own scale times the Settings choice (60–150 %); 100 % = Android's own
+            int zoom = new Prefs(this).ghostZoom();
+            float density = zoom == 100 ? 0 : getResources().getDisplayMetrics().density * zoom / 100f;
             // landscape from the start, in the launcher's colour (Ghost Race reads both from the address)
             String t = in.getStringExtra(THEME);
             baseUrl = EngineHost.GHOST_URL + "?natee=1&natee-theme=" + (t == null ? "blue" : t);
@@ -90,6 +101,9 @@ public class GhostActivity extends Activity {
         try { unregisterReceiver(themeRx); } catch (Exception ignored) { }
         if (gecko != null) gecko.close();
         super.onDestroy();
+        // the Firefox engine is set up once per process: end this one so a new size applies next time
+        // (this process only ever holds the Ghost Race window)
+        if (isFinishing()) android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     @Override public void finish() {

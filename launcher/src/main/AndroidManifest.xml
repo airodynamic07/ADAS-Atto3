@@ -169,7 +169,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:screenOrientation="landscape"
-            android:theme="@android:style/Theme.DeviceDefault.Dialog.NoActionBar"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode" />
         <!-- "Now playing" card: needs Notification access, switched on once by the user -->
         <service

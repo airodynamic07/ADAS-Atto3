@@ -127,6 +127,13 @@ public final class SettingsDialog {
             root.addView(sm);
         }
 
+        section(c, root, th, "Ghost Race size: " + prefs.ghostZoom() + "% (applies next time Ghost Race opens)");
+        LinearLayout gz = row(c);
+        gz.addView(Ui.chip(c, "−  smaller", false, th, v -> { prefs.setGhostZoom(prefs.ghostZoom() - 10); redo.run(); }), weight(c));
+        gz.addView(Ui.chip(c, "100%", prefs.ghostZoom() == 100, th, v -> { prefs.setGhostZoom(100); redo.run(); }), weight(c));
+        gz.addView(Ui.chip(c, "+  bigger", false, th, v -> { prefs.setGhostZoom(prefs.ghostZoom() + 10); redo.run(); }), weight(c));
+        root.addView(gz);
+
         section(c, root, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
         for (String[] u : new String[][]{{"psi", "PSI"}, {"bar", "bar"}, {"kpa", "kPa"}}) {

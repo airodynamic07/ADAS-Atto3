@@ -33,10 +33,22 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         if (engineHost == null) {
             engineHost = new EngineHost(this);
             engineHost.setGhostListener(open -> rebuild());   // Ghost Race opens wide, closes back
+            engineHost.setGhostArea(this::ghostArea);
         }
         return engineHost;
     }
     private boolean sportOn;        // Auto Sport currently active
+    private int[] winOrder = {2, 1, 0};
+    /** Screen box covering the first two windows (left + middle), for the Ghost Race window. */
+    private int[] ghostArea() {
+        View a = frames[winOrder[0]], b = frames[winOrder[1]];
+        if (a == null || b == null || a.getWidth() == 0) return null;
+        int[] la = new int[2], lb = new int[2];
+        a.getLocationOnScreen(la); b.getLocationOnScreen(lb);
+        int x0 = Math.min(la[0], lb[0]), y0 = Math.min(la[1], lb[1]);
+        int x1 = Math.max(la[0] + a.getWidth(), lb[0] + b.getWidth()), y1 = Math.max(la[1] + a.getHeight(), lb[1] + b.getHeight());
+        return new int[]{x0, y0, x1 - x0, y1 - y0};
+    }
     private final CameraFeed feed = new CameraFeed();
     private final Panel[] panels = new Panel[3];
     private TurnCamera turnCam;
@@ -131,9 +143,10 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         panels[2] = new InfoPanel(this, th, prefs);
         // Ghost Race open: it fills the left + middle windows; the right window and the graph stay
         // (user, 2026-11-12).
-        boolean wide = engineHost().ghostOpen();
+        boolean wide = engineHost().ghostOpen() && !engineHost().ghostInWindow();
         // Window order: Info left and ChatGPT/energy right by default (user, 2026-11-10); swappable in Settings.
         int[] order = prefs.infoLeft() ? new int[]{2, 1, 0} : new int[]{0, 1, 2};
+        winOrder = order;
         for (int i = 0; i < 3; i++) {
             frames[i] = new LinearLayout(this);
             frames[i].setOrientation(LinearLayout.VERTICAL);

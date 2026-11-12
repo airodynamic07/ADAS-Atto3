@@ -45,9 +45,11 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout row1 = new LinearLayout(c);
         LinearLayout tp = infoTile("PM2.5 out / in"); pm = big(tp);
         LinearLayout to = infoTile("Outside"); outside = big(to);
-        row1.addView(tp, wgap(1.1f));
-        row1.addView(to, wgap(.7f));
-        row1.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1f));
+        row1.addView(tp, wgap(1f));   // same width as My speed limit below: the edges line up (user, 2026-11-12)
+        LinearLayout r1b = new LinearLayout(c);
+        r1b.addView(to, wgap(.7f));
+        r1b.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1f));
+        row1.addView(r1b, new LinearLayout.LayoutParams(0, -1, 1.35f));
         root.addView(row1, gap());
 
         LinearLayout row2 = new LinearLayout(c);
@@ -104,6 +106,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         head.addView(avg);
         head.addView(Ui.text(c, " kWh/100", 11, th.muted, false));
         head.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
+        soc = Ui.text(c, "–", 12, th.text, true);   // battery moved here from its card (2026-11-12)
+        head.addView(soc);
         since = Ui.text(c, "", 11, th.muted, false);
         head.addView(since);
         TextView reset = Ui.text(c, "  ⟲", 16, th.accent, true);
@@ -113,22 +117,21 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         head.setPadding(0, 0, 0, Ui.dp(c, 5));
         en.addView(head);
 
-        LinearLayout r1 = new LinearLayout(c), r2 = new LinearLayout(c), r3 = new LinearLayout(c);
+        // 8 cards in 2 rows x 4, lined up across and down; Peak / regen and Today route wider (user, 2026-11-12)
+        LinearLayout r1 = new LinearLayout(c), r2 = new LinearLayout(c);
         LinearLayout t1 = tile("Distance"); dist = big(t1);
         LinearLayout t2 = tile("Power now"); power = big(t2);
-        LinearLayout t3 = tile("Battery"); soc = big(t3);
-        r1.addView(t1, w(true)); r1.addView(t2, w(true)); r1.addView(t3, w(false));
-        LinearLayout t4 = tile("Top speed"); topSpd = big(t4);
-        LinearLayout t5 = tile("Peak / regen"); peak = big(t5);
         LinearLayout t6 = tile("Best 0–100"); zeroTo = big(t6);
-        r2.addView(t4, w(true)); r2.addView(t5, w(true)); r2.addView(t6, w(false));
-        LinearLayout t7 = tile("Avg speed"); avgSpd = big(t7);
+        LinearLayout t5 = tile("Peak / regen"); peak = big(t5);
+        r1.addView(t1, w(true)); r1.addView(t2, w(true)); r1.addView(t6, w(true)); r1.addView(t5, wide());
         LinearLayout t8 = tile("Drive time"); driveT = big(t8);
+        LinearLayout t7 = tile("Avg speed"); avgSpd = big(t7);
+        LinearLayout t4 = tile("Top speed"); topSpd = big(t4);
         // Today route (user, 2026-11-12): replaces Hard brakes (still on the graph as stamps); tap = map
         LinearLayout t9 = tile("Today route 🗺"); brakes = big(t9);
         t9.setOnClickListener(v -> openRoute());
-        r3.addView(t7, w(true)); r3.addView(t8, w(true)); r3.addView(t9, w(false));
-        for (LinearLayout r : new LinearLayout[]{r1, r2, r3}) {   // the 9 cards share the free height
+        r2.addView(t8, w(true)); r2.addView(t7, w(true)); r2.addView(t4, w(true)); r2.addView(t9, wide());
+        for (LinearLayout r : new LinearLayout[]{r1, r2}) {   // the 9 cards share the free height
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, 0, 1f);
             lp.bottomMargin = Ui.dp(c, 7);
             en.addView(r, lp);
@@ -322,6 +325,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
     private static String pmLevel(int v) { return v < 0 ? "" : v <= 25 ? " good" : v <= 50 ? " moderate" : " unhealthy"; }
 
+    private LinearLayout.LayoutParams wide() { return new LinearLayout.LayoutParams(0, -1, 1.45f); }
+
     private LinearLayout.LayoutParams w(boolean gap) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, 1f);
         if (gap) lp.rightMargin = Ui.dp(c, 8);   // more room between the 9 cards (user, 2026-11-12)
@@ -439,6 +444,6 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         boolean over = SpeedAlert.get(c).over();
         limitCard.setBackground(over ? Ui.round(Theme.DANGER, Theme.DANGER, 12, c) : Ui.round(th.card, th.line, 12, c));
         limit.setTextColor(over ? 0xFFFFFFFF : th.text);
-        soc.setText((Double.isNaN(s.socPct) ? "–" : Math.round(s.socPct) + "%") + (s.rangeKm >= 0 ? " · " + s.rangeKm + " km" : ""));
+        soc.setText("🔋 " + (Double.isNaN(s.socPct) ? "–" : Math.round(s.socPct) + "%") + (s.rangeKm >= 0 ? " · " + s.rangeKm + " km" : "") + "   ");
     }
 }

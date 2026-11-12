@@ -43,6 +43,10 @@ public final class Prefs {
     public int smoothPower() { return p.getInt("smoothPower", 200); }
     public void setSmoothPower(int m) { p.edit().putInt("smoothPower", m).apply(); }
 
+    /** Ghost Race size in its window, percent of normal (60–150, default 100) (user, 2026-11-12). */
+    public int ghostZoom() { return p.getInt("ghostZoom", 100); }
+    public void setGhostZoom(int z) { p.edit().putInt("ghostZoom", Math.max(60, Math.min(150, z))).apply(); }
+
     /** Tyre pressure unit: "psi" (default), "bar" or "kpa". */
     public String tyreUnit() { return p.getString("tyreUnit", "psi"); }
     public void setTyreUnit(String u) { p.edit().putString("tyreUnit", u).apply(); }

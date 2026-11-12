@@ -291,18 +291,16 @@ public final class EngineHost {
     private void showGhost(boolean show) {
         // First choice: Firefox's engine (the car's WebView leaves Ghost Race's map blank). Settings can switch back.
         // Firefox engine: runs in its own window and process (GhostActivity), so a crash there can't
-        // close the launcher. The launcher goes wide first, then the window is put over that area.
+        // close the launcher. The window goes straight over the left + middle windows (user, 2026-11-12):
+        // the launcher's layout doesn't change, so the size is right the first time and the graph stays.
         if (show && ghost == null && new Prefs(ctx).ghostGecko() && act != null) {
             if (geckoOpen) return;
+            int[] r = ghostArea != null ? ghostArea.get() : null;
+            if (r == null) { int[] l = new int[2]; root.getLocationOnScreen(l); r = new int[]{l[0], l[1], root.getWidth(), root.getHeight()}; }
             geckoOpen = true;
-            if (!ghostVisible) { ghostVisible = true; if (ghostListener != null) ghostListener.onGhost(true); }
-            root.postDelayed(() -> {
-                if (!geckoOpen) return;
-                int[] l = new int[2];
-                root.getLocationOnScreen(l);
-                try { GhostActivity.open(act, l[0], l[1], root.getWidth(), root.getHeight(), theme); }
-                catch (Throwable t) { showDiag("Ghost Race window didn't open (" + t.getClass().getSimpleName() + ")"); ghostWindowClosed(); }
-            }, 250);
+            ghostVisible = true;
+            try { GhostActivity.open(act, r[0], r[1], r[2], r[3], theme); }
+            catch (Throwable t) { showDiag("Ghost Race window didn't open (" + t.getClass().getSimpleName() + ")"); ghostWindowClosed(); }
             return;
         }
         if (show && ghost == null && !geckoOpen) {
@@ -346,6 +344,12 @@ public final class EngineHost {
     public void closeGhost() { showGhost(false); }
 
     private boolean geckoOpen;
+    /** The launcher's left + middle windows on screen: {x, y, width, height}. */
+    public interface Area { int[] get(); }
+    private Area ghostArea;
+    public void setGhostArea(Area a) { ghostArea = a; }
+    /** Ghost Race is in its own window (Firefox engine): the launcher keeps its normal layout. */
+    public boolean ghostInWindow() { return geckoOpen; }
     /** Called when the launcher comes back to the front: the Firefox-engine window has closed (or crashed). */
     public void ghostWindowClosed() {
         if (!geckoOpen) return;
