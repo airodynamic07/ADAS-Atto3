@@ -17,11 +17,20 @@ import android.widget.TextView;
  * The window sits exactly over the launcher's Ghost Race area; the rest of the launcher stays usable.
  */
 public class GhostActivity extends Activity {
-    static final String X = "x", Y = "y", W = "w", H = "h";
+    static final String X = "x", Y = "y", W = "w", H = "h", THEME = "theme";
+    /** Sent by the launcher when its colour changes (theme dots or Auto Sport). */
+    static final String ACTION_THEME = "com.airodynamic.adas.GHOST_THEME";
+    private String baseUrl;
+    private final android.content.BroadcastReceiver themeRx = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context c, Intent i) {
+            String t = i.getStringExtra(THEME);
+            if (gecko != null && t != null) gecko.load(baseUrl + "#natee=" + t);
+        }
+    };
     private GeckoGhost gecko;
 
-    static void open(Activity from, int x, int y, int w, int h) {
-        Intent i = new Intent(from, GhostActivity.class).putExtra(X, x).putExtra(Y, y).putExtra(W, w).putExtra(H, h);
+    static void open(Activity from, int x, int y, int w, int h, String theme) {
+        Intent i = new Intent(from, GhostActivity.class).putExtra(X, x).putExtra(Y, y).putExtra(W, w).putExtra(H, h).putExtra(THEME, theme);
         from.startActivity(i);
         from.overridePendingTransition(0, 0);
     }
@@ -55,7 +64,11 @@ public class GhostActivity extends Activity {
             // Ghost Race's side panel is about 440 web pixels tall: scale so it fills this window's height
             int hPx = in.getIntExtra(H, 0);
             float density = hPx > 0 ? Math.max(.75f, Math.min(3f, hPx / 440f)) : 0;
-            gecko = new GeckoGhost(this, EngineHost.GHOST_URL + "?natee=1", density);   // Ghost Race starts in landscape
+            // landscape from the start, in the launcher's colour (Ghost Race reads both from the address)
+            String t = in.getStringExtra(THEME);
+            baseUrl = EngineHost.GHOST_URL + "?natee=1&natee-theme=" + (t == null ? "blue" : t);
+            gecko = new GeckoGhost(this, baseUrl, density);
+            registerReceiver(themeRx, new android.content.IntentFilter(ACTION_THEME));
             root.addView(gecko.view(), new FrameLayout.LayoutParams(-1, -1));
         } catch (Throwable t) {
             TextView err = Ui.text(this, "Firefox engine didn't start (" + t.getClass().getSimpleName() + ")\n"
@@ -74,6 +87,7 @@ public class GhostActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        try { unregisterReceiver(themeRx); } catch (Exception ignored) { }
         if (gecko != null) gecko.close();
         super.onDestroy();
     }

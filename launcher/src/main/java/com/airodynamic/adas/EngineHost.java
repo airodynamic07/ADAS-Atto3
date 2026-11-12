@@ -57,11 +57,13 @@ public final class EngineHost {
 
     private volatile boolean carOn, engineRunning, ghostVisible, ghostGps, ghostCar, batteryWanted, foreground = true;
     private String theme = "blue";
+    private final android.app.Activity act;
     private long lastGhostCarAt;
 
     @SuppressLint("SetJavaScriptEnabled")
     public EngineHost(Context c) {
         ctx = c.getApplicationContext();
+        act = c instanceof android.app.Activity ? (android.app.Activity) c : null;   // to open the Ghost Race window
         carThread.start();
         car = new Handler(carThread.getLooper());
         root = new FrameLayout(ctx);
@@ -214,6 +216,8 @@ public final class EngineHost {
     private void applyTheme() {
         js(engine, "window.setLauncherTheme && window.setLauncherTheme(" + q(theme) + ")");
         js(ghost, "window.__attoTheme && window.__attoTheme(" + q(theme) + ")");
+        if (geckoOpen) ctx.sendBroadcast(new android.content.Intent(GhostActivity.ACTION_THEME)
+                .setPackage(ctx.getPackageName()).putExtra(GhostActivity.THEME, theme));   // Ghost Race window follows
     }
 
     /** Launcher in front or not: when hidden, the page's own animation loop stops, so tick it from here. */
@@ -288,7 +292,7 @@ public final class EngineHost {
         // First choice: Firefox's engine (the car's WebView leaves Ghost Race's map blank). Settings can switch back.
         // Firefox engine: runs in its own window and process (GhostActivity), so a crash there can't
         // close the launcher. The launcher goes wide first, then the window is put over that area.
-        if (show && ghost == null && new Prefs(ctx).ghostGecko() && ctx instanceof android.app.Activity) {
+        if (show && ghost == null && new Prefs(ctx).ghostGecko() && act != null) {
             if (geckoOpen) return;
             geckoOpen = true;
             if (!ghostVisible) { ghostVisible = true; if (ghostListener != null) ghostListener.onGhost(true); }
@@ -296,7 +300,7 @@ public final class EngineHost {
                 if (!geckoOpen) return;
                 int[] l = new int[2];
                 root.getLocationOnScreen(l);
-                try { GhostActivity.open((android.app.Activity) ctx, l[0], l[1], root.getWidth(), root.getHeight()); }
+                try { GhostActivity.open(act, l[0], l[1], root.getWidth(), root.getHeight(), theme); }
                 catch (Throwable t) { showDiag("Ghost Race window didn't open (" + t.getClass().getSimpleName() + ")"); ghostWindowClosed(); }
             }, 250);
             return;

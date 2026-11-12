@@ -47,5 +47,8 @@ final class GeckoGhost {
 
     void reload() { session.reload(); }
 
+    /** Same page, only the part after # changes: Ghost Race switches colour without reloading. */
+    void load(String url) { session.loadUri(url); }
+
     void close() { try { view.releaseSession(); session.close(); } catch (Throwable ignored) { } }
 }
