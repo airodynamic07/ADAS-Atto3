@@ -132,7 +132,9 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         r2.addView(t4, w(true)); r2.addView(t5, w(true)); r2.addView(t6, w(false));
         LinearLayout t7 = tile("Avg speed"); avgSpd = big(t7);
         LinearLayout t8 = tile("Drive time"); driveT = big(t8);
-        LinearLayout t9 = tile("Hard brakes"); brakes = big(t9);
+        // Today route (user, 2026-11-12): replaces Hard brakes (still on the graph as stamps); tap = map
+        LinearLayout t9 = tile("Today route 🗺"); brakes = big(t9);
+        t9.setOnClickListener(v -> openRoute());
         r3.addView(t7, w(true)); r3.addView(t8, w(true)); r3.addView(t9, w(false));
         for (LinearLayout r : new LinearLayout[]{r1, r2, r3}) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -313,7 +315,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         long sec = Math.round(t.movingSec + t.stoppedSec);
         driveT.setText(sec >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60)
                 : String.format(Locale.US, "%d:%02d", sec / 60, sec % 60));
-        brakes.setText(String.valueOf(t.hardBrakes));
+        brakes.setText(String.format(Locale.US, "%.1f km ›", t.todayKm()));
+
         double tk = t.todayKm(), te = t.todayKwh();
         todayKm.setText(String.format(Locale.US, "%.1f km", tk));
         todayKwh.setText(String.format(Locale.US, "%.1f kWh", te));
@@ -376,6 +379,11 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     }
 
     @Override public View view() { return root; }
+
+    /** Set by the launcher: opens Today's route map in the middle window. */
+    public void setRouteOpener(Runnable r) { routeOpener = r; }
+    private Runnable routeOpener;
+    private void openRoute() { if (routeOpener != null) routeOpener.run(); }
 
     @Override public void setActive(boolean a) {
         if (a) TripEnergy.get(c).addListener(this); else TripEnergy.get(c).removeListener(this);

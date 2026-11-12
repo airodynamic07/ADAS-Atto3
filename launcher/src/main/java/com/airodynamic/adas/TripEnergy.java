@@ -50,6 +50,7 @@ public final class TripEnergy implements CarData.Listener {
     private final android.location.LocationListener gps = new android.location.LocationListener() {
         @Override public void onLocationChanged(android.location.Location l) {
             if (l.hasAltitude()) { lastAlt = l.getAltitude(); lastAltAt = System.currentTimeMillis(); }
+            if (route != null) route.add(l);   // today's route map
         }
         @Override public void onStatusChanged(String p, int st, android.os.Bundle b) { }
         @Override public void onProviderEnabled(String p) { }
@@ -58,8 +59,11 @@ public final class TripEnergy implements CarData.Listener {
     /** Called once location has been allowed. */
     public void restartGps(Context c) { startGps(c.getApplicationContext()); }
 
+    private TodayRoute route;
+
     @android.annotation.SuppressLint("MissingPermission")
     private void startGps(Context c) {
+        route = TodayRoute.get(c);
         try {
             ((android.location.LocationManager) c.getSystemService(Context.LOCATION_SERVICE)).removeUpdates(gps);
             android.location.LocationManager lm = (android.location.LocationManager) c.getSystemService(Context.LOCATION_SERVICE);

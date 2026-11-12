@@ -126,6 +126,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         row.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(row, new LinearLayout.LayoutParams(-1, 0, 1f));
         panels[0] = new DrivePanel(this, th, prefs, themeControls(th));
+        ((DrivePanel) panels[0]).setRouteOpener(() -> { routeOpen = true; showRoute(); });
         panels[1] = new EnginePanel(engineHost(), th);
         panels[2] = new InfoPanel(this, th, prefs);
         // Ghost Race open: it fills the left + middle windows; the right window and the graph stay
@@ -151,6 +152,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             row.addView(frames[i], lp);
         }
         engineHost().addGhostClose(th);
+        if (routeOpen && !wide) showRoute();   // stays open across a theme change
         turnCam.attach(bodies[1], th);
 
         FrameLayout graphBox = new FrameLayout(this);
@@ -165,6 +167,19 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         for (int i = 0; i < 3; i++) panels[i].onCar(CarData.get(this).last());
         if (resumed) for (Panel p : panels) p.setActive(true);
         sendTheme();
+    }
+
+    // Today's route map: covers the middle window (Engine Sound keeps playing underneath); ✕ closes it
+    private boolean routeOpen;
+    private RouteOverlay route;
+    private void showRoute() {
+        if (route != null && route.getParent() != null) ((android.view.ViewGroup) route.getParent()).removeView(route);
+        route = new RouteOverlay(this, theme, () -> {
+            routeOpen = false;
+            if (route != null && route.getParent() != null) ((android.view.ViewGroup) route.getParent()).removeView(route);
+            route = null;
+        });
+        bodies[1].addView(route, new FrameLayout.LayoutParams(-1, -1));
     }
 
     /** Blue / white / red dots and the Settings button. */
