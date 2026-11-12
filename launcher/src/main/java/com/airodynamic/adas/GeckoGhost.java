@@ -28,7 +28,11 @@ final class GeckoGhost {
             if (density > 0) sb.displayDensityOverride(density);
             runtime = GeckoRuntime.create(c.getApplicationContext(), sb.build());
         }
-        session = new GeckoSession();
+        // "NATEELauncher/1" at the end of the browser name: Ghost Race turns Pro on here (Air's own car, 2026-11-12)
+        String ua;
+        try { ua = GeckoSession.getDefaultUserAgent(); } catch (Throwable t) { ua = "Mozilla/5.0 (Android 10; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0"; }
+        session = new GeckoSession(new org.mozilla.geckoview.GeckoSessionSettings.Builder()
+                .userAgentOverride(ua + " NATEELauncher/1").build());
         session.setPermissionDelegate(new GeckoSession.PermissionDelegate() {
             @Override public void onAndroidPermissionsRequest(GeckoSession s, String[] permissions, Callback callback) {
                 callback.grant();   // location is already granted to the launcher at install
