@@ -28,7 +28,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private float liveX0, liveX1;
     private static final int REGEN_STAMP = 0xFF2EE59D, MILD_STAMP = 0xFFFF9A1F, HARD_STAMP = 0xFFFF3B30;
     private double nowKm, liveSpeed = Double.NaN, livePower = Double.NaN, livePedal = Double.NaN;
-    private static final int SPEED_COL = 0xFF4DA3FF, POWER_COL = 0xFFFFB020, PEDAL_COL = 0xFFB8A4FF, REGEN_COL = 0x553DD9C1;
+    private static final int POWER_COL = 0xFFFFB020, PEDAL_COL = 0xFFB8A4FF, REGEN_COL = 0x553DD9C1;
    // average with 2 points each side
 
     public TripGraph(Context c, Theme th) { super(c); this.th = th; }
@@ -48,6 +48,9 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private static double val(TripEnergy.Point q, int which) {
         return which == 0 ? q.speed : which == 1 ? q.power : q.pedal;
     }
+
+    /** Speed line in the theme's card colour, bright enough to see: blue / red / black (user, 2026-11-12). */
+    private int speedCol() { return th == Theme.RED ? 0xFFC8202E : th == Theme.WHITE ? 0xFF000000 : 0xFF3A78E8; }
 
     /** Moving average set in Settings, in metres (0 = real time). */
     private int avgM(int which) {
@@ -111,7 +114,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         p.setStyle(Paint.Style.FILL);
         float lx = left;
         int ms = avgM(0), mp = avgM(1);
-        lx = legend(c, lx, 13 * d, SPEED_COL, "Speed km/h (" + (ms == 0 ? "real time" : ms + " m") + ")", d);
+        lx = legend(c, lx, 13 * d, speedCol(), "Speed km/h (" + (ms == 0 ? "real time" : ms + " m") + ")", d);
         lx = legend(c, lx, 13 * d, POWER_COL, "Power kW (" + (mp == 0 ? "real time" : mp + " m") + ")", d);
         if (hLo <= hHi) lx = legend(c, lx, 13 * d, 0xFF7FA6C9, String.format(java.util.Locale.US, "Height ↕ %.0f m", hHi - hLo), d);
         lx = legend(c, lx, 13 * d, REGEN_STAMP, "Regen", d);
@@ -126,7 +129,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
             float y = top + (bottom - top) * i / 4f;
             p.setColor(th.line);
             c.drawLine(left, y, right, y, p);
-            p.setColor(SPEED_COL);
+            p.setColor(speedCol());
             p.setTextAlign(Paint.Align.RIGHT);
             c.drawText(String.valueOf(Math.round(sMax * (4 - i) / 4)), left - 5 * d, y + 4 * d, p);
             p.setColor(POWER_COL);
@@ -184,7 +187,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         }
 
         line(c, 1, from, to, eMin, eMax, left, right, top, bottom, POWER_COL, 2.2f * d, 5 * d);
-        line(c, 0, from, to, 0, sMax, left, right, top, bottom, SPEED_COL, 3.75f * d, 6 * d);   // 1.5x thicker
+        line(c, 0, from, to, 0, sMax, left, right, top, bottom, speedCol(), 3.75f * d, 6 * d);   // 1.5x thicker
         // stamp rows (live): regen green; braking orange (mild ≥0.15 g) / red (hard ≥0.4 g)
         p.setTextSize(9 * d);
         p.setTextAlign(Paint.Align.RIGHT);
