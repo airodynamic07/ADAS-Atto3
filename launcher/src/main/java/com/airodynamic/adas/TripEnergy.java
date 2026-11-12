@@ -37,6 +37,7 @@ public final class TripEnergy implements CarData.Listener {
         if (instance == null) {
             instance = new TripEnergy();
             instance.store = c.getApplicationContext().getSharedPreferences("today", Context.MODE_PRIVATE);
+            instance.hist = c.getApplicationContext().getSharedPreferences("history", Context.MODE_PRIVATE);
             instance.loadToday();
             CarData.get(c).addListener(instance);
             instance.startGps(c.getApplicationContext());
@@ -84,7 +85,7 @@ public final class TripEnergy implements CarData.Listener {
     // ---- today: km and kWh across all trips, starts again each day, saved so a restart keeps it
     private android.content.SharedPreferences store;
     private String day = "";
-    private double dayKm, dayKwh, daySec;
+    private double dayKm, dayKwh, daySec, dayDrv;   // dayDrv: time in a driving gear, stops included (history)
     private long savedAt;
     public double todayKm() { rollDay(); return dayKm; }
     public double todayKwh() { rollDay(); return dayKwh; }
@@ -95,14 +96,41 @@ public final class TripEnergy implements CarData.Listener {
         dayKm = Double.longBitsToDouble(store.getLong("km", 0));
         dayKwh = Double.longBitsToDouble(store.getLong("kwh", 0));
         daySec = Double.longBitsToDouble(store.getLong("sec", 0));
+        dayDrv = Math.max(daySec, Double.longBitsToDouble(store.getLong("drv", 0)));
         if (dayKwh < 0) dayKwh = 0;   // charging counted by an older version
         rollDay();
     }
-    private void rollDay() { String d = dayNow(); if (!d.equals(day)) { day = d; dayKm = dayKwh = daySec = 0; } }
+    private void rollDay() {
+        String d = dayNow();
+        if (d.equals(day)) return;
+        saveHistory();   // the day that just ended keeps its numbers in the history
+        day = d; dayKm = dayKwh = daySec = dayDrv = 0;
+    }
+
+    // ---- driving history (user, 2026-11-12): one entry per day, kept for good: "km,kWh,seconds"
+    private android.content.SharedPreferences hist;
+    private void saveHistory() {
+        if (hist == null || day.isEmpty() || dayKm < 0.05) return;
+        hist.edit().putString(day, String.format(java.util.Locale.US, "%.3f,%.3f,%.0f", dayKm, Math.max(0, dayKwh), dayDrv)).apply();
+    }
+    /** Day → {km, kWh, seconds}, today included (live). */
+    public synchronized java.util.TreeMap<String, double[]> history() {
+        rollDay();
+        java.util.TreeMap<String, double[]> out = new java.util.TreeMap<>();
+        if (hist != null) for (java.util.Map.Entry<String, ?> e : hist.getAll().entrySet()) {
+            try {
+                String[] p = String.valueOf(e.getValue()).split(",");
+                out.put(e.getKey(), new double[]{Double.parseDouble(p[0]), Double.parseDouble(p[1]), Double.parseDouble(p[2])});
+            } catch (Exception ignored) { }
+        }
+        if (dayKm >= 0.05) out.put(day, new double[]{dayKm, Math.max(0, dayKwh), dayDrv});
+        return out;
+    }
     private void saveToday(long now) {
         if (store == null || now - savedAt < 20_000) return;
         savedAt = now;
-        store.edit().putString("day", day).putLong("km", Double.doubleToLongBits(dayKm)).putLong("kwh", Double.doubleToLongBits(dayKwh)).putLong("sec", Double.doubleToLongBits(daySec)).apply();
+        store.edit().putString("day", day).putLong("km", Double.doubleToLongBits(dayKm)).putLong("kwh", Double.doubleToLongBits(dayKwh)).putLong("sec", Double.doubleToLongBits(daySec)).putLong("drv", Double.doubleToLongBits(dayDrv)).apply();
+        saveHistory();
     }
 
     public long startedAt;
@@ -260,6 +288,7 @@ public final class TripEnergy implements CarData.Listener {
         segMax = Double.isNaN(segMax) ? v : Math.max(segMax, v);
         if (v > topSpeed) { topSpeed = v; topSpeedKm = km; }
         if (v > 2) { movingSec += dt; daySec += dt; } else stoppedSec += dt;
+        if (v > 1 || s.gear >= 2) dayDrv += dt;   // in R / N / D or rolling: driving time, stops at lights included
         // 0–100 km/h: starts when the car moves off from standing still, ends at 100;
         // dropped if the speed falls back 5 km/h or it takes longer than 40 s
         if (v <= 1) { runStart = 0; runArmed = true; }

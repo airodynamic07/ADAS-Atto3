@@ -88,6 +88,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         td.addView(tl, new LinearLayout.LayoutParams(-2, -2));
         todayKm = pair(td, "  Distance "); todayKwh = pair(td, "Used ");
         todayAvg = pair(td, "Avg "); todayDrive = pair(td, "Drive ");
+        td.setOnClickListener(v -> { if (historyOpener != null) historyOpener.run(); });   // driving history
         LinearLayout.LayoutParams g1 = new LinearLayout.LayoutParams(-1, -2);
         g1.bottomMargin = Ui.dp(c, 6);
         root.addView(td, g1);
@@ -426,6 +427,9 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
     /** Set by the launcher: opens Today's route map in the middle window. */
     public void setRouteOpener(Runnable r) { routeOpener = r; }
+    /** Set by the launcher: opens the driving history over this window. */
+    public void setHistoryOpener(Runnable r) { historyOpener = r; }
+    private Runnable historyOpener;
     private Runnable routeOpener;
     private android.widget.Button bestBtn;
     private LinearLayout latestRow;

@@ -139,6 +139,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         root.addView(row, new LinearLayout.LayoutParams(-1, 0, 1f));
         panels[0] = new DrivePanel(this, th, prefs, themeControls(th));
         ((DrivePanel) panels[0]).setRouteOpener(() -> { routeOpen = true; showRoute(); });
+        ((DrivePanel) panels[0]).setHistoryOpener(() -> { historyOpen = true; showHistory(); });
         panels[1] = new EnginePanel(engineHost(), th);
         panels[2] = new InfoPanel(this, th, prefs);
         // Ghost Race open: it fills the left + middle windows; the right window and the graph stay
@@ -166,6 +167,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         }
         engineHost().addGhostClose(th);
         if (routeOpen && !wide) showRoute();   // stays open across a theme change
+        if (historyOpen) showHistory();
         turnCam.attach(bodies[1], th);
 
         FrameLayout graphBox = new FrameLayout(this);
@@ -182,6 +184,19 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         // a theme change rebuilt the panels and they stayed empty until Ghost Race closed (2026-11-12)
         if (resumed || engineHost().ghostInWindow()) for (Panel p : panels) p.setActive(true);
         sendTheme();
+    }
+
+    // Driving history: covers the right window (the Today card opens it); ✕ closes it
+    private boolean historyOpen;
+    private HistoryOverlay history;
+    private void showHistory() {
+        if (history != null && history.getParent() != null) ((android.view.ViewGroup) history.getParent()).removeView(history);
+        history = new HistoryOverlay(this, theme, () -> {
+            historyOpen = false;
+            if (history != null && history.getParent() != null) ((android.view.ViewGroup) history.getParent()).removeView(history);
+            history = null;
+        });
+        bodies[0].addView(history, new FrameLayout.LayoutParams(-1, -1));
     }
 
     // Today's route map: covers the middle window (Engine Sound keeps playing underneath); ✕ closes it
