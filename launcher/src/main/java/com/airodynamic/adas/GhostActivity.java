@@ -97,9 +97,10 @@ public class GhostActivity extends Activity {
         // ⟳: load Ghost Race again (e.g. the map didn't load because the internet wasn't up yet)
         android.widget.Button again = Ui.chip(this, "⟳", false, th, v -> { if (gecko != null) gecko.reload(); });
         again.setAlpha(0.85f);
+        // just left of "✕ Engine Sound", away from Ghost Race's own map buttons (it covered the ☀ button)
         FrameLayout.LayoutParams al = new FrameLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         al.topMargin = Ui.dp(this, 4);
-        al.leftMargin = Ui.dp(this, 210);
+        al.rightMargin = Ui.dp(this, 230);
         root.addView(again, al);
         setContentView(root);
         reloadWhenOnline();
