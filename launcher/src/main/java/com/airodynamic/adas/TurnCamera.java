@@ -35,14 +35,17 @@ public final class TurnCamera {
         this.feed = feed;
         this.prefs = prefs;
         guide.setStrokeWidth(3);
-        applySideCrop(feed, prefs.sideCloseUp());
+        applySideCrop(feed, prefs.sideCloseUp(), prefs.sideCamUp());
     }
 
     /** Close-up of the side looking back, cut from the full-resolution picture. */
-    public static void applySideCrop(CameraFeed feed, boolean closeUp) {
+    public static void applySideCrop(CameraFeed feed, boolean closeUp, int up) {
         if (closeUp) {
-            feed.setCrop(CameraFeed.RIGHT, 0.30f, 0.18f, 1.00f, 0.88f);
-            feed.setCrop(CameraFeed.LEFT, 0.00f, 0.18f, 0.70f, 0.88f);
+            // view height (user, 2026-11-12: "too low, I want to see cars coming from the side"):
+            // 0 low (as before), 1 middle, 2 high (default) — the cut-out moves up the picture
+            float top = up >= 2 ? 0.02f : up == 1 ? 0.10f : 0.18f, bot = top + 0.70f;
+            feed.setCrop(CameraFeed.RIGHT, 0.30f, top, 1.00f, bot);
+            feed.setCrop(CameraFeed.LEFT, 0.00f, top, 0.70f, bot);
         } else {
             feed.setCrop(CameraFeed.RIGHT, 0, 0, 1, 1);
             feed.setCrop(CameraFeed.LEFT, 0, 0, 1, 1);
@@ -51,7 +54,7 @@ public final class TurnCamera {
 
     /** Puts the (hidden) camera layer on top of the middle window. Called on every rebuild. */
     public void attach(FrameLayout parent, Theme th) {
-        applySideCrop(feed, prefs.sideCloseUp());
+        applySideCrop(feed, prefs.sideCloseUp(), prefs.sideCamUp());
         box = new FrameLayout(c);
         box.setBackgroundColor(0xFF000000);
         img = new ImageView(c);

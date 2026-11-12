@@ -47,6 +47,10 @@ public final class Prefs {
     public int ghostZoom() { return p.getInt("ghostZoom", 100); }
     public void setGhostZoom(int z) { p.edit().putInt("ghostZoom", Math.max(60, Math.min(150, z))).apply(); }
 
+    /** Side camera close-up height: 0 low, 1 middle, 2 high (default, 2026-11-12). */
+    public int sideCamUp() { return p.getInt("sideCamUp", 2); }
+    public void setSideCamUp(int u) { p.edit().putInt("sideCamUp", u).apply(); }
+
     /** Tyre pressure unit: "psi" (default), "bar" or "kpa". */
     public String tyreUnit() { return p.getString("tyreUnit", "psi"); }
     public void setTyreUnit(String u) { p.edit().putString("tyreUnit", u).apply(); }

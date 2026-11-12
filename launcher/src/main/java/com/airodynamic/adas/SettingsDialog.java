@@ -111,6 +111,14 @@ public final class SettingsDialog {
         sc.addView(Ui.chip(c, "Close-up of the side", prefs.sideCloseUp(), th, v -> { prefs.setSideCloseUp(true); redo.run(); }), weight(c));
         sc.addView(Ui.chip(c, "Whole picture", !prefs.sideCloseUp(), th, v -> { prefs.setSideCloseUp(false); redo.run(); }), weight(c));
         root.addView(sc);
+        section(c, root, th, "Side camera view height (close-up)");
+        LinearLayout su = row(c);
+        String[] ul = {"Low", "Middle", "High"};
+        for (int u = 0; u < 3; u++) {
+            final int uu = u;
+            su.addView(Ui.chip(c, ul[u], prefs.sideCamUp() == u, th, v -> { prefs.setSideCamUp(uu); redo.run(); }), weight(c));
+        }
+        root.addView(su);
 
         // graph moving average (user, 2026-11-12): real time or over 100–500 m, separately for each line
         for (int which = 0; which < 2; which++) {
