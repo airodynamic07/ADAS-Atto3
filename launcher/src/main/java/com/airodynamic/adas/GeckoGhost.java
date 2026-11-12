@@ -18,8 +18,16 @@ final class GeckoGhost {
     private final GeckoSession session;
     private final GeckoView view;
 
-    GeckoGhost(Context c, String url) {
-        if (runtime == null) runtime = GeckoRuntime.create(c.getApplicationContext());
+    /**
+     * @param density how many screen pixels per web pixel. Chosen so Ghost Race's side panel fills the window's
+     *                height like it does in full-screen Firefox (user, 2026-11-12); 0 = Android's own.
+     */
+    GeckoGhost(Context c, String url, float density) {
+        if (runtime == null) {
+            org.mozilla.geckoview.GeckoRuntimeSettings.Builder sb = new org.mozilla.geckoview.GeckoRuntimeSettings.Builder();
+            if (density > 0) sb.displayDensityOverride(density);
+            runtime = GeckoRuntime.create(c.getApplicationContext(), sb.build());
+        }
         session = new GeckoSession();
         session.setPermissionDelegate(new GeckoSession.PermissionDelegate() {
             @Override public void onAndroidPermissionsRequest(GeckoSession s, String[] permissions, Callback callback) {

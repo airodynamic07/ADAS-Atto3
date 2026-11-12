@@ -52,7 +52,10 @@ public class GhostActivity extends Activity {
         root.setBackground(Ui.round(Color.BLACK, Theme.SAFE, 18, this));
         root.setPadding(bw, bw, bw, bw);
         try {
-            gecko = new GeckoGhost(this, EngineHost.GHOST_URL);
+            // Ghost Race's side panel is about 440 web pixels tall: scale so it fills this window's height
+            int hPx = in.getIntExtra(H, 0);
+            float density = hPx > 0 ? Math.max(.75f, Math.min(3f, hPx / 440f)) : 0;
+            gecko = new GeckoGhost(this, EngineHost.GHOST_URL + "?natee=1", density);   // Ghost Race starts in landscape
             root.addView(gecko.view(), new FrameLayout.LayoutParams(-1, -1));
         } catch (Throwable t) {
             TextView err = Ui.text(this, "Firefox engine didn't start (" + t.getClass().getSimpleName() + ")\n"

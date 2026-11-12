@@ -128,8 +128,8 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         panels[0] = new DrivePanel(this, th, prefs, themeControls(th));
         panels[1] = new EnginePanel(engineHost(), th);
         panels[2] = new InfoPanel(this, th, prefs);
-        // Ghost Race open: it fills the middle + right windows and the graph area (user, 2026-11-10);
-        // the left window stays and gets the full height.
+        // Ghost Race open: it fills the left + middle windows; the right window and the graph stay
+        // (user, 2026-11-12).
         boolean wide = engineHost().ghostOpen();
         // Window order: Info left and ChatGPT/energy right by default (user, 2026-11-10); swappable in Settings.
         int[] order = prefs.infoLeft() ? new int[]{2, 1, 0} : new int[]{0, 1, 2};
@@ -159,7 +159,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         graphBox.addView(new TripGraph(this, th), new FrameLayout.LayoutParams(-1, -1));
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 132));
         glp.topMargin = Ui.dp(this, 8);
-        if (!wide) root.addView(graphBox, glp);
+        root.addView(graphBox, glp);   // the graph stays across the bottom with Ghost Race open too (user, 2026-11-12)
 
         setContentView(root);
         for (int i = 0; i < 3; i++) panels[i].onCar(CarData.get(this).last());
@@ -204,6 +204,8 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         super.onPause();
         if (engineHost != null) engineHost.setForeground(false);   // keep the engine sound going
         resumed = false;
+        // Ghost Race's own window is on top but the right window and graph are still visible: keep them live
+        if (engineHost != null && engineHost.ghostOpen()) { turnCam.setAllowed(false); feed.stop(); return; }
         CarData.get(this).removeListener(this);
         for (Panel p : panels) if (p != null) p.setActive(false);
         turnCam.setAllowed(false);

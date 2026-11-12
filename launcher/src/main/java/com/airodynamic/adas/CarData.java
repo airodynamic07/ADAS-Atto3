@@ -79,7 +79,7 @@ public final class CarData {
 
     public State last() { return last; }
 
-    public void addListener(Listener l) { listeners.add(l); l.onCar(last); start(); }
+    public void addListener(Listener l) { if (!listeners.contains(l)) listeners.add(l); l.onCar(last); start(); }
     public void removeListener(Listener l) { listeners.remove(l); }
 
     private synchronized void start() {
