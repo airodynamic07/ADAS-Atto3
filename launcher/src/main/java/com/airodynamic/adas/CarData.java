@@ -133,6 +133,41 @@ public final class CarData {
         return call("setting.BYDAutoSettingDevice", method, v);
     }
 
+    /** Reads one "device|method|arg" key (arg -1 = no argument). Read only. */
+    public Integer readKey(String key) {
+        String[] k = key.split("\\|");
+        if (k.length != 3) return null;
+        int a = Integer.parseInt(k[2]);
+        Object v = a < 0 ? call(k[0], k[1]) : call(k[0], k[1], a);
+        return v instanceof Number ? ((Number) v).intValue() : v instanceof Boolean ? ((Boolean) v ? 1 : 0) : null;
+    }
+
+    /**
+     * Every simple reading of these devices ("device|method|arg" → value), to find which one changes
+     * when the driver switches something in BYD's own settings (Settings → Find DRL reading).
+     * Only get…/is… methods are called: nothing on the car is changed.
+     */
+    public Map<String, Integer> snapshot(String... classes) {
+        Map<String, Integer> out = new java.util.TreeMap<>();
+        for (String cls : classes) {
+            Object d = dev(cls);
+            if (d == null) continue;
+            for (Method m : d.getClass().getMethods()) {
+                String n = m.getName();
+                if (!(n.startsWith("get") || n.startsWith("is")) || m.getDeclaringClass() == Object.class) continue;
+                Class<?> r = m.getReturnType();
+                if (!(r == int.class || r == boolean.class || r == Integer.class || r == Boolean.class)) continue;
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 0) put(out, cls + "|" + n + "|-1");
+                else if (p.length == 1 && p[0] == int.class) for (int a = 0; a <= 5; a++) put(out, cls + "|" + n + "|" + a);
+            }
+        }
+        return out;
+    }
+    private void put(Map<String, Integer> out, String key) {
+        try { Integer v = readKey(key); if (v != null && ok(v)) out.put(key, v); } catch (Throwable ignored) { }
+    }
+
     private Object call(String cls, String name, Object... args) {
         Object d = dev(cls);
         if (d == null) return null;
@@ -257,7 +292,14 @@ public final class CarData {
                 {"setting.BYDAutoSettingDevice", "getDaytimeRunningLightOnOff"}, {"setting.BYDAutoSettingDevice", "getDRLOnOff"},
                 {"setting.BYDAutoSettingDevice", "getDaytimeRunningLight"}};
         s.drl = -1;
+        // learned in Settings → "Find DRL reading": device|method|arg and the value that means ON
+        String learned = Prefs.drlKey(ctx);
+        if (!learned.isEmpty()) {
+            Integer lv = readKey(learned);
+            if (lv != null) { s.drl = lv == Prefs.drlOn(ctx) ? 1 : 0; drl.append(learned.split("\\|")[1].replace("get", "")).append('=').append(lv).append(' '); }
+        }
         for (String[] dc : drlCalls) {
+            if (!learned.isEmpty()) break;
             v = call(dc[0], dc[1]);
             if (!ok(v) || !(v instanceof Number)) continue;
             int iv = ((Number) v).intValue();

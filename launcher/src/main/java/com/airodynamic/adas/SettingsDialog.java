@@ -163,6 +163,12 @@ public final class SettingsDialog {
         }), weight(c));
         root.addView(lw);
 
+        // DRL button showed OFF always (2026-11-12): learn which reading follows the DRL switch
+        section(c, root, th, "DRL button: " + (Prefs.drlKey(c).isEmpty() ? "reading not found yet" : "using " + Prefs.drlKey(c).replaceAll(".*\\|(get)?", "").replaceAll("\\|-1$", "")));
+        LinearLayout dl = row(c);
+        dl.addView(Ui.chip(c, "Find DRL reading", false, th, v -> findDrl(c, th, redo)), weight(c));
+        root.addView(dl);
+
         section(c, root, th, "Problems");
         LinearLayout pb = row(c);
         pb.addView(Ui.chip(c, "Show crash log", false, th, v -> new Thread(() -> {
@@ -233,6 +239,51 @@ public final class SettingsDialog {
             try { out = Updater.adbShell(c, cmd); out = what + ": " + (out.isEmpty() ? "done" : out); }
             catch (Exception e) { out = what + ": couldn't reach the car's ADB (" + e.getClass().getSimpleName() + ")"; }
             host.log(out);
+        }).start();
+    }
+
+    /**
+     * Step 1: note every light / setting reading. Step 2: the driver switches the DRL in BYD's page and
+     * comes back. Step 3: the readings that changed are shown; the driver says whether the DRL is now
+     * on or off, and the first changed light reading is remembered. Reading only, nothing is switched.
+     */
+    private static void findDrl(Context c, Theme th, Runnable redo) {
+        final String[] devs = {"light.BYDAutoLightDevice", "setting.BYDAutoSettingDevice", "bodywork.BYDAutoBodyworkDevice"};
+        android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+        android.widget.Toast.makeText(c, "Reading the car… (a few seconds)", android.widget.Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            final java.util.Map<String, Integer> before = CarData.get(c).snapshot(devs);
+            ui.post(() -> new AlertDialog.Builder(c).setTitle("Find DRL reading (" + before.size() + " readings noted)")
+                    .setMessage("1. Open BYD's Light page → Exterior and tap Daytime Running Light once (on → off, or off → on).\n"
+                            + "2. Come back here and tap Done.")
+                    .setPositiveButton("Done", (d, w) -> new Thread(() -> {
+                        java.util.Map<String, Integer> after = CarData.get(c).snapshot(devs);
+                        final java.util.List<String> changed = new java.util.ArrayList<>();
+                        for (java.util.Map.Entry<String, Integer> e : after.entrySet()) {
+                            Integer b = before.get(e.getKey());
+                            if (b != null && !b.equals(e.getValue())) changed.add(e.getKey());
+                        }
+                        // light device first
+                        java.util.Collections.sort(changed, (a, b2) -> Boolean.compare(!a.startsWith("light."), !b2.startsWith("light.")));
+                        ui.post(() -> {
+                            if (changed.isEmpty()) {
+                                new AlertDialog.Builder(c).setTitle("No reading changed")
+                                        .setMessage("NATEE couldn't see the DRL switch change. Send a photo of this to Claude.")
+                                        .setPositiveButton("OK", null).show();
+                                return;
+                            }
+                            StringBuilder sb = new StringBuilder();
+                            for (String k : changed) sb.append(k.replaceAll(".*\\.BYDAuto|Device", "")).append(": ")
+                                    .append(before.get(k)).append(" → ").append(after.get(k)).append('\n');
+                            final String key = changed.get(0);
+                            new AlertDialog.Builder(c).setTitle("Changed readings (send a photo to Claude)")
+                                    .setMessage(sb + "\nIs the DRL ON or OFF now?")
+                                    .setPositiveButton("DRL is ON", (d2, w2) -> { Prefs.setDrl(c, key, after.get(key)); redo.run(); })
+                                    .setNegativeButton("DRL is OFF", (d2, w2) -> { Prefs.setDrl(c, key, before.get(key)); redo.run(); })
+                                    .setNeutralButton("Cancel", null).show();
+                        });
+                    }).start())
+                    .setNegativeButton("Cancel", null).show());
         }).start();
     }
 

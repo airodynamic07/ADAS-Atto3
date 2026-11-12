@@ -51,6 +51,11 @@ public final class Prefs {
     public int sideCamUp() { return p.getInt("sideCamUp", 2); }
     public void setSideCamUp(int u) { p.edit().putInt("sideCamUp", u).apply(); }
 
+    /** The DRL reading found in Settings ("device|method|arg") and its ON value. */
+    public static String drlKey(android.content.Context c) { return c.getSharedPreferences("adas_launcher", 0).getString("drlKey", ""); }
+    public static int drlOn(android.content.Context c) { return c.getSharedPreferences("adas_launcher", 0).getInt("drlOn", 1); }
+    public static void setDrl(android.content.Context c, String key, int on) { c.getSharedPreferences("adas_launcher", 0).edit().putString("drlKey", key).putInt("drlOn", on).apply(); }
+
     /** Tyre pressure unit: "psi" (default), "bar" or "kpa". */
     public String tyreUnit() { return p.getString("tyreUnit", "psi"); }
     public void setTyreUnit(String u) { p.edit().putString("tyreUnit", u).apply(); }
