@@ -43,8 +43,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         // --- top (user's layout, 2026-11-12): three compact rows
         //     [PM2.5 | Outside | theme dots]  /  [My speed limit | apps in one row]  /  [Today in one line]
         LinearLayout row1 = new LinearLayout(c);
-        LinearLayout tp = infoTile("PM2.5 out / in"); pm = big(tp);
-        LinearLayout to = infoTile("Outside"); outside = big(to);
+        LinearLayout tp = flatTile("PM2.5"); pm = big(tp);
+        LinearLayout to = flatTile("Outside"); outside = big(to);
         row1.addView(tp, wgap(1f));   // same width as My speed limit below: the edges line up (user, 2026-11-12)
         LinearLayout r1b = new LinearLayout(c);
         r1b.addView(to, wgap(.7f));
@@ -53,19 +53,19 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         root.addView(row1, gap());
 
         LinearLayout row2 = new LinearLayout(c);
-        limitCard = infoTile("My speed limit");
+        limitCard = flatTile("Limit");
         LinearLayout lb = new LinearLayout(c);
         lb.setGravity(Gravity.CENTER_VERTICAL);
         limit = big(new LinearLayout(c));
         ((android.view.ViewGroup) limit.getParent()).removeView(limit);
         lb.addView(limit, new LinearLayout.LayoutParams(0, -2, 1f));
-        LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 30));
+        LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 26));
         pb.leftMargin = Ui.dp(c, 4);
         android.widget.Button minus = Ui.chip(c, "−", false, th, v -> { prefs.setSpeedLimit(Math.max(30, prefs.speedLimit() - 10)); showLimit(); });
         android.widget.Button plus = Ui.chip(c, "+", false, th, v -> { prefs.setSpeedLimit(Math.min(180, prefs.speedLimit() + 10)); showLimit(); });
         for (android.widget.Button bt : new android.widget.Button[]{minus, plus}) { bt.setMinHeight(0); bt.setMinimumHeight(0); lb.addView(bt, pb); }
         limit.setOnClickListener(v -> { prefs.setSpeedVoice(!prefs.speedVoice()); showLimit(); });
-        limitCard.addView(lb);
+        limitCard.addView(lb, new LinearLayout.LayoutParams(0, -2, 1f));
         row2.addView(limitCard, wgap(1f));
         tray = new android.widget.GridLayout(c);
         tray.setColumnCount(TRAY_N + 1);   // apps in one row + "＋"
@@ -82,7 +82,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout td = new LinearLayout(c);
         td.setGravity(Gravity.CENTER_VERTICAL);
         td.setBackground(Ui.round(th.card, th.line, 12, c));
-        td.setPadding(Ui.dp(c, 9), Ui.dp(c, 5), Ui.dp(c, 6), Ui.dp(c, 5));
+        td.setPadding(Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 8), Ui.dp(c, 10));   // roomier (user, 2026-11-12)
         TextView tl = Ui.label(c, "Today", th);
         tl.setTextSize(10);
         td.addView(tl, new LinearLayout.LayoutParams(-2, -2));
@@ -245,7 +245,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED),
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f));
         lp.width = 0;
-        lp.height = Ui.dp(c, 36);
+        lp.height = Ui.dp(c, 30);
         int m = Ui.dp(c, 2);
         lp.setMargins(m, m, m, m);
         return lp;
@@ -285,12 +285,23 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         return l;
     }
 
+    /** Flat card: label beside the value, one line (user, 2026-11-12: more room for Today). */
+    private LinearLayout flatTile(String label) {
+        LinearLayout l = new LinearLayout(c);
+        l.setGravity(Gravity.CENTER_VERTICAL);
+        l.setBackground(Ui.round(th.card, th.line, 12, c));
+        l.setPadding(Ui.dp(c, 8), Ui.dp(c, 2), Ui.dp(c, 6), Ui.dp(c, 2));
+        TextView t = Ui.text(c, label + "  ", 10.5f, th.muted, false);
+        l.addView(t);
+        return l;
+    }
+
     /** "Label value" in half of a row (Today card). */
     private TextView pair(LinearLayout row, String label) {
         LinearLayout p = new LinearLayout(c);
         p.setGravity(Gravity.BOTTOM);
-        p.addView(Ui.text(c, label, 11, th.muted, false));
-        TextView v = Ui.text(c, "–", 14, th.text, true);
+        p.addView(Ui.text(c, label, 12, th.muted, false));
+        TextView v = Ui.text(c, "–", 16, th.text, true);
         v.setSingleLine(true);
         p.addView(v);
         row.addView(p, new LinearLayout.LayoutParams(0, -2, 1f));
