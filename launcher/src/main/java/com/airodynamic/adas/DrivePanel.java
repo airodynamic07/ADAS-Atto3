@@ -111,14 +111,16 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
         // 8 short cards, 2 rows x 4, same columns as above (user, 2026-11-13)
         LinearLayout r1 = new LinearLayout(c), r2 = new LinearLayout(c);
-        LinearLayout t1 = tile("Today route"); TextView mapB = big(t1); mapB.setText("🗺 Map ›"); mapB.setTextColor(th.accent);
+        LinearLayout t1 = tile("Today route"); TextView mapB = big(t1); mapB.setText("🗺 Map ›");
+        tapButton(t1, mapB);
         t1.setOnClickListener(v -> openRoute());
         LinearLayout t2 = tile("Peak power"); power = big(t2);
         LinearLayout t6 = tile("Best 0–100"); zeroTo = big(t6);
         LinearLayout t5 = tile("Regen (kWh · %)"); peak = big(t5);   // "0.8 · 12 %" on one line (user, 2026-11-13)
         regenPct = Ui.text(c, "", 11, TOP_GREEN, true);
         r1.addView(t1, w(true)); r1.addView(t2, w(true)); r1.addView(t6, w(true)); r1.addView(t5, wide());
-        LinearLayout t8 = tile("Every day"); TextView histB = big(t8); histB.setText("📅 History ›"); histB.setTextColor(th.accent);
+        LinearLayout t8 = tile("Every day"); TextView histB = big(t8); histB.setText("📅 History ›");
+        tapButton(t8, histB);
         t8.setOnClickListener(v -> { if (historyOpener != null) historyOpener.run(); });
         LinearLayout t7 = tile("Avg speed"); avgSpd = big(t7);
         LinearLayout t4 = tile("Top speed"); topSpd = big(t4);
@@ -370,6 +372,15 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         sr.spd.setText(Double.isNaN(b.speed) ? "–" : String.valueOf(Math.round(b.speed)));
         sr.range.setText(Double.isNaN(b.min) ? "" : String.format(Locale.US, "%.0f–%.0f", b.min, b.max));
         sr.km.setText(String.format(Locale.US, "%.1f–%.1f · %s", b.fromKm, b.toKm, tag));
+    }
+
+    /** Tappable cards look like buttons: yellow in the blue / red themes, the theme's blue in white (user, 2026-11-13). */
+    private void tapButton(LinearLayout card, TextView value) {
+        boolean white = th == Theme.WHITE;
+        int bg = white ? th.accent : 0xFFFFC21A, fg = white ? 0xFFFFFFFF : 0xFF1A1200;
+        card.setBackground(Ui.round(bg, bg, 10, c));
+        value.setTextColor(fg);
+        ((TextView) card.getChildAt(0)).setTextColor(white ? 0xDDFFFFFF : 0xFF3A2A00);
     }
 
     private LinearLayout.LayoutParams wide() { return new LinearLayout.LayoutParams(0, -1, 1.45f); }

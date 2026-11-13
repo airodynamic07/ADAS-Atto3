@@ -24,7 +24,7 @@ public class GhostActivity extends Activity {
     private FrameLayout frame;
     /** Window frame in the launcher's colour: blue, red, or black for the white theme (user, 2026-11-12). */
     private void setFrame(String t) {
-        int col = "red".equals(t) ? 0xFF6B1018 : "white".equals(t) ? 0xFF000000 : 0xFF1C3D78;   // dark red / black / dark blue (user, 2026-11-12)
+        int col = "red".equals(t) ? 0xFF6B1018 : "white".equals(t) ? 0xFF9AA0A8 : 0xFF1C3D78;   // dark red / black / dark blue (user, 2026-11-12)
         if (frame == null) return;
         android.graphics.drawable.GradientDrawable g = Ui.round(Color.BLACK, 0, 18, this);
         g.setStroke(Ui.dp(this, 3), col);

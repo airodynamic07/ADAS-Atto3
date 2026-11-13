@@ -44,7 +44,7 @@ public class VideoActivity extends Activity {
 
         Theme th = new Prefs(this).theme();
         String t = in.getStringExtra(THEME);
-        int frameCol = "red".equals(t) ? 0xFF6B1018 : "white".equals(t) ? 0xFF000000 : 0xFF1C3D78;
+        int frameCol = "red".equals(t) ? 0xFF6B1018 : "white".equals(t) ? 0xFF9AA0A8 : 0xFF1C3D78;
         FrameLayout root = new FrameLayout(this);
         android.graphics.drawable.GradientDrawable g = Ui.round(Color.BLACK, 0, 14, this);
         g.setStroke(Ui.dp(this, 2), frameCol);
