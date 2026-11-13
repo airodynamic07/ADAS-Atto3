@@ -128,6 +128,9 @@ public final class InfoPanel implements Panel {
         music = new MusicCard(c, th);
         music.setVideoOpener(this::openVideo);
         root.addView(music.view(), new LinearLayout.LayoutParams(-1, 0, 1f));   // fills the window to the bottom (lyrics)
+        LinearLayout.LayoutParams wxl = new LinearLayout.LayoutParams(-1, -2);   // weather: separate card (user, 2026-11-13)
+        wxl.topMargin = Ui.dp(c, 6);
+        root.addView(music.weatherView(), wxl);
 
     }
 

@@ -38,6 +38,9 @@ public final class MusicCard {
     private final Button play, like;
     private final TextView lyPrev, lyNow, lyNext;
     private final LinearLayout queueRow;
+    private final LinearLayout weatherCard;
+    /** The weather card: shown by the left window as a separate card under the music box. */
+    public android.view.View weatherView() { return weatherCard; }
     private String queueKey = "";
     private final TextView lab;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -148,9 +151,8 @@ public final class MusicCard {
         wl.addView(Ui.text(c, "In 1 hour", 11, th.muted, false));
         wxNext = Ui.text(c, "", 18, th.text, true); wl.addView(wxNext);
         wx.addView(wl, new LinearLayout.LayoutParams(-2, -2));
-        LinearLayout.LayoutParams wxl = new LinearLayout.LayoutParams(-1, -2);
-        wxl.topMargin = wxl.bottomMargin = Ui.dp(c, 4);
-        root.addView(wx, wxl);
+        wx.setBackground(Ui.round(th.card, th.line, 14, c));
+        weatherCard = wx;   // its own card under the music box, not inside it (user, 2026-11-13)
 
         // up next: the app's queue, swipe sideways, tap a song to play it
         root.addView(Ui.label(c, "Up next", th));
