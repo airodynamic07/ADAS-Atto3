@@ -182,6 +182,12 @@
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode" />
+        <activity
+            android:name=".KmInputActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
         <!-- "Now playing" card: needs Notification access, switched on once by the user -->
         <service
             android:name=".NowPlaying"

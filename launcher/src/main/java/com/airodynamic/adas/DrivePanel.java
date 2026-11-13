@@ -445,38 +445,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
     /** Pop-up with the number keyboard: type the stretch length in km (1–100). */
     private void editBestKm() {
-        final android.widget.EditText in = new android.widget.EditText(c);
-        in.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        double cur = TripEnergy.get(c).bestKm();
-        in.setText(cur == Math.floor(cur) ? String.valueOf((int) cur) : String.valueOf(cur));
-        in.setSelectAllOnFocus(true);
-        in.setTextSize(26);
-        LinearLayout box = new LinearLayout(c);
-        int p = Ui.dp(c, 20);
-        box.setPadding(p, Ui.dp(c, 6), p, 0);
-        box.setGravity(Gravity.BOTTOM);
-        box.addView(in, new LinearLayout.LayoutParams(0, -2, 1f));
-        box.addView(Ui.text(c, " km", 16, th.muted, false));
-        android.app.AlertDialog d = new android.app.AlertDialog.Builder(c)
-                .setTitle("Best stretch length")
-                .setMessage("Find the 10 best stretches of this many km (1–100)")
-                .setView(box)
-                .setPositiveButton("Save", (dlg, w) -> {
-                    try {
-                        float km = Float.parseFloat(in.getText().toString().trim());
-                        if (km < 1 || km > 100) throw new NumberFormatException();
-                        prefs.setBestKm(km);
-                        TripEnergy.get(c).setBestKm(km);
-                    } catch (Exception e) {
-                        Toast.makeText(c, "Type a number from 1 to 100", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .create();
-        // open the number keyboard straight away
-        d.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-        d.show();
-        in.requestFocus();
+        // its own window, so it's always on top (also over Ghost Race / the song video) and the keyboard opens
+        c.startActivity(new android.content.Intent(c, KmInputActivity.class));
     }
 
     @Override public View view() { return root; }
