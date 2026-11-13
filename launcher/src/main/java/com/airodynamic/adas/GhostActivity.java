@@ -77,6 +77,30 @@ public class GhostActivity extends Activity {
         if (gecko != null) gecko.load(baseUrl + "#natee=" + theme + (big ? "" : "&mini=1"));   // # change: no reload
     }
 
+    /** Hold ⟳: can this window reach the map servers? (white theme's day map failed, 2026-11-13) */
+    private void netTest() {
+        android.widget.Toast.makeText(this, "Testing the map servers…", android.widget.Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            String[] urls = {"https://tiles.openfreemap.org/styles/liberty", "https://tiles.openfreemap.org/styles/dark",
+                    "https://tiles.openfreemap.org/planet", "https://ghostrace.airodynamic.workers.dev/"};
+            StringBuilder sb = new StringBuilder();
+            for (String u : urls) {
+                long t0 = System.currentTimeMillis();
+                String res;
+                try {
+                    java.net.HttpURLConnection con = (java.net.HttpURLConnection) new java.net.URL(u).openConnection();
+                    con.setConnectTimeout(8000); con.setReadTimeout(8000);
+                    con.setRequestProperty("User-Agent", "Mozilla/5.0 (Android 10; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0 NATEELauncher/1");
+                    res = "HTTP " + con.getResponseCode();
+                    con.disconnect();
+                } catch (Throwable e) { res = e.getClass().getSimpleName() + ": " + e.getMessage(); }
+                sb.append(u.replace("https://", "")).append("\n   → ").append(res).append("  (").append(System.currentTimeMillis() - t0).append(" ms)\n");
+            }
+            runOnUiThread(() -> new android.app.AlertDialog.Builder(this).setTitle("Map server test (send a photo to Claude)")
+                    .setMessage(sb.toString()).setPositiveButton("OK", null).show());
+        }).start();
+    }
+
     @Override protected void onNewIntent(Intent in) {
         super.onNewIntent(in);
         int[] a = in.getIntArrayExtra(AREAS);
@@ -139,9 +163,10 @@ public class GhostActivity extends Activity {
         root.addView(bSmall, sl);
         bAgain = Ui.chip(this, "⟳", false, th, v -> { if (gecko != null) gecko.reload(); });
         bAgain.setAlpha(0.85f);
+        bAgain.setOnLongClickListener(v -> { netTest(); return true; });
         FrameLayout.LayoutParams al = new FrameLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         al.topMargin = Ui.dp(this, 4);
-        al.rightMargin = Ui.dp(this, 200);
+        al.rightMargin = Ui.dp(this, 330);
         root.addView(bAgain, al);
         bStop = Ui.chip(this, "■  Stop", false, th, v -> new android.app.AlertDialog.Builder(this)
                 .setTitle("Stop Ghost Race?").setMessage("Recording stops and Ghost Race closes.")
@@ -152,7 +177,7 @@ public class GhostActivity extends Activity {
         bStop.setAlpha(0.9f);
         FrameLayout.LayoutParams stl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         stl.topMargin = Ui.dp(this, 4);
-        stl.leftMargin = Ui.dp(this, 230);
+        stl.rightMargin = Ui.dp(this, 200);   // left of "Small", on the map, clear of Ghost Race's cards
         root.addView(bStop, stl);
         bEnlarge = Ui.chip(this, "⤢  Enlarge", false, th, v -> { mode = 0; place(); });
         FrameLayout.LayoutParams el = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.END);
