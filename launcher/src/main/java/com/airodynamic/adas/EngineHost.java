@@ -68,7 +68,19 @@ public final class EngineHost {
         car = new Handler(carThread.getLooper());
         root = new FrameLayout(ctx);
         root.setBackgroundColor(Color.BLACK);
-        try { assets = ctx.createPackageContext(ENGINE_PKG, 0).getAssets(); } catch (Exception ignored) {}
+        openAssets();
+        // a new Engine Sound installed (e.g. from ADAS Probe): read the new app and reload the page; before, NATEE
+        // kept showing the old page until it restarted (2026-11-13)
+        android.content.IntentFilter pf = new android.content.IntentFilter();
+        pf.addAction(android.content.Intent.ACTION_PACKAGE_REPLACED);
+        pf.addAction(android.content.Intent.ACTION_PACKAGE_ADDED);
+        pf.addDataScheme("package");
+        ctx.registerReceiver(new android.content.BroadcastReceiver() {
+            @Override public void onReceive(Context cx, android.content.Intent i) {
+                if (i.getData() == null || !ENGINE_PKG.equals(i.getData().getSchemeSpecificPart())) return;
+                main.post(() -> { openAssets(); if (engine != null) { engine.clearCache(true); engine.reload(); } });
+            }
+        }, pf);
 
         engine = newWebView();
         engine.addJavascriptInterface(new Bridge(), "AndroidBridge");
@@ -122,7 +134,19 @@ public final class EngineHost {
     }
 
     /** Engine Sound's page, sounds and scripts come straight from its installed APK. */
+    private long assetsFrom;   // install time of the Engine Sound app the assets came from
+    private void openAssets() {
+        try {
+            assets = ctx.createPackageContext(ENGINE_PKG, 0).getAssets();
+            assetsFrom = ctx.getPackageManager().getPackageInfo(ENGINE_PKG, 0).lastUpdateTime;
+        } catch (Exception ignored) {}
+    }
+
     private WebResourceResponse serveAsset(String url) {
+        // also catch an update the broadcast missed: when the page itself loads, check the app's install time
+        if (url.startsWith(ENGINE_ORIGIN + "index.html") || url.equals(ENGINE_ORIGIN)) {
+            try { if (ctx.getPackageManager().getPackageInfo(ENGINE_PKG, 0).lastUpdateTime != assetsFrom) openAssets(); } catch (Exception ignored) {}
+        }
         if (!url.startsWith(ENGINE_ORIGIN) || assets == null) return null;
         String path = url.substring(ENGINE_ORIGIN.length());
         int q = path.indexOf('?');
