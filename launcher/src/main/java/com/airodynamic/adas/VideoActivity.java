@@ -19,6 +19,7 @@ public class VideoActivity extends Activity {
     static final String X = "x", Y = "y", W = "w", H = "h", Q = "q", THEME = "theme";
     private GeckoGhost gecko;
     private boolean fit;
+    private static int live;   // windows alive in this process
 
     static void open(Activity from, int x, int y, int w, int h, String query, String theme) {
         from.startActivity(new Intent(from, VideoActivity.class).putExtra(X, x).putExtra(Y, y).putExtra(W, w).putExtra(H, h)
@@ -28,6 +29,7 @@ public class VideoActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        live++;
         Intent in = getIntent();
         Window win = getWindow();
         win.requestFeature(Window.FEATURE_NO_TITLE);
@@ -86,10 +88,15 @@ public class VideoActivity extends Activity {
 
     @Override protected void onDestroy() {
         try { unregisterReceiver(closeRx); } catch (Exception ignored) { }
-        if (gecko != null) gecko.close();
+        closeGecko();
         super.onDestroy();
-        if (isFinishing()) android.os.Process.killProcess(android.os.Process.myPid());
+        live--;
+        // Android can run this late, after the video was opened again for the next song: ending the process then
+        // killed the new window (black box, 2026-11-13). Only end it when no window is left.
+        if (isFinishing() && live <= 0) android.os.Process.killProcess(android.os.Process.myPid());
     }
 
-    @Override public void finish() { super.finish(); overridePendingTransition(0, 0); }
+    private void closeGecko() { if (gecko != null) { gecko.close(); gecko = null; } }
+
+    @Override public void finish() { closeGecko(); super.finish(); overridePendingTransition(0, 0); }
 }

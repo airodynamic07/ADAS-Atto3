@@ -67,21 +67,21 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         limit = big(new LinearLayout(c));
         ((android.view.ViewGroup) limit.getParent()).removeView(limit);
         lb.addView(limit, new LinearLayout.LayoutParams(0, -2, 1f));
-        LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 26));
-        pb.leftMargin = Ui.dp(c, 4);
+        LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(Ui.dp(c, 26), Ui.dp(c, 26));   // smaller − + so the box lines up with PM2.5 / Cabin (user, 2026-11-13)
+        pb.leftMargin = Ui.dp(c, 3);
         android.widget.Button minus = Ui.chip(c, "−", false, th, v -> { prefs.setSpeedLimit(Math.max(30, prefs.speedLimit() - 10)); showLimit(); });
         android.widget.Button plus = Ui.chip(c, "+", false, th, v -> { prefs.setSpeedLimit(Math.min(180, prefs.speedLimit() + 10)); showLimit(); });
-        for (android.widget.Button bt : new android.widget.Button[]{minus, plus}) { bt.setMinHeight(0); bt.setMinimumHeight(0); lb.addView(bt, pb); }
+        for (android.widget.Button bt : new android.widget.Button[]{minus, plus}) { bt.setMinHeight(0); bt.setMinimumHeight(0); bt.setMinWidth(0); bt.setMinimumWidth(0); bt.setPadding(0, 0, 0, 0); lb.addView(bt, pb); }
         limit.setOnClickListener(v -> { prefs.setSpeedVoice(!prefs.speedVoice()); showLimit(); });
         limitCard.addView(lb, new LinearLayout.LayoutParams(0, -2, 1f));
-        row2.addView(limitCard, wgap(1f));
+        row2.addView(limitCard, wgap(1.2f));   // same width as PM2.5 and Cabin above
         tray = new android.widget.GridLayout(c);
         tray.setColumnCount(TRAY_N + 1);   // apps in one row + "＋"
         LinearLayout trayBox = card();
         trayBox.setGravity(Gravity.CENTER_VERTICAL);
         trayBox.setPadding(Ui.dp(c, 4), Ui.dp(c, 3), Ui.dp(c, 4), Ui.dp(c, 3));
         trayBox.addView(tray);
-        row2.addView(trayBox, new LinearLayout.LayoutParams(0, -1, 1.35f));
+        row2.addView(trayBox, new LinearLayout.LayoutParams(0, -1, 1.8f));
         drawShortcuts();
         root.addView(row2, gapH(rowH));
         showLimit();
@@ -126,7 +126,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout t5 = tile("Regen (kWh · %)"); peak = big(t5);   // "0.8 · 12 %" on one line (user, 2026-11-13)
         regenPct = Ui.text(c, "", 11, TOP_GREEN, true);
         r1.addView(t1, w(true)); r1.addView(t2, w(true)); r1.addView(t6, w(true)); r1.addView(t5, wide());
-        LinearLayout t8 = tile("Every day"); TextView histB = big(t8); histB.setText("📅 History ›");
+        LinearLayout t8 = tile("Every day"); TextView histB = big(t8); histB.setText("📅 History"); histB.setTextSize(13.5f); histB.setEllipsize(null);
         tapButton(t8, histB);
         t8.setOnClickListener(v -> { if (historyOpener != null) historyOpener.run(); });
         LinearLayout t7 = tile("Avg speed"); avgSpd = big(t7);

@@ -139,6 +139,38 @@ public final class CarData {
      * First reading that gives a believable number (lo..hi). Values 10x too big (e.g. 126 for 12.6 V) are scaled
      * when decimals > 0. A reading picked in Settings ("prefs: read_<name>") is tried first. Read only.
      */
+    private boolean searching;
+    /**
+     * The guessed readings gave nothing on this car (cards stayed "–", 2026-11-13): look through every reading once,
+     * in the background, for one whose name and value fit, and remember it. Read only.
+     */
+    private void autoFind(Context c) {
+        if (searching) return;
+        final android.content.SharedPreferences sp = c.getSharedPreferences("adas_launcher", 0);
+        if (System.currentTimeMillis() - sp.getLong("read_searched", 0) < 6 * 3600_000L) return;
+        searching = true;
+        new Thread(() -> {
+            try {
+                Map<String, Integer> all = snapshot("statistic.BYDAutoStatisticDevice", "instrument.BYDAutoInstrumentDevice",
+                        "bodywork.BYDAutoBodyworkDevice", "bms.BYDAutoBmsDevice", "energy.BYDAutoEnergyDevice",
+                        "power.BYDAutoPowerDevice", "engine.BYDAutoEngineDevice", "charging.BYDAutoChargingDevice");
+                android.content.SharedPreferences.Editor ed = sp.edit().putLong("read_searched", System.currentTimeMillis());
+                String volt = null, batt = null;
+                for (Map.Entry<String, Integer> e : all.entrySet()) {
+                    String m = e.getKey().split("\\|")[1].toLowerCase(java.util.Locale.US);
+                    int v = e.getValue();
+                    if (volt == null && m.contains("volt") && !m.contains("cell") && ((v >= 9 && v <= 16) || (v >= 90 && v <= 160))) volt = e.getKey();
+                    if (batt == null && m.contains("temp") && (m.contains("batt") || m.contains("cell") || m.contains("pack"))
+                            && v >= -20 && v <= 70) batt = e.getKey();
+                }
+                if (volt != null && sp.getString("read_volt12", "").isEmpty()) ed.putString("read_volt12", volt);
+                if (batt != null && sp.getString("read_battery", "").isEmpty()) ed.putString("read_battery", batt);
+                ed.apply();
+            } catch (Throwable ignored) { }
+            searching = false;
+        }).start();
+    }
+
     private double pick(Context c, String name, String[][] tries, double lo, double hi, int decimals) {
         String chosen = c.getSharedPreferences("adas_launcher", 0).getString("read_" + name, "");
         java.util.List<String> keys = new java.util.ArrayList<>();
@@ -153,6 +185,7 @@ public final class CarData {
             if (decimals == 0 && d / 10 >= lo && d / 10 <= hi) return d / 10;   // 126 → 12.6 V
             if (d / 10 >= lo && d / 10 <= hi && decimals > 0) return d / 10;
         }
+        if (!"cabin".equals(name)) autoFind(c);
         return Double.NaN;
     }
 

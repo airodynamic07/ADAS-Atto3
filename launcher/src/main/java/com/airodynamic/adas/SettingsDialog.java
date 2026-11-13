@@ -308,12 +308,16 @@ public final class SettingsDialog {
         new Thread(() -> {
             java.util.Map<String, Integer> all = CarData.get(c).snapshot("ac.BYDAutoAcDevice", "statistic.BYDAutoStatisticDevice",
                     "instrument.BYDAutoInstrumentDevice", "bodywork.BYDAutoBodyworkDevice", "bms.BYDAutoBmsDevice",
-                    "energy.BYDAutoEnergyDevice", "power.BYDAutoPowerDevice", "engine.BYDAutoEngineDevice");
+                    "energy.BYDAutoEnergyDevice", "power.BYDAutoPowerDevice", "engine.BYDAutoEngineDevice", "charging.BYDAutoChargingDevice");
             final java.util.List<String> keys = new java.util.ArrayList<>();
             final java.util.List<String> labels = new java.util.ArrayList<>();
-            for (java.util.Map.Entry<String, Integer> e : all.entrySet()) {
+            // the air-conditioner's readings last: the first photo showed only those (2026-11-13)
+            java.util.List<java.util.Map.Entry<String, Integer>> sorted = new java.util.ArrayList<>(all.entrySet());
+            java.util.Collections.sort(sorted, (x, y) -> Boolean.compare(x.getKey().startsWith("ac."), y.getKey().startsWith("ac.")));
+            for (java.util.Map.Entry<String, Integer> e : sorted) {
                 String m = e.getKey().split("\\|")[1].toLowerCase(java.util.Locale.US);
                 if (!(m.contains("temp") || m.contains("volt"))) continue;
+                if (m.contains("color") || m.contains("antivirus") || m.contains("unit") || m.contains("mode")) continue;
                 keys.add(e.getKey());
                 labels.add(e.getKey().replaceAll(".*\\.BYDAuto|Device", "").replace("|-1", "") + " = " + e.getValue());
             }
