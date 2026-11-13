@@ -18,7 +18,19 @@ final class RouteOverlay extends FrameLayout implements TripEnergy.Listener {
         setClipToOutline(true);
         int b = Ui.dp(c, 2);
         setPadding(b, b, b, b);
-        addView(new RouteMapView(c, th), new LayoutParams(-1, -1));
+        final RouteMapView map = new RouteMapView(c, th);
+        addView(map, new LayoutParams(-1, -1));
+        // + / − zoom buttons, bottom right (pinch works too)
+        LinearLayout zb = new LinearLayout(c);
+        zb.setOrientation(LinearLayout.VERTICAL);
+        android.widget.Button zin = Ui.chip(c, "+", false, th, v -> map.zoomBy(1));
+        android.widget.Button zout = Ui.chip(c, "−", false, th, v -> map.zoomBy(-1));
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46));
+        bl.bottomMargin = Ui.dp(c, 6);
+        zb.addView(zin, bl); zb.addView(zout, new LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)));
+        LayoutParams zl = new LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
+        zl.rightMargin = Ui.dp(c, 8); zl.bottomMargin = Ui.dp(c, 30);
+        addView(zb, zl);
 
         int glass = (th.card & 0x00FFFFFF) | 0xDD000000;
         LinearLayout box = new LinearLayout(c);

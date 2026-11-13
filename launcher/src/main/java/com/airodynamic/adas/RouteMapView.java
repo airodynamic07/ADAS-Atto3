@@ -118,15 +118,31 @@ final class RouteMapView extends View {
     }
 
     // ---------------------------------------------------------------- touch
+    // two-finger pinch done by hand (the car's screen didn't zoom with Android's detector, 2026-11-13)
+    private float pinchStart = -1; private double zoomStart;
+    private static float span(MotionEvent e) {
+        float dx = e.getX(0) - e.getX(1), dy = e.getY(0) - e.getY(1);
+        return (float) Math.hypot(dx, dy);
+    }
+
     @Override public boolean onTouchEvent(MotionEvent e) {
-        pinch.onTouchEvent(e);
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                lastX = downX = e.getX(); lastY = downY = e.getY(); dragging = false;
+                lastX = downX = e.getX(); lastY = downY = e.getY(); dragging = false; pinchStart = -1;
                 getParent().requestDisallowInterceptTouchEvent(true);
                 return true;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                if (e.getPointerCount() >= 2) { pinchStart = span(e); zoomStart = zoom; dragging = true; }
+                return true;
             case MotionEvent.ACTION_MOVE:
-                if (pinch.isInProgress() || e.getPointerCount() > 1) { lastX = e.getX(); lastY = e.getY(); return true; }
+                if (e.getPointerCount() >= 2 && pinchStart > 10) {
+                    float sp = span(e);
+                    zoom = Math.max(3, Math.min(18, zoomStart + Math.log(sp / pinchStart) / Math.log(2)));
+                    touched();
+                    invalidate();
+                    return true;
+                }
+                if (pinchStart > 0) return true;   // finishing a pinch with one finger: don't jump
                 float dx = e.getX() - lastX, dy = e.getY() - lastY;
                 if (dragging || Math.hypot(e.getX() - downX, e.getY() - downY) > 8 * d) {
                     dragging = true;
@@ -136,18 +152,24 @@ final class RouteMapView extends View {
                 }
                 lastX = e.getX(); lastY = e.getY();
                 return true;
+            case MotionEvent.ACTION_POINTER_UP:
+                return true;
             case MotionEvent.ACTION_UP:
-                if (!dragging && !pinch.isInProgress()) {   // a tap near the red dot: follow the car again
+                if (!dragging && pinchStart < 0) {   // a tap near the red dot: follow the car again
                     int n = pts.length / 2;
                     if (n > 0 && Math.hypot(e.getX() - sx(wx(pts[2 * n - 1])), e.getY() - sy(wy(pts[2 * n - 2]))) < 40 * d) {
                         following = true;
                         invalidate();
                     }
                 }
+                pinchStart = -1;
                 return true;
         }
         return true;
     }
+
+    /** + / − buttons (in case the screen doesn't report two fingers). */
+    void zoomBy(double dz) { zoom = Math.max(3, Math.min(18, zoom + dz)); touched(); invalidate(); }
 
     // ---------------------------------------------------------------- tiles
     private Bitmap tile(int z, int x, int y) {
