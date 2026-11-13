@@ -188,7 +188,7 @@ public final class SettingsDialog {
         pb.addView(Ui.chip(c, "Show crash log", false, th, v -> new Thread(() -> {
             String out;
             try {
-                out = Updater.adbShell(c, "logcat -d -b crash -t 120; echo ----; logcat -d -t 400 *:E | grep -i -E 'airodynamic|gecko|fatal|AndroidRuntime' | tail -n 60");
+                out = Updater.adbShell(c, "logcat -d -b crash -t 120; echo ----; logcat -d -t 400 *:E | grep -i -E 'com.airodynamic|gecko|fatal|AndroidRuntime' | grep -v -i -E 'token|GmsHttp|AuthRequest|oauth|email' | tail -n 60");
             } catch (Exception e) { out = "Couldn't reach the car's ADB: " + e; }
             final String text = out.isEmpty() ? "No crash recorded." : out;
             new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
