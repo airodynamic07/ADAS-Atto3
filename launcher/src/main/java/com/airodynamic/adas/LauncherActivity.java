@@ -41,7 +41,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     private int[] winOrder = {2, 1, 0};
     /** Screen box covering the first two windows (left + middle), for the Ghost Race window. */
     private int[] ghostArea() {
-        View a = frames[winOrder[0]], b = frames[winOrder[1]];
+        View a = frames[2], b = frames[1];   // info + engine (the trip window is never covered)
         if (a == null || b == null || a.getWidth() == 0) return null;
         int[] la = new int[2], lb = new int[2];
         a.getLocationOnScreen(la); b.getLocationOnScreen(lb);
@@ -128,15 +128,18 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         getWindow().setStatusBarColor(th.bg);
         getWindow().setNavigationBarColor(th.bg);
 
+        // (user, 2026-11-13) the trip window (right) reaches the bottom of the screen; the other two windows
+        // and the graph share the rest: [ [info | engine] over [graph] ] [trip]
         LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        root.setOrientation(LinearLayout.HORIZONTAL);
         root.setBackgroundColor(th.bg);
         int pad = Ui.dp(this, 10);
         root.setPadding(pad, Ui.dp(this, 4), pad, Ui.dp(this, 6));
-
+        LinearLayout side = new LinearLayout(this);
+        side.setOrientation(LinearLayout.VERTICAL);
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        root.addView(row, new LinearLayout.LayoutParams(-1, 0, 1f));
+        side.addView(row, new LinearLayout.LayoutParams(-1, 0, 1f));
         panels[0] = new DrivePanel(this, th, prefs, themeControls(th));
         ((DrivePanel) panels[0]).setRouteOpener(() -> { routeOpen = true; showRoute(); });
         ((DrivePanel) panels[0]).setHistoryOpener(() -> { historyOpen = true; showHistory(); });
@@ -159,6 +162,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         }
         boolean first = true;
         for (int i : order) {
+            if (i == 0) continue;           // the trip window has the full height (added below)
             if (wide && i == 2) continue;   // Info is hidden under Ghost Race
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, wide && i == 1 ? 2.03f : 1f);
             if (!first) lp.leftMargin = Ui.dp(this, 10);
@@ -176,7 +180,12 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         graphBox.addView(new TripGraph(this, th), new FrameLayout.LayoutParams(-1, -1));
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 132));
         glp.topMargin = Ui.dp(this, 8);
-        root.addView(graphBox, glp);   // the graph stays across the bottom with Ghost Race open too (user, 2026-11-12)
+        side.addView(graphBox, glp);
+        boolean tripRight = order[2] == 0;
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, -1, wide ? 2.03f : 2.03f);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, -1, 1f);
+        if (tripRight) { tp.leftMargin = Ui.dp(this, 10); root.addView(side, sp); root.addView(frames[0], tp); }
+        else { sp.leftMargin = Ui.dp(this, 10); root.addView(frames[0], tp); root.addView(side, sp); }   // the graph stays across the bottom with Ghost Race open too (user, 2026-11-12)
 
         setContentView(root);
         for (int i = 0; i < 3; i++) panels[i].onCar(CarData.get(this).last());

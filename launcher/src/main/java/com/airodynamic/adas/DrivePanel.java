@@ -25,7 +25,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private final Prefs prefs;
     private TextView outside, pm, limit, todayKm, todayKwh, todayAvg, todayDrive;
     private LinearLayout limitCard;
-    private final TextView used, avg, dist, power, soc, since, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty;
+    private TextView used, avg, dist, power, soc, since, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty, regenPct;
+    private SpecialRow recentRow, latestRow;
     private static final int BEST_N = 10;   // keep the 10 best, scroll to see them (user, 2026-11-12)
     private static final int TOP_GREEN = 0xFF2EE59D;
     private final TextView[] bestKwh = new TextView[BEST_N], bestSpd = new TextView[BEST_N], bestRange = new TextView[BEST_N], bestKmTxt = new TextView[BEST_N];
@@ -78,72 +79,61 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         root.addView(row2, gap());
         showLimit();
 
-        // Today in one line: Distance · Used · Avg · Drive
-        LinearLayout td = new LinearLayout(c);
-        td.setGravity(Gravity.CENTER_VERTICAL);
-        td.setBackground(Ui.round(th.card, th.line, 12, c));
-        td.setPadding(Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 8), Ui.dp(c, 10));   // roomier (user, 2026-11-12)
-        TextView tl = Ui.label(c, "Today", th);
-        tl.setTextSize(10);
-        td.addView(tl, new LinearLayout.LayoutParams(-2, -2));
-        todayKm = pair(td, "  Distance "); todayKwh = pair(td, "Used ");
-        todayAvg = pair(td, "Avg "); todayDrive = pair(td, "Drive ");
-        td.setOnClickListener(v -> { if (historyOpener != null) historyOpener.run(); });   // driving history
+        // Today and This trip: the same 4 columns, label above value, lined up with the cards below (user, 2026-11-13)
+        LinearLayout td = card();
+        td.setPadding(Ui.dp(c, 9), Ui.dp(c, 5), Ui.dp(c, 9), Ui.dp(c, 6));
+        TextView tl = Ui.label(c, "Today", th); tl.setTextSize(10);
+        td.addView(tl);
+        TextView[] tv = statRow(td);
+        todayKm = tv[0]; todayKwh = tv[1]; todayAvg = tv[2]; todayDrive = tv[3];
         LinearLayout.LayoutParams g1 = new LinearLayout.LayoutParams(-1, -2);
         g1.bottomMargin = Ui.dp(c, 6);
         root.addView(td, g1);
 
-        // --- box 2: this trip (user's layout, 2026-11-11): one line of energy, 9 small stats, big "Best 10 km"
         LinearLayout en = card();
-        // header line: THIS TRIP · Used · Avg · start time · reset
-        LinearLayout head = new LinearLayout(c);
-        head.setGravity(Gravity.BOTTOM);
-        head.addView(Ui.label(c, "This trip  ", th));
-        head.addView(Ui.text(c, "Used ", 11, th.muted, false));
-        used = Ui.text(c, "–", 20, th.text, true);
-        head.addView(used);
-        head.addView(Ui.text(c, " kWh   Avg ", 11, th.muted, false));
-        avg = Ui.text(c, "–", 20, Theme.CAUTION, true);
-        head.addView(avg);
-        head.addView(Ui.text(c, " kWh/100", 11, th.muted, false));
-        head.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
-        soc = Ui.text(c, "–", 12, th.text, true);   // battery moved here from its card (2026-11-12)
-        head.addView(soc);
+        en.setPadding(Ui.dp(c, 9), Ui.dp(c, 5), Ui.dp(c, 9), Ui.dp(c, 6));
+        TextView trl = Ui.label(c, "This trip", th); trl.setTextSize(10);
+        en.addView(trl);
+        TextView[] trv = statRow(en);
+        dist = trv[0]; used = trv[1]; avg = trv[2]; driveT = trv[3];
+        LinearLayout foot = new LinearLayout(c);
+        foot.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+        soc = Ui.text(c, "–", 11, th.text, true);
+        foot.addView(soc);
         since = Ui.text(c, "", 11, th.muted, false);
-        head.addView(since);
-        TextView reset = Ui.text(c, "  ⟲", 16, th.accent, true);
+        foot.addView(since);
+        TextView reset = Ui.text(c, "  ⟲", 15, th.accent, true);
         reset.setPadding(Ui.dp(c, 6), 0, Ui.dp(c, 2), 0);
         reset.setOnClickListener(v -> { TripEnergy.get(c).reset(); Toast.makeText(c, "New trip started", Toast.LENGTH_SHORT).show(); });
-        head.addView(reset);
-        head.setPadding(0, 0, 0, Ui.dp(c, 5));
-        en.addView(head);
+        foot.addView(reset);
+        foot.setPadding(0, 0, 0, Ui.dp(c, 4));
+        en.addView(foot, new LinearLayout.LayoutParams(-1, -2));
 
-        // 8 cards in 2 rows x 4, lined up across and down; Peak / regen and Today route wider (user, 2026-11-12)
+        // 8 short cards, 2 rows x 4, same columns as above (user, 2026-11-13)
         LinearLayout r1 = new LinearLayout(c), r2 = new LinearLayout(c);
-        LinearLayout t1 = tile("Distance"); dist = big(t1);
-        LinearLayout t2 = tile("Peak power"); power = big(t2);   // was Power now (shown on the graph) (2026-11-12)
+        LinearLayout t1 = tile("Today route"); TextView mapB = big(t1); mapB.setText("🗺 Map ›"); mapB.setTextColor(th.accent);
+        t1.setOnClickListener(v -> openRoute());
+        LinearLayout t2 = tile("Peak power"); power = big(t2);
         LinearLayout t6 = tile("Best 0–100"); zeroTo = big(t6);
-        LinearLayout t5 = tile("Total regen"); peak = big(t5);   // energy regenerated this trip (2026-11-12)
+        LinearLayout t5 = tile("Total regen"); peak = big(t5);
+        regenPct = Ui.text(c, "", 11, TOP_GREEN, true); t5.addView(regenPct);
         r1.addView(t1, w(true)); r1.addView(t2, w(true)); r1.addView(t6, w(true)); r1.addView(t5, wide());
-        LinearLayout t8 = tile("Drive time"); driveT = big(t8);
+        LinearLayout t8 = tile("Every day"); TextView histB = big(t8); histB.setText("📅 History ›"); histB.setTextColor(th.accent);
+        t8.setOnClickListener(v -> { if (historyOpener != null) historyOpener.run(); });
         LinearLayout t7 = tile("Avg speed"); avgSpd = big(t7);
         LinearLayout t4 = tile("Top speed"); topSpd = big(t4);
-        // Today route (user, 2026-11-12): replaces Hard brakes (still on the graph as stamps); tap = map
-        LinearLayout t9 = tile("Today route 🗺"); brakes = big(t9);
-        t9.setOnClickListener(v -> openRoute());
+        LinearLayout t9 = tile("Battery used"); brakes = big(t9);
         r2.addView(t8, w(true)); r2.addView(t7, w(true)); r2.addView(t4, w(true)); r2.addView(t9, wide());
-        for (LinearLayout r : new LinearLayout[]{r1, r2}) {   // the 9 cards share the free height
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, 0, 1f);
-            lp.bottomMargin = Ui.dp(c, 7);
+        for (LinearLayout r : new LinearLayout[]{r1, r2}) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.bottomMargin = Ui.dp(c, 6);
             en.addView(r, lp);
         }
 
-        // Best stretches: top 3 (bigger text), never overlapping; tap the title to type the length (km)
+        // Best stretches: Recent (live, orange), Latest (last finished, blue), then BEST 1–10; fills to the bottom
         LinearLayout b10 = col();
-        b10.setGravity(Gravity.CENTER_VERTICAL);
         b10.setBackground(Ui.round(th.chip, th.line, 12, c));
         b10.setPadding(Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4));
-        // title + a real button to change the length (user, 2026-11-12)
         LinearLayout bh = new LinearLayout(c);
         bh.setGravity(Gravity.CENTER_VERTICAL);
         bestTitle = Ui.text(c, "", 12, th.muted, false);
@@ -155,54 +145,39 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         bh.addView(bestBtn, new LinearLayout.LayoutParams(-2, Ui.dp(c, 26)));
         bh.setPadding(0, Ui.dp(c, 2), 0, Ui.dp(c, 3));
         b10.addView(bh);
-        // the latest stretch (the last N km just driven), blue, always visible
-        latestRow = new LinearLayout(c);
-        latestRow.setGravity(Gravity.BOTTOM);
-        latestRow.setBackground(Ui.round((th.accent & 0x00FFFFFF) | 0x33000000, th.accent, 8, c));
-        latestRow.setPadding(Ui.dp(c, 4), Ui.dp(c, 1), Ui.dp(c, 4), Ui.dp(c, 1));
-        latestRow.addView(Ui.text(c, "Latest", 12, th.accent, true), new LinearLayout.LayoutParams(Ui.dp(c, 48), -2));
-        latKwh = Ui.text(c, "", 16, th.accent, true);
-        latestRow.addView(latKwh, new LinearLayout.LayoutParams(Ui.dp(c, 42), -2));
-        latestRow.addView(Ui.text(c, "kWh/100", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 54), -2));
-        latSpd = Ui.text(c, "", 16, th.accent, true);
-        latestRow.addView(latSpd, new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
-        latestRow.addView(Ui.text(c, "km/h", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
-        latRange = Ui.text(c, "", 12, th.muted, false);
-        latestRow.addView(latRange, new LinearLayout.LayoutParams(0, -2, 1f));
-        latKm = Ui.text(c, "", 12, th.muted, false);
-        latestRow.addView(latKm);
-        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-1, -2);
-        ll.bottomMargin = Ui.dp(c, 2);
-        b10.addView(latestRow, ll);
-        // the rows scroll; the title stays put. Best is always on top; 1–3 in green.
+        recentRow = specialRow(b10, "Recent", Theme.CAUTION);
+        latestRow = specialRow(b10, "Latest", th.accent);
+        TextView bestHead = Ui.text(c, "BEST", 11, TOP_GREEN, true);
+        bestHead.setLetterSpacing(0.08f);
+        bestHead.setPadding(0, Ui.dp(c, 4), 0, Ui.dp(c, 1));
+        b10.addView(bestHead);
         LinearLayout list = col();
         android.widget.ScrollView sv = new android.widget.ScrollView(c);
         sv.setVerticalScrollBarEnabled(true);
-        sv.setFillViewport(true);
         sv.addView(list, new android.widget.ScrollView.LayoutParams(-1, -2));
         for (int i = 0; i < BEST_N; i++) {
-            int fg = i == 0 ? TOP_GREEN : th.text;   // only the best one in green (user, 2026-11-12)
+            int fg = i == 0 ? TOP_GREEN : th.text;
             LinearLayout r = new LinearLayout(c);
             r.setGravity(Gravity.BOTTOM);
-            r.setPadding(0, Ui.dp(c, 1), 0, Ui.dp(c, 1));
-            r.addView(Ui.text(c, String.valueOf(i + 1), 13, i == 0 ? TOP_GREEN : th.muted, true), new LinearLayout.LayoutParams(Ui.dp(c, 48), -2));
-            bestKwh[i] = Ui.text(c, "", 16, fg, true);
-            r.addView(bestKwh[i], new LinearLayout.LayoutParams(Ui.dp(c, 42), -2));
-            r.addView(Ui.text(c, "kWh/100", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 54), -2));
-            bestSpd[i] = Ui.text(c, "", 16, fg, true);
-            r.addView(bestSpd[i], new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
-            r.addView(Ui.text(c, "km/h", 11, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 36), -2));
-            bestRange[i] = Ui.text(c, "", 12, th.muted, false);
+            r.setPadding(0, Ui.dp(c, 2), 0, Ui.dp(c, 2));
+            r.addView(Ui.text(c, String.valueOf(i + 1), 14, i == 0 ? TOP_GREEN : th.muted, true), new LinearLayout.LayoutParams(Ui.dp(c, 54), -2));
+            bestKwh[i] = Ui.text(c, "", 18, fg, true);
+            r.addView(bestKwh[i], new LinearLayout.LayoutParams(Ui.dp(c, 48), -2));
+            r.addView(Ui.text(c, "kWh/100", 12, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 60), -2));
+            bestSpd[i] = Ui.text(c, "", 18, fg, true);
+            r.addView(bestSpd[i], new LinearLayout.LayoutParams(Ui.dp(c, 40), -2));
+            r.addView(Ui.text(c, "km/h", 12, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 40), -2));
+            bestRange[i] = Ui.text(c, "", 13, th.muted, false);
             r.addView(bestRange[i], new LinearLayout.LayoutParams(0, -2, 1f));
-            bestKmTxt[i] = Ui.text(c, "", 12, th.muted, false);
+            bestKmTxt[i] = Ui.text(c, "", 13, th.muted, false);
             r.addView(bestKmTxt[i]);
             bestRows[i] = r;
             list.addView(r);
         }
-        bestEmpty = Ui.text(c, "", 11, th.muted, false);
+        bestEmpty = Ui.text(c, "", 12, th.muted, false);
         list.addView(bestEmpty);
         b10.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1f));
-        en.addView(b10, new LinearLayout.LayoutParams(-1, Ui.dp(c, 150)));   // fixed: Latest + 4 rows, scroll for more
+        en.addView(b10, new LinearLayout.LayoutParams(-1, 0, 1f));   // runs to the bottom of the window
         TripEnergy.get(c).setBestKm(prefs.bestKm());
         root.addView(en, new LinearLayout.LayoutParams(-1, 0, 1f));   // fills the window to the bottom
     }
@@ -337,6 +312,58 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
     private static String pmLevel(int v) { return v < 0 ? "" : v <= 25 ? " good" : v <= 50 ? " moderate" : " unhealthy"; }
 
+    /** Distance · Used · Avg (kWh) · Drive: label above value, same columns as the cards. */
+    private TextView[] statRow(LinearLayout parent) {
+        LinearLayout r = new LinearLayout(c);
+        String[] labels = {"Distance", "Used", "Avg (kWh)", "Drive"};
+        TextView[] out = new TextView[4];
+        for (int i = 0; i < 4; i++) {
+            LinearLayout cl = col();
+            cl.setPadding(Ui.dp(c, 7), 0, 0, 0);
+            cl.addView(Ui.text(c, labels[i], 11, th.muted, false));
+            out[i] = Ui.text(c, "–", 19, i == 2 ? Theme.CAUTION : th.text, true);
+            out[i].setSingleLine(true);
+            cl.addView(out[i]);
+            r.addView(cl, i == 3 ? wide() : w(true));
+        }
+        parent.addView(r, new LinearLayout.LayoutParams(-1, -2));
+        return out;
+    }
+
+    /** One highlighted line in Best stretches (Recent / Latest). */
+    private static final class SpecialRow { LinearLayout row; TextView kwh, spd, range, km; }
+    private SpecialRow specialRow(LinearLayout parent, String name, int col) {
+        SpecialRow sr = new SpecialRow();
+        LinearLayout r = new LinearLayout(c);
+        r.setGravity(Gravity.BOTTOM);
+        r.setBackground(Ui.round((col & 0x00FFFFFF) | 0x33000000, col, 8, c));
+        r.setPadding(Ui.dp(c, 4), Ui.dp(c, 2), Ui.dp(c, 4), Ui.dp(c, 2));
+        r.addView(Ui.text(c, name, 14, col, true), new LinearLayout.LayoutParams(Ui.dp(c, 50), -2));
+        sr.kwh = Ui.text(c, "", 18, col, true);
+        r.addView(sr.kwh, new LinearLayout.LayoutParams(Ui.dp(c, 48), -2));
+        r.addView(Ui.text(c, "kWh/100", 12, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 60), -2));
+        sr.spd = Ui.text(c, "", 18, col, true);
+        r.addView(sr.spd, new LinearLayout.LayoutParams(Ui.dp(c, 40), -2));
+        r.addView(Ui.text(c, "km/h", 12, th.muted, false), new LinearLayout.LayoutParams(Ui.dp(c, 40), -2));
+        sr.range = Ui.text(c, "", 13, th.muted, false);
+        r.addView(sr.range, new LinearLayout.LayoutParams(0, -2, 1f));
+        sr.km = Ui.text(c, "", 13, th.muted, false);
+        r.addView(sr.km);
+        sr.row = r;
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = Ui.dp(c, 3);
+        parent.addView(r, lp);
+        return sr;
+    }
+    private void fill(SpecialRow sr, TripEnergy.Best b, String tag) {
+        sr.row.setVisibility(b == null ? View.GONE : View.VISIBLE);
+        if (b == null) return;
+        sr.kwh.setText(String.format(Locale.US, "%.1f", b.kwh100));
+        sr.spd.setText(Double.isNaN(b.speed) ? "–" : String.valueOf(Math.round(b.speed)));
+        sr.range.setText(Double.isNaN(b.min) ? "" : String.format(Locale.US, "%.0f–%.0f km/h", b.min, b.max));
+        sr.km.setText(String.format(Locale.US, "km %.1f–%.1f · %s", b.fromKm, b.toKm, tag));
+    }
+
     private LinearLayout.LayoutParams wide() { return new LinearLayout.LayoutParams(0, -1, 1.45f); }
 
     private LinearLayout.LayoutParams w(boolean gap) {
@@ -348,40 +375,36 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     // ---------------------------------------------------------------- data
 
     @Override public void onTrip(TripEnergy t) {
-        used.setText(String.format(Locale.US, "%.1f", t.kwh));
+        used.setText(String.format(Locale.US, "%.1f kWh", t.kwh));
         double a = t.avg();
         avg.setText(Double.isNaN(a) ? "–" : String.format(Locale.US, "%.1f", a));
         dist.setText(String.format(Locale.US, "%.1f km", t.km));
-        since.setText(t.startedAt == 0 ? "" : "since " + new SimpleDateFormat("HH:mm", Locale.US).format(new Date(t.startedAt)));
+        since.setText(t.startedAt == 0 ? "" : "  · since " + new SimpleDateFormat("HH:mm", Locale.US).format(new Date(t.startedAt)));
         topSpd.setText(t.topSpeed > 0 ? Math.round(t.topSpeed) + " km/h" : "–");
         peak.setText(String.format(Locale.US, "%.1f kWh", t.regenKwh));
+        double gross = t.kwh + t.regenKwh;   // energy driven before regen came back
+        regenPct.setText(gross > 0.05 ? Math.round(t.regenKwh / gross * 100) + " % back" : "");
         power.setText(t.peakKw > 0 ? Math.round(t.peakKw) + " kW" : "–");
         zeroTo.setText(Double.isNaN(t.best0100) ? "–" : String.format(Locale.US, "%.1f s", t.best0100));
         double am = t.avgMoving();
         avgSpd.setText(Double.isNaN(am) ? "–" : Math.round(am) + " km/h");
         long sec = Math.round(t.movingSec + t.stoppedSec);
-        driveT.setText(sec >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60)
-                : String.format(Locale.US, "%d:%02d", sec / 60, sec % 60));
-        brakes.setText(String.format(Locale.US, "%.1f km ›", t.todayKm()));
+        driveT.setText(String.format(Locale.US, "%d:%02d", sec / 3600, sec / 60 % 60));
+        // battery used = this trip's energy / 60.48 kWh; charging is never counted, so it keeps going past 100 %
+        brakes.setText(Math.round(Math.max(0, t.kwh) / 60.48 * 100) + " %");
 
         double tk = t.todayKm(), te = t.todayKwh();
         todayKm.setText(String.format(Locale.US, "%.1f km", tk));
         todayKwh.setText(String.format(Locale.US, "%.1f kWh", te));
-        todayAvg.setText(tk >= 0.5 && te > 0 ? String.format(Locale.US, "%.1f /100", te / tk * 100) : "–");
+        todayAvg.setText(tk >= 0.5 && te > 0 ? String.format(Locale.US, "%.1f", te / tk * 100) : "–");
         long ts = Math.round(t.todaySec());
         todayDrive.setText(String.format(Locale.US, "%d:%02d", ts / 3600, ts / 60 % 60));
         double bk = t.bestKm();
         String kmTxt = bk == Math.floor(bk) ? String.valueOf((int) bk) : String.format(Locale.US, "%.1f", bk);
         bestTitle.setText("BEST " + kmTxt + " KM STRETCHES OF THIS TRIP");
         bestBtn.setText("✎ " + kmTxt + " km");
-        TripEnergy.Best lt = t.latest();
-        latestRow.setVisibility(lt == null ? View.GONE : View.VISIBLE);
-        if (lt != null) {
-            latKwh.setText(String.format(Locale.US, "%.1f", lt.kwh100));
-            latSpd.setText(Double.isNaN(lt.speed) ? "–" : String.valueOf(Math.round(lt.speed)));
-            latRange.setText(Double.isNaN(lt.min) ? "" : String.format(Locale.US, "%.0f–%.0f km/h", lt.min, lt.max));
-            latKm.setText(String.format(Locale.US, "km %.1f–%.1f", lt.fromKm, lt.toKm));
-        }
+        fill(recentRow, t.latest(), "live");
+        fill(latestRow, t.lastBlock(), "saved");
         java.util.List<TripEnergy.Best> list = t.best();
         for (int i = 0; i < BEST_N; i++) {
             boolean has = i < list.size();
@@ -443,8 +466,6 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private Runnable historyOpener;
     private Runnable routeOpener;
     private android.widget.Button bestBtn;
-    private LinearLayout latestRow;
-    private TextView latKwh, latSpd, latRange, latKm;
     private void openRoute() { if (routeOpener != null) routeOpener.run(); }
 
     @Override public void setActive(boolean a) {
@@ -459,6 +480,6 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         boolean over = SpeedAlert.get(c).over();
         limitCard.setBackground(over ? Ui.round(Theme.DANGER, Theme.DANGER, 12, c) : Ui.round(th.card, th.line, 12, c));
         limit.setTextColor(over ? 0xFFFFFFFF : th.text);
-        soc.setText("🔋 " + (Double.isNaN(s.socPct) ? "–" : Math.round(s.socPct) + "%") + (s.rangeKm >= 0 ? " · " + s.rangeKm + " km" : "") + "   ");
+        soc.setText("🔋 " + (Double.isNaN(s.socPct) ? "–" : Math.round(s.socPct) + "%") + (s.rangeKm >= 0 ? " · " + s.rangeKm + " km" : ""));
     }
 }
