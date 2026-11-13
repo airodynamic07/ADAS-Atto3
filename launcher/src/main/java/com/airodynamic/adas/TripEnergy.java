@@ -137,6 +137,7 @@ public final class TripEnergy implements CarData.Listener {
     public double km, kwh, regenKwh, powerKw = Double.NaN;
     public boolean fromRemaining;           // true when using the battery's remaining energy instead of power
     private double startRemain = Double.NaN;
+    private double lastSoc = Double.NaN;
     private long lastAt;
     private double segKm, segKwh, segSpeedSum;
     private int segN, segPedalN, segPowerN;
@@ -215,7 +216,12 @@ public final class TripEnergy implements CarData.Listener {
             // standing still with energy going in = charging (regen needs the wheels turning); the gear can
             // read "unknown" while the car is off and charging, so don't rely on P (2026-11-12: −5555 kWh/100)
             boolean still = Double.isNaN(s.speedKmh) || s.speedKmh < 1;
-            boolean charging = still && !Double.isNaN(s.powerKw) && s.powerKw < 0;
+            // (2026-11-13: Today showed ~20 kWh too much after charging in the morning) some chargers make the
+            // power reading go UP, not below zero: standing still, anything over 5 kW is charging too (the climate
+            // and 12 V system use less than that), and so is the battery % rising while standing.
+            boolean socUp = !Double.isNaN(s.socPct) && !Double.isNaN(lastSoc) && s.socPct > lastSoc;
+            if (!Double.isNaN(s.socPct)) lastSoc = s.socPct;
+            boolean charging = still && !Double.isNaN(s.powerKw) && (s.powerKw < 0 || s.powerKw > 5 || socUp);
             if (charging) {
                 fromRemaining = false;
                 dKwh = 0;
