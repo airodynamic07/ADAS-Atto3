@@ -358,15 +358,17 @@ public final class TripEnergy implements CarData.Listener {
         best = out;
         // the latest stretch: the last bestKm just driven (shown in blue above the list)
         Best lt = null;
-        if (n >= w && w > 0) {
-            int st = n - w;
+        // Recent shows from the first 100 m: until a full stretch is driven it covers the trip so far (user, 2026-11-13)
+        if (n > 0 && w > 0) {
+            int st = Math.max(0, n - w);
+            double len = (n - st) * STEP_KM;
             double e = 0, t = 0, lo = Double.MAX_VALUE, hi = 0;
             for (int k = st; k < n; k++) { double[] g = segs.get(k); e += g[0]; t += g[1]; if (!Double.isNaN(g[2])) lo = Math.min(lo, g[2]); if (!Double.isNaN(g[3])) hi = Math.max(hi, g[3]); }
             lt = new Best();
-            lt.kwh100 = e / bestKm * 100;
-            lt.speed = t > 0 ? bestKm / (t / 3600.0) : Double.NaN;
+            lt.kwh100 = e / len * 100;
+            lt.speed = t > 0 ? len / (t / 3600.0) : Double.NaN;
             lt.min = lo == Double.MAX_VALUE ? Double.NaN : lo; lt.max = hi;
-            lt.toKm = segs.get(n - 1)[4]; lt.fromKm = lt.toKm - bestKm;
+            lt.toKm = segs.get(n - 1)[4]; lt.fromKm = lt.toKm - len;
         }
         latest = lt;
         // the last finished stretch: trips are cut into back-to-back blocks of bestKm (0–5, 5–10, …);
