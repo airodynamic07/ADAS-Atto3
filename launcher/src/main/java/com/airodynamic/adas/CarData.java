@@ -25,6 +25,8 @@ public final class CarData {
         public double socPct = Double.NaN;
         public int rangeKm = -1;
         public int outsideC = Integer.MIN_VALUE;
+        /** new row (user, 2026-11-13): NaN until a working reading is found */
+        public double cabinC = Double.NaN, batteryC = Double.NaN, volt12 = Double.NaN;
         public int pmIn = -1, pmOut = -1;
         public final double[] tyreBar = {Double.NaN, Double.NaN, Double.NaN, Double.NaN}; // FL FR RL RR
         public int turn;                      // 0 none, 1 left, 2 right, 3 hazard
@@ -131,6 +133,27 @@ public final class CarData {
     public Object ambient(String method, int v) {
         if (!method.matches("(get|set)IAL(Color|Brightness)")) return null;
         return call("setting.BYDAutoSettingDevice", method, v);
+    }
+
+    /**
+     * First reading that gives a believable number (lo..hi). Values 10x too big (e.g. 126 for 12.6 V) are scaled
+     * when decimals > 0. A reading picked in Settings ("prefs: read_<name>") is tried first. Read only.
+     */
+    private double pick(Context c, String name, String[][] tries, double lo, double hi, int decimals) {
+        String chosen = c.getSharedPreferences("adas_launcher", 0).getString("read_" + name, "");
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        if (!chosen.isEmpty()) keys.add(chosen);
+        for (String[] t : tries) keys.add(t[0] + "|" + t[1] + "|" + (t[2].isEmpty() ? "-1" : t[2]));
+        for (String k : keys) {
+            Integer v;
+            try { v = readKey(k); } catch (Throwable e) { v = null; }
+            if (v == null || !ok(v)) continue;
+            double d = v;
+            if (d >= lo && d <= hi) return d;
+            if (decimals == 0 && d / 10 >= lo && d / 10 <= hi) return d / 10;   // 126 → 12.6 V
+            if (d / 10 >= lo && d / 10 <= hi && decimals > 0) return d / 10;
+        }
+        return Double.NaN;
     }
 
     /** Reads one "device|method|arg" key (arg -1 = no argument). Read only. */
@@ -278,6 +301,15 @@ public final class CarData {
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getElecPercentageValue"))) s.socPct = ((Number) v).doubleValue();
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getElecDrivingRangeValue"))) s.rangeKm = ((Number) v).intValue();
         if (ok(v = call("instrument.BYDAutoInstrumentDevice", "getOutCarTemperature"))) s.outsideC = ((Number) v).intValue();
+        // cabin / battery temperature / 12 V: a reading chosen in Settings → Find readings wins; else try the likely ones
+        s.cabinC = pick(ctx, "cabin", new String[][]{{"ac.BYDAutoAcDevice", "getTemprature", "3"}, {"ac.BYDAutoAcDevice", "getInsideTemperature", ""},
+                {"instrument.BYDAutoInstrumentDevice", "getInCarTemperature", ""}, {"ac.BYDAutoAcDevice", "getTemperature", "3"}}, -30, 70, 1);
+        s.batteryC = pick(ctx, "battery", new String[][]{{"statistic.BYDAutoStatisticDevice", "getBatteryTemperature", ""},
+                {"bms.BYDAutoBmsDevice", "getBatteryTemperature", ""}, {"energy.BYDAutoEnergyDevice", "getBatteryTemperature", ""},
+                {"statistic.BYDAutoStatisticDevice", "getAverageBatteryTemperature", ""}}, -30, 80, 1);
+        s.volt12 = pick(ctx, "volt12", new String[][]{{"bodywork.BYDAutoBodyworkDevice", "getBatteryVoltage", ""},
+                {"statistic.BYDAutoStatisticDevice", "getLowVoltageBatteryVoltage", ""}, {"power.BYDAutoPowerDevice", "getBatteryVoltage", ""},
+                {"instrument.BYDAutoInstrumentDevice", "getBatteryVoltage", ""}}, 8, 16, 0);
         v = call("pm2p5.BYDAutoPM2p5Device", "getPM2p5Value");
         if (v instanceof int[] && ((int[]) v).length >= 2) { s.pmIn = ((int[]) v)[0]; s.pmOut = ((int[]) v)[1]; }
         for (int i = 0; i < 4; i++) {

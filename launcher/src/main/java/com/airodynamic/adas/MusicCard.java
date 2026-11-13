@@ -92,11 +92,65 @@ public final class MusicCard {
         lyNow = lyricLine(25, th.text, true);
         lyNext = lyricLine(17, th.muted, false);
         lyNext2 = lyricLine(16, th.muted, false);
-        lyNext2.setAlpha(.75f);
         lyNext3 = lyricLine(15, th.muted, false);
-        lyNext3.setAlpha(.55f);
-        ly.addView(lyPrev); ly.addView(lyNow); ly.addView(lyNext); ly.addView(lyNext2); ly.addView(lyNext3);
-        root.addView(ly, new LinearLayout.LayoutParams(-1, 0, 1f));
+        ly.addView(lyPrev); ly.addView(lyNow); ly.addView(lyNext);   // 3 lines (user, 2026-11-13)
+        // tap the lyrics: a slider to move in the song pops up and hides 3 s after the last touch
+        android.widget.FrameLayout lyBox = new android.widget.FrameLayout(c);
+        lyBox.addView(ly, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        seekBox = new LinearLayout(c);
+        seekBox.setGravity(Gravity.CENTER_VERTICAL);
+        seekBox.setBackground(Ui.round((th.card & 0x00FFFFFF) | 0xEE000000, th.accent, 12, c));
+        seekBox.setPadding(Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4));
+        seekPos = Ui.text(c, "0:00", 12, th.muted, false);
+        seekLen = Ui.text(c, "0:00", 12, th.muted, false);
+        seek = new android.widget.SeekBar(c);
+        seek.setMax(1000);
+        seek.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar b, int v, boolean user) {
+                if (!user) return;
+                long len = songLength();
+                if (len > 0) seekPos.setText(mmss(len * v / 1000));
+                hideSeekLater();
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar b) { main.removeCallbacks(hideSeek); }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar b) {
+                long len = songLength();
+                MediaController mc = session();
+                if (mc != null && len > 0) mc.getTransportControls().seekTo(len * b.getProgress() / 1000);
+                hideSeekLater();
+            }
+        });
+        seekBox.addView(seekPos);
+        seekBox.addView(seek, new LinearLayout.LayoutParams(0, Ui.dp(c, 36), 1f));
+        seekBox.addView(seekLen);
+        seekBox.setVisibility(android.view.View.GONE);
+        android.widget.FrameLayout.LayoutParams sbl = new android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        sbl.leftMargin = sbl.rightMargin = Ui.dp(c, 4);
+        lyBox.addView(seekBox, sbl);
+        lyBox.setOnClickListener(v -> showSeek());
+        ly.setOnClickListener(v -> showSeek());
+        root.addView(lyBox, new LinearLayout.LayoutParams(-1, 0, 1f));
+
+        // weather: now and in 1 hour (user, 2026-11-13); says why when it can't get it
+        LinearLayout wx = new LinearLayout(c);
+        wx.setGravity(Gravity.CENTER_VERTICAL);
+        wx.setBackground(Ui.round(th.card, th.line, 12, c));
+        wx.setPadding(Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4));
+        wxNowIcon = Ui.text(c, "–", 24, th.text, false);
+        wx.addView(wxNowIcon);
+        LinearLayout wn = new LinearLayout(c); wn.setOrientation(LinearLayout.VERTICAL); wn.setPadding(Ui.dp(c, 8), 0, 0, 0);
+        wn.addView(Ui.text(c, "Now", 11, th.muted, false));
+        wxNow = Ui.text(c, "–", 18, th.text, true); wn.addView(wxNow);
+        wx.addView(wn, new LinearLayout.LayoutParams(0, -2, 1f));
+        wxNextIcon = Ui.text(c, "", 22, th.text, false);
+        wx.addView(wxNextIcon);
+        LinearLayout wl = new LinearLayout(c); wl.setOrientation(LinearLayout.VERTICAL); wl.setPadding(Ui.dp(c, 8), 0, 0, 0);
+        wl.addView(Ui.text(c, "In 1 hour", 11, th.muted, false));
+        wxNext = Ui.text(c, "", 18, th.text, true); wl.addView(wxNext);
+        wx.addView(wl, new LinearLayout.LayoutParams(-2, -2));
+        LinearLayout.LayoutParams wxl = new LinearLayout.LayoutParams(-1, -2);
+        wxl.topMargin = wxl.bottomMargin = Ui.dp(c, 4);
+        root.addView(wx, wxl);
 
         // up next: the app's queue, swipe sideways, tap a song to play it
         root.addView(Ui.label(c, "Up next", th));
@@ -149,6 +203,7 @@ public final class MusicCard {
     }
 
     private void refresh() {
+        refreshWeather();
         if (!NowPlaying.allowed(c)) {
             title.setText("Tap ⏯ to switch on");
             artist.setText("once; uses the car's ADB");
@@ -249,6 +304,50 @@ public final class MusicCard {
     }
 
     private TextView lyNext2, lyNext3;
+    private LinearLayout seekBox;
+    private android.widget.SeekBar seek;
+    private TextView seekPos, seekLen, wxNowIcon, wxNow, wxNextIcon, wxNext;
+    private long wxAt;
+    private final Runnable hideSeek = () -> { if (seekBox != null) seekBox.setVisibility(android.view.View.GONE); };
+    private void hideSeekLater() { main.removeCallbacks(hideSeek); main.postDelayed(hideSeek, 3000); }
+    private static String mmss(long ms) { long s = ms / 1000; return (s / 60) + ":" + String.format(java.util.Locale.US, "%02d", s % 60); }
+    private long songLength() {
+        MediaController mc = session();
+        if (mc == null || mc.getMetadata() == null) return 0;
+        return mc.getMetadata().getLong(android.media.MediaMetadata.METADATA_KEY_DURATION);
+    }
+    /** Show the song slider (tap on the lyrics or the video). */
+    public void showSeek() {
+        MediaController mc = session();
+        long len = songLength();
+        if (mc == null || len <= 0) return;
+        PlaybackState st = mc.getPlaybackState();
+        long pos = st == null ? 0 : st.getPosition();
+        if (st != null && st.getState() == PlaybackState.STATE_PLAYING)
+            pos += (long) ((android.os.SystemClock.elapsedRealtime() - st.getLastPositionUpdateTime()) * st.getPlaybackSpeed());
+        seek.setProgress((int) Math.max(0, Math.min(1000, pos * 1000 / len)));
+        seekPos.setText(mmss(pos));
+        seekLen.setText(mmss(len));
+        seekBox.setVisibility(android.view.View.VISIBLE);
+        hideSeekLater();
+    }
+    private void refreshWeather() {
+        if (System.currentTimeMillis() - wxAt < 60_000L) return;
+        wxAt = System.currentTimeMillis();
+        Places.weather(c, w -> {
+            if (w.tempC == Integer.MIN_VALUE) {
+                wxNowIcon.setText("☁"); wxNow.setText(w.note.isEmpty() ? "–" : w.note); wxNow.setTextSize(12);
+                wxNextIcon.setText(""); wxNext.setText("");
+                return;
+            }
+            wxNow.setTextSize(18);
+            wxNowIcon.setText(w.icon()); wxNow.setText(w.tempC + "°C");
+            if (w.nextTempC != Integer.MIN_VALUE) {
+                wxNextIcon.setText(w.nextIcon());
+                wxNext.setText(w.nextTempC + "°C" + (w.nextRainPct >= 0 ? " · " + w.nextRainPct + "%" : ""));
+            }
+        });
+    }
     private LinearLayout queueRow2;
     private Runnable videoOpener;
     /** Set by the launcher: shows the current song's video over this card. */

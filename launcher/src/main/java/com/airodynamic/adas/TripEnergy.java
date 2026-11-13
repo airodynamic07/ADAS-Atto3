@@ -98,6 +98,14 @@ public final class TripEnergy implements CarData.Listener {
         daySec = Double.longBitsToDouble(store.getLong("sec", 0));
         dayDrv = Math.max(daySec, Double.longBitsToDouble(store.getLong("drv", 0)));
         if (dayKwh < 0) dayKwh = 0;   // charging counted by an older version
+        // (user, 2026-11-13) today counted charging as used: delete 13 Nov completely, once
+        if (!store.getBoolean("wiped20261113", false)) {
+            if ("2026-11-13".equals(day)) { dayKm = dayKwh = daySec = dayDrv = 0; }
+            if (hist != null) hist.edit().remove("2026-11-13").apply();
+            android.content.SharedPreferences.Editor ed = store.edit().putBoolean("wiped20261113", true);
+            if ("2026-11-13".equals(day)) ed.putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0);
+            ed.apply();
+        }
         rollDay();
     }
     private void rollDay() {

@@ -18,6 +18,7 @@ import android.widget.TextView;
 public class VideoActivity extends Activity {
     static final String X = "x", Y = "y", W = "w", H = "h", Q = "q", THEME = "theme";
     private GeckoGhost gecko;
+    private boolean fit;
 
     static void open(Activity from, int x, int y, int w, int h, String query, String theme) {
         from.startActivity(new Intent(from, VideoActivity.class).putExtra(X, x).putExtra(Y, y).putExtra(W, w).putExtra(H, h)
@@ -67,6 +68,15 @@ public class VideoActivity extends Activity {
         FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40), Gravity.TOP | Gravity.END);
         cl.topMargin = cl.rightMargin = Ui.dp(this, 4);
         root.addView(close, cl);
+        // ⤢ fill (no bars, sides trimmed) ⇄ fit (whole picture with bars) (user, 2026-11-13)
+        android.widget.Button fitB = Ui.chip(this, "⤢", false, th, v -> {
+            fit = !fit;
+            if (gecko != null) gecko.evalHash(fit ? "natee-fit" : "natee-fill");
+        });
+        fitB.setAlpha(0.85f);
+        FrameLayout.LayoutParams fl = new FrameLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40), Gravity.TOP | Gravity.END);
+        fl.topMargin = Ui.dp(this, 4); fl.rightMargin = Ui.dp(this, 52);
+        root.addView(fitB, fl);
         setContentView(root);
         registerReceiver(closeRx, new android.content.IntentFilter(InfoPanel.ACTION_VIDEO_CLOSE));
     }

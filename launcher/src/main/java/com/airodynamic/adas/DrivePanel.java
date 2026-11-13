@@ -23,6 +23,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private final LinearLayout root;
     private android.widget.GridLayout tray;
     private final Prefs prefs;
+    private TextView cabin, batt, volt;
     private TextView outside, pm, limit, todayKm, todayKwh, todayAvg, todayDrive;
     private LinearLayout limitCard;
     private TextView used, avg, dist, power, soc, since, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty, regenPct;
@@ -43,15 +44,21 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
         // --- top (user's layout, 2026-11-12): three compact rows
         //     [PM2.5 | Outside | theme dots]  /  [My speed limit | apps in one row]  /  [Today in one line]
+        // (user, 2026-11-13) rows 1, new row and 2 the same height; row 1 and the new row on the same 3 columns
+        final int rowH = Ui.dp(c, 44);
         LinearLayout row1 = new LinearLayout(c);
         LinearLayout tp = flatTile("PM2.5"); pm = big(tp);
-        LinearLayout to = flatTile("Outside"); outside = big(to);
-        row1.addView(tp, wgap(1f));   // same width as My speed limit below: the edges line up (user, 2026-11-12)
-        LinearLayout r1b = new LinearLayout(c);
-        r1b.addView(to, wgap(.7f));
-        r1b.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1f));
-        row1.addView(r1b, new LinearLayout.LayoutParams(0, -1, 1.35f));
-        root.addView(row1, gap());
+        LinearLayout to = flatTile("Range"); outside = big(to);   // was Outside (now in the weather card)
+        row1.addView(tp, wgap(1.2f));
+        row1.addView(to, wgap(.8f));
+        row1.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1f));
+        root.addView(row1, gapH(rowH));
+        LinearLayout rowN = new LinearLayout(c);
+        LinearLayout tc = flatTile("Cabin"); cabin = big(tc);
+        LinearLayout tb = flatTile("Battery"); batt = big(tb);
+        LinearLayout tvC = flatTile("12 V"); volt = big(tvC);
+        rowN.addView(tc, wgap(1.2f)); rowN.addView(tb, wgap(.8f)); rowN.addView(tvC, new LinearLayout.LayoutParams(0, -1, 1f));
+        root.addView(rowN, gapH(rowH));
 
         LinearLayout row2 = new LinearLayout(c);
         limitCard = flatTile("Limit");
@@ -76,7 +83,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         trayBox.addView(tray);
         row2.addView(trayBox, new LinearLayout.LayoutParams(0, -1, 1.35f));
         drawShortcuts();
-        root.addView(row2, gap());
+        root.addView(row2, gapH(rowH));
         showLimit();
 
         // Today and This trip: the same 4 columns, label above value, lined up with the cards below (user, 2026-11-13)
@@ -126,8 +133,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout t4 = tile("Top speed"); topSpd = big(t4);
         LinearLayout t9 = tile("Battery used"); brakes = big(t9);
         r2.addView(t8, w(true)); r2.addView(t7, w(true)); r2.addView(t4, w(true)); r2.addView(t9, wide());
-        for (LinearLayout r : new LinearLayout[]{r1, r2}) {
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        for (LinearLayout r : new LinearLayout[]{r1, r2}) {   // the two card rows the same height (user, 2026-11-13)
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Ui.dp(c, 50));
             lp.bottomMargin = Ui.dp(c, 6);
             en.addView(r, lp);
         }
@@ -294,6 +301,12 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private LinearLayout.LayoutParams wgap(float w) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, w);
         lp.rightMargin = Ui.dp(c, 6);
+        return lp;
+    }
+
+    private LinearLayout.LayoutParams gapH(int h) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, h);
+        lp.bottomMargin = Ui.dp(c, 6);
         return lp;
     }
 
@@ -465,7 +478,15 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     }
 
     @Override public void onCar(CarData.State s) {
-        outside.setText(s.outsideC == Integer.MIN_VALUE ? "–" : s.outsideC + "°C");
+        // Range at your driving: battery left ÷ today's average (or the car's own range early in the day)
+        TripEnergy te = TripEnergy.get(c);
+        double avgNow = te.todayKm() >= 5 && te.todayKwh() > 0 ? te.todayKwh() / te.todayKm() * 100 : Double.NaN;
+        double left = !Double.isNaN(s.remainKwh) ? s.remainKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 : Double.NaN;
+        outside.setText(!Double.isNaN(avgNow) && !Double.isNaN(left) && avgNow > 5 ? Math.round(left / avgNow * 100) + " km"
+                : s.rangeKm >= 0 ? s.rangeKm + " km" : "–");
+        cabin.setText(Double.isNaN(s.cabinC) ? "–" : Math.round(s.cabinC) + "°C");
+        batt.setText(Double.isNaN(s.batteryC) ? "–" : Math.round(s.batteryC) + "°C");
+        volt.setText(Double.isNaN(s.volt12) ? "–" : String.format(Locale.US, "%.1f V", s.volt12));
         pm.setText((s.pmOut < 0 ? "–" : String.valueOf(s.pmOut)) + " / " + (s.pmIn < 0 ? "–" : String.valueOf(s.pmIn)) + pmLevel(s.pmOut));
         pm.setTextColor(s.pmOut > 50 ? Theme.DANGER : s.pmOut > 25 ? Theme.CAUTION : th.text);
         // My speed limit: card turns red while over (warning only; SpeedAlert beeps)

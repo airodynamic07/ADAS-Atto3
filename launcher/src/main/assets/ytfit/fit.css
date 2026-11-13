@@ -33,5 +33,10 @@ html.natee-watch .html5-video-container,
 html.natee-watch .html5-main-video {
   width: 100vw !important; height: 100vh !important;
   left: 0 !important; top: 0 !important;
-  object-fit: contain !important;
+  object-fit: cover !important;   /* fill the box, sides trimmed (user, 2026-11-13) */
 }
+
+/* ⤢ in NATEE switches to "fit": the whole picture with bars */
+html.natee-watch.natee-fit #player-container-id video,
+html.natee-watch.natee-fit .player-container video,
+html.natee-watch.natee-fit .html5-main-video { object-fit: contain !important; }

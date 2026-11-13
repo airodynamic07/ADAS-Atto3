@@ -177,6 +177,12 @@ public final class SettingsDialog {
         dl.addView(Ui.chip(c, "Find DRL reading", false, th, v -> findDrl(c, th, redo)), weight(c));
         root.addView(dl);
 
+        // cabin / battery / 12 V cards show "–": list the car's readings to find the right ones (user, 2026-11-13)
+        section(c, root, th, "Cabin · Battery · 12 V cards");
+        LinearLayout fr = row(c);
+        fr.addView(Ui.chip(c, "Find readings", false, th, v -> findReadings(c, th)), weight(c));
+        root.addView(fr);
+
         section(c, root, th, "Problems");
         LinearLayout pb = row(c);
         pb.addView(Ui.chip(c, "Show crash log", false, th, v -> new Thread(() -> {
@@ -292,6 +298,35 @@ public final class SettingsDialog {
                         });
                     }).start())
                     .setNegativeButton("Cancel", null).show());
+        }).start();
+    }
+
+    /** Every temperature / voltage-looking reading the car gives; tap one to use it for a card. Read only. */
+    private static void findReadings(Context c, Theme th) {
+        android.widget.Toast.makeText(c, "Reading the car… (a few seconds)", android.widget.Toast.LENGTH_SHORT).show();
+        android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+        new Thread(() -> {
+            java.util.Map<String, Integer> all = CarData.get(c).snapshot("ac.BYDAutoAcDevice", "statistic.BYDAutoStatisticDevice",
+                    "instrument.BYDAutoInstrumentDevice", "bodywork.BYDAutoBodyworkDevice", "bms.BYDAutoBmsDevice",
+                    "energy.BYDAutoEnergyDevice", "power.BYDAutoPowerDevice", "engine.BYDAutoEngineDevice");
+            final java.util.List<String> keys = new java.util.ArrayList<>();
+            final java.util.List<String> labels = new java.util.ArrayList<>();
+            for (java.util.Map.Entry<String, Integer> e : all.entrySet()) {
+                String m = e.getKey().split("\\|")[1].toLowerCase(java.util.Locale.US);
+                if (!(m.contains("temp") || m.contains("volt"))) continue;
+                keys.add(e.getKey());
+                labels.add(e.getKey().replaceAll(".*\\.BYDAuto|Device", "").replace("|-1", "") + " = " + e.getValue());
+            }
+            ui.post(() -> {
+                if (keys.isEmpty()) { new AlertDialog.Builder(c).setTitle("No readings found").setPositiveButton("OK", null).show(); return; }
+                new AlertDialog.Builder(c).setTitle("Car readings (send a photo to Claude) — tap one to use it")
+                        .setItems(labels.toArray(new String[0]), (d, i) -> new AlertDialog.Builder(c).setTitle(labels.get(i))
+                                .setItems(new String[]{"Use for Cabin", "Use for Battery temp", "Use for 12 V"}, (d2, j) -> {
+                                    String n = j == 0 ? "cabin" : j == 1 ? "battery" : "volt12";
+                                    c.getSharedPreferences("adas_launcher", 0).edit().putString("read_" + n, keys.get(i)).apply();
+                                }).show())
+                        .setPositiveButton("Close", null).show();
+            });
         }).start();
     }
 

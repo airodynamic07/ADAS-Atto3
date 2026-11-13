@@ -78,5 +78,10 @@ final class GeckoGhost {
         } catch (Throwable ignored) { }
     }
 
+    /** Change only the part after # of the current page (no reload): the video add-on reads it. */
+    void evalHash(String h) {
+        try { session.loadUri("javascript:location.hash='" + h + "';void 0"); } catch (Throwable ignored) { }
+    }
+
     void close() { try { view.releaseSession(); session.close(); } catch (Throwable ignored) { } }
 }
