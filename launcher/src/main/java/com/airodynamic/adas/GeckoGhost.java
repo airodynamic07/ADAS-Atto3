@@ -22,10 +22,22 @@ final class GeckoGhost {
      * @param density how many screen pixels per web pixel. Chosen so Ghost Race's side panel fills the window's
      *                height like it does in full-screen Firefox (user, 2026-11-12); 0 = Android's own.
      */
-    GeckoGhost(Context c, String url, float density) {
+    GeckoGhost(Context c, String url, float density) { this(c, url, density, null); }
+
+    /**
+     * @param profile its own browser data folder (the song video): Ghost Race keeps running in another process
+     *                and holds the shared one, so a second engine on it stayed black (2026-11-13). null = default.
+     */
+    GeckoGhost(Context c, String url, float density, String profile) {
         if (runtime == null) {
             org.mozilla.geckoview.GeckoRuntimeSettings.Builder sb = new org.mozilla.geckoview.GeckoRuntimeSettings.Builder();
             if (density > 0) sb.displayDensityOverride(density);
+            if (profile != null) {
+                java.io.File dir = new java.io.File(c.getFilesDir(), "gecko-" + profile);
+                //noinspection ResultOfMethodCallIgnored
+                dir.mkdirs();
+                sb.arguments(new String[]{"-profile", dir.getAbsolutePath()});
+            }
             runtime = GeckoRuntime.create(c.getApplicationContext(), sb.build());
         }
         // "NATEELauncher/1" at the end of the browser name: Ghost Race turns Pro on here (Air's own car, 2026-11-12)

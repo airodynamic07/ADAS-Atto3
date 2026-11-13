@@ -54,7 +54,7 @@ public class VideoActivity extends Activity {
         try {
             String q = in.getStringExtra(Q);
             String url = "https://m.youtube.com/results?search_query=" + android.net.Uri.encode((q == null ? "" : q) + " official video");
-            gecko = new GeckoGhost(this, url, 0);
+            gecko = new GeckoGhost(this, url, 0, "video");   // own browser data: Ghost Race may be running too
             gecko.installVideoFit();   // only the video, filling the box (user, 2026-11-13)
             root.addView(gecko.view(), new FrameLayout.LayoutParams(-1, -1));
         } catch (Throwable e) {
