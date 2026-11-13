@@ -138,6 +138,7 @@ public final class TripEnergy implements CarData.Listener {
     public boolean fromRemaining;           // true when using the battery's remaining energy instead of power
     private double startRemain = Double.NaN;
     private double lastSoc = Double.NaN;
+    private boolean chargingLatch;
     private long lastAt;
     private double segKm, segKwh, segSpeedSum;
     private int segN, segPedalN, segPowerN;
@@ -222,6 +223,11 @@ public final class TripEnergy implements CarData.Listener {
             boolean socUp = !Double.isNaN(s.socPct) && !Double.isNaN(lastSoc) && s.socPct > lastSoc;
             if (!Double.isNaN(s.socPct)) lastSoc = s.socPct;
             boolean charging = still && !Double.isNaN(s.powerKw) && (s.powerKw < 0 || s.powerKw > 5 || socUp);
+            // (2026-11-13) a slow home charger (≈3 kW) only showed as "battery % went up" for the one moment the % changed;
+            // in between, its power was counted as driving. Once charging is seen, it stays "charging" until the car moves.
+            if (charging) chargingLatch = true;
+            if (!still) chargingLatch = false;
+            charging = charging || chargingLatch;
             if (charging) {
                 fromRemaining = false;
                 dKwh = 0;
