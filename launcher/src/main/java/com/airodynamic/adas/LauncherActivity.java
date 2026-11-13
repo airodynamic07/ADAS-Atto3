@@ -34,12 +34,21 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             engineHost = new EngineHost(this);
             engineHost.setGhostListener(open -> rebuild());   // Ghost Race opens wide, closes back
             engineHost.setGhostArea(this::ghostArea);
+            engineHost.setWindowAreas(() -> box(frames[2]), () -> box(frames[1]));
         }
         return engineHost;
     }
+    private final android.content.BroadcastReceiver ghostStopped = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context c, android.content.Intent i) { if (engineHost != null) engineHost.ghostWindowClosed(); }
+    };
     private boolean sportOn;        // Auto Sport currently active
     private int[] winOrder = {2, 1, 0};
     /** Screen box covering the first two windows (left + middle), for the Ghost Race window. */
+    private int[] box(View v) {
+        if (v == null || v.getWidth() == 0) return null;
+        int[] l = new int[2]; v.getLocationOnScreen(l);
+        return new int[]{l[0], l[1], v.getWidth(), v.getHeight()};
+    }
     private int[] ghostArea() {
         View a = frames[2], b = frames[1];   // info + engine (the trip window is never covered)
         if (a == null || b == null || a.getWidth() == 0) return null;
@@ -68,6 +77,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         TripEnergy.get(this);   // counts this trip's energy even while other apps are open
         turnCam = new TurnCamera(this, feed, prefs);
         registerReceiver(themeRequest, new IntentFilter(ACTION_THEME_REQUEST));
+        registerReceiver(ghostStopped, new IntentFilter(GhostActivity.ACTION_STOPPED));
         rebuild();
         ensureLocation();
     }
@@ -103,6 +113,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     @Override protected void onDestroy() {
         try { unregisterReceiver(themeRequest); } catch (Exception ignored) {}
+        try { unregisterReceiver(ghostStopped); } catch (Exception ignored) {}
         super.onDestroy();
     }
 
@@ -246,7 +257,8 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     @Override protected void onResume() {
         super.onResume();
-        if (engineHost != null) { engineHost.setForeground(true); engineHost.ghostWindowClosed(); }
+        // Ghost Race keeps running in its own window (it only ends with its ■ Stop): show it again on top
+        if (engineHost != null) { engineHost.setForeground(true); getWindow().getDecorView().post(engineHost::reshowGhost); }
         resumed = true;
         CarData.get(this).addListener(this);
         turnCam.setAllowed(true);

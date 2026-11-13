@@ -299,7 +299,7 @@ public final class EngineHost {
             if (r == null) { int[] l = new int[2]; root.getLocationOnScreen(l); r = new int[]{l[0], l[1], root.getWidth(), root.getHeight()}; }
             geckoOpen = true;
             ghostVisible = true;
-            try { GhostActivity.open(act, r[0], r[1], r[2], r[3], theme); }
+            try { GhostActivity.open(act, ghostAreas(r), theme); }
             catch (Throwable t) { showDiag("Ghost Race window didn't open (" + t.getClass().getSimpleName() + ")"); ghostWindowClosed(); }
             return;
         }
@@ -351,6 +351,21 @@ public final class EngineHost {
     /** Ghost Race is in its own window (Firefox engine): the launcher keeps its normal layout. */
     public boolean ghostInWindow() { return geckoOpen; }
     /** Called when the launcher comes back to the front: the Firefox-engine window has closed (or crashed). */
+    /** big, window 1, window 2 boxes for the Ghost Race window. */
+    private int[] ghostAreas(int[] big) {
+        int[] w1 = win1 != null ? win1.get() : null, w2 = win2 != null ? win2.get() : null;
+        if (w1 == null) w1 = big; if (w2 == null) w2 = big;
+        return new int[]{big[0], big[1], big[2], big[3], w1[0], w1[1], w1[2], w1[3], w2[0], w2[1], w2[2], w2[3]};
+    }
+    private Area win1, win2;
+    public void setWindowAreas(Area one, Area two) { win1 = one; win2 = two; }
+    /** The launcher came back to the front while Ghost Race still runs: put its window back on top. */
+    public void reshowGhost() {
+        if (!geckoOpen || act == null) return;
+        int[] r = ghostArea != null ? ghostArea.get() : null;
+        if (r == null) return;
+        try { GhostActivity.open(act, ghostAreas(r), theme); } catch (Throwable ignored) { }
+    }
     public void ghostWindowClosed() {
         if (!geckoOpen) return;
         geckoOpen = false;

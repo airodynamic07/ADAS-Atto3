@@ -166,6 +166,8 @@
         <activity
             android:name=".GhostActivity"
             android:process=":ghost"
+            android:launchMode="singleInstance"
+            android:taskAffinity="com.airodynamic.adas.ghost"
             android:exported="false"
             android:excludeFromRecents="true"
             android:screenOrientation="landscape"

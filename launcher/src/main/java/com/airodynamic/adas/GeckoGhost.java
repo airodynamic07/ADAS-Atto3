@@ -54,5 +54,8 @@ final class GeckoGhost {
     /** Same page, only the part after # changes: Ghost Race switches colour without reloading. */
     void load(String url) { session.loadUri(url); }
 
+    /** Keep the page running (GPS, recording) while the window is hidden. */
+    void keepActive() { try { session.setActive(true); } catch (Throwable ignored) { } }
+
     void close() { try { view.releaseSession(); session.close(); } catch (Throwable ignored) { } }
 }

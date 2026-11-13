@@ -377,10 +377,10 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     /** Tappable cards look like buttons: yellow in the blue / red themes, the theme's blue in white (user, 2026-11-13). */
     private void tapButton(LinearLayout card, TextView value) {
         boolean white = th == Theme.WHITE;
-        int bg = white ? th.accent : 0xFFFFC21A, fg = white ? 0xFFFFFFFF : 0xFF1A1200;
+        int bg = white ? th.accent : 0xFFFF8A1F, fg = white ? 0xFFFFFFFF : 0xFF1A0B00;   // orange (user, 2026-11-13)
         card.setBackground(Ui.round(bg, bg, 10, c));
         value.setTextColor(fg);
-        ((TextView) card.getChildAt(0)).setTextColor(white ? 0xDDFFFFFF : 0xFF3A2A00);
+        ((TextView) card.getChildAt(0)).setTextColor(white ? 0xDDFFFFFF : 0xFF3A1800);
     }
 
     private LinearLayout.LayoutParams wide() { return new LinearLayout.LayoutParams(0, -1, 1.45f); }

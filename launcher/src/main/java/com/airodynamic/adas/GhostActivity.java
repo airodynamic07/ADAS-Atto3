@@ -33,16 +33,59 @@ public class GhostActivity extends Activity {
     private final android.content.BroadcastReceiver themeRx = new android.content.BroadcastReceiver() {
         @Override public void onReceive(android.content.Context c, Intent i) {
             String t = i.getStringExtra(THEME);
-            if (gecko != null && t != null) gecko.load(baseUrl + "#natee=" + t);
-            if (t != null) setFrame(t);
+            if (t != null) { theme = t; setFrame(t); if (gecko != null) gecko.load(baseUrl + "#natee=" + t + (mode == 0 ? "" : "&mini=1")); }
         }
     };
     private GeckoGhost gecko;
 
-    static void open(Activity from, int x, int y, int w, int h, String theme) {
-        Intent i = new Intent(from, GhostActivity.class).putExtra(X, x).putExtra(Y, y).putExtra(W, w).putExtra(H, h).putExtra(THEME, theme);
+    static final String AREAS = "areas", ACTION_STOPPED = "com.airodynamic.adas.GHOST_STOPPED";
+    /**
+     * @param areas screen boxes {x, y, w, h} x3: big (windows 1+2), window 1, window 2. Ghost Race runs in its own
+     *              task, so going Home or opening another app never ends it: it keeps recording (user, 2026-11-13).
+     */
+    static void open(Activity from, int[] areas, String theme) {
+        Intent i = new Intent(from, GhostActivity.class).putExtra(AREAS, areas).putExtra(THEME, theme)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         from.startActivity(i);
         from.overridePendingTransition(0, 0);
+    }
+
+    // 0 = big (windows 1+2, all of Ghost Race), 1 = small in window 1, 2 = small in window 2 (map only)
+    private int mode;
+    private int[] areas;
+    private String theme = "blue";
+    private android.widget.Button bSmall, bStop, bEnlarge, bMove, bAgain;
+    private TextView rec;
+
+    private void place() {
+        if (areas == null || areas.length < 12) return;
+        int o = mode * 4;
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.x = areas[o]; lp.y = areas[o + 1]; lp.width = areas[o + 2]; lp.height = areas[o + 3];
+        getWindow().setAttributes(lp);
+        boolean big = mode == 0;
+        bSmall.setVisibility(big ? android.view.View.VISIBLE : android.view.View.GONE);
+        bStop.setVisibility(big ? android.view.View.VISIBLE : android.view.View.GONE);
+        bAgain.setVisibility(big ? android.view.View.VISIBLE : android.view.View.GONE);
+        bEnlarge.setVisibility(big ? android.view.View.GONE : android.view.View.VISIBLE);
+        bMove.setVisibility(big ? android.view.View.GONE : android.view.View.VISIBLE);
+        rec.setVisibility(big ? android.view.View.GONE : android.view.View.VISIBLE);
+        bMove.setText(mode == 1 ? "→ 2" : "1 ←");
+        FrameLayout.LayoutParams ml = (FrameLayout.LayoutParams) bMove.getLayoutParams();
+        ml.gravity = Gravity.BOTTOM | (mode == 1 ? Gravity.END : Gravity.START);
+        bMove.setLayoutParams(ml);
+        if (gecko != null) gecko.load(baseUrl + "#natee=" + theme + (big ? "" : "&mini=1"));   // # change: no reload
+    }
+
+    @Override protected void onNewIntent(Intent in) {
+        super.onNewIntent(in);
+        int[] a = in.getIntArrayExtra(AREAS);
+        if (a != null && a.length >= 12) { areas = a; place(); }
+    }
+
+    @Override protected void onStop() {
+        super.onStop();
+        if (gecko != null) gecko.keepActive();   // keep recording while hidden behind another app
     }
 
     @Override protected void onCreate(Bundle b) {
@@ -57,10 +100,9 @@ public class GhostActivity extends Activity {
                 | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
         WindowManager.LayoutParams lp = win.getAttributes();
         lp.gravity = Gravity.TOP | Gravity.START;
-        lp.x = in.getIntExtra(X, 0);
-        lp.y = in.getIntExtra(Y, 0);
-        lp.width = in.getIntExtra(W, WindowManager.LayoutParams.MATCH_PARENT);
-        lp.height = in.getIntExtra(H, WindowManager.LayoutParams.MATCH_PARENT);
+        areas = in.getIntArrayExtra(AREAS);
+        if (in.getStringExtra(THEME) != null) theme = in.getStringExtra(THEME);
+        if (areas != null && areas.length >= 4) { lp.x = areas[0]; lp.y = areas[1]; lp.width = areas[2]; lp.height = areas[3]; }
         lp.windowAnimations = 0;
         win.setAttributes(lp);
         setFinishOnTouchOutside(false);
@@ -89,20 +131,45 @@ public class GhostActivity extends Activity {
         }
         if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED)
             android.widget.Toast.makeText(this, "Location is not allowed for NATEE yet: Ghost Race can't find GPS", android.widget.Toast.LENGTH_LONG).show();
-                android.widget.Button close = Ui.chip(this, "✕  Engine Sound", false, th, v -> finish());
-        close.setAlpha(0.85f);
-        FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        cl.topMargin = Ui.dp(this, 4);
-        root.addView(close, cl);
-        // ⟳: load Ghost Race again (e.g. the map didn't load because the internet wasn't up yet)
-        android.widget.Button again = Ui.chip(this, "⟳", false, th, v -> { if (gecko != null) gecko.reload(); });
-        again.setAlpha(0.85f);
-        // just left of "✕ Engine Sound", away from Ghost Race's own map buttons (it covered the ☀ button)
+        // big: ▭ Small, ⟳, ■ Stop  ·  small: ⤢ Enlarge, → 2 / 1 ←, ● REC (user, 2026-11-13)
+        bSmall = Ui.chip(this, "▭  Small", false, th, v -> { mode = 1; place(); });
+        bSmall.setAlpha(0.9f);
+        FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        sl.topMargin = Ui.dp(this, 4);
+        root.addView(bSmall, sl);
+        bAgain = Ui.chip(this, "⟳", false, th, v -> { if (gecko != null) gecko.reload(); });
+        bAgain.setAlpha(0.85f);
         FrameLayout.LayoutParams al = new FrameLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         al.topMargin = Ui.dp(this, 4);
-        al.rightMargin = Ui.dp(this, 230);
-        root.addView(again, al);
+        al.rightMargin = Ui.dp(this, 200);
+        root.addView(bAgain, al);
+        bStop = Ui.chip(this, "■  Stop", false, th, v -> new android.app.AlertDialog.Builder(this)
+                .setTitle("Stop Ghost Race?").setMessage("Recording stops and Ghost Race closes.")
+                .setPositiveButton("Stop", (d, w) -> {
+                    sendBroadcast(new Intent(ACTION_STOPPED).setPackage(getPackageName()));
+                    finish();
+                }).setNegativeButton("Keep running", null).show());
+        bStop.setAlpha(0.9f);
+        FrameLayout.LayoutParams stl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        stl.topMargin = Ui.dp(this, 4);
+        stl.leftMargin = Ui.dp(this, 230);
+        root.addView(bStop, stl);
+        bEnlarge = Ui.chip(this, "⤢  Enlarge", false, th, v -> { mode = 0; place(); });
+        FrameLayout.LayoutParams el = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.END);
+        el.topMargin = el.rightMargin = Ui.dp(this, 6);
+        root.addView(bEnlarge, el);
+        bMove = Ui.chip(this, "→ 2", false, th, v -> { mode = mode == 1 ? 2 : 1; place(); });
+        FrameLayout.LayoutParams mvl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.BOTTOM | Gravity.END);
+        mvl.bottomMargin = mvl.rightMargin = mvl.leftMargin = Ui.dp(this, 6);
+        root.addView(bMove, mvl);
+        rec = Ui.text(this, "● REC", 13, Color.WHITE, true);
+        rec.setBackground(Ui.round(0xCCE5202E, 0, 10, this));
+        rec.setPadding(Ui.dp(this, 9), Ui.dp(this, 2), Ui.dp(this, 9), Ui.dp(this, 2));
+        FrameLayout.LayoutParams rl = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+        rl.topMargin = rl.leftMargin = Ui.dp(this, 8);
+        root.addView(rec, rl);
         setContentView(root);
+        place();
         reloadWhenOnline();
     }
 
