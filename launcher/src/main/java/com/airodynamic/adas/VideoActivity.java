@@ -55,6 +55,7 @@ public class VideoActivity extends Activity {
             String q = in.getStringExtra(Q);
             String url = "https://m.youtube.com/results?search_query=" + android.net.Uri.encode((q == null ? "" : q) + " official video");
             gecko = new GeckoGhost(this, url, 0);
+            gecko.installVideoFit();   // only the video, filling the box (user, 2026-11-13)
             root.addView(gecko.view(), new FrameLayout.LayoutParams(-1, -1));
         } catch (Throwable e) {
             TextView err = Ui.text(this, "Video couldn't start (" + e.getClass().getSimpleName() + ")", 15, Color.WHITE, true);

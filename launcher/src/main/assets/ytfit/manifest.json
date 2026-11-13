@@ -1,0 +1,15 @@
+{
+  "manifest_version": 2,
+  "name": "NATEE video fit",
+  "version": "1.0",
+  "description": "Song video window: only the video, filling the box (no YouTube header, title or Next bar).",
+  "browser_specific_settings": { "gecko": { "id": "ytfit@natee" } },
+  "content_scripts": [
+    {
+      "matches": ["*://m.youtube.com/*", "*://www.youtube.com/*", "*://youtube.com/*"],
+      "css": ["fit.css"],
+      "js": ["fit.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

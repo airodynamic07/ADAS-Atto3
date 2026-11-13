@@ -57,5 +57,14 @@ final class GeckoGhost {
     /** Keep the page running (GPS, recording) while the window is hidden. */
     void keepActive() { try { session.setActive(true); } catch (Throwable ignored) { } }
 
+    /** Song video window: install the small built-in add-on that shows only the video, filling the box,
+     *  then load the page again so the add-on is active on it. */
+    void installVideoFit() {
+        try {
+            runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/ytfit/", "ytfit@natee")
+                    .accept(ext -> session.reload(), err -> { });
+        } catch (Throwable ignored) { }
+    }
+
     void close() { try { view.releaseSession(); session.close(); } catch (Throwable ignored) { } }
 }

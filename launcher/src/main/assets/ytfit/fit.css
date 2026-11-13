@@ -1,0 +1,37 @@
+/* Only on a video page (class set by fit.js): hide YouTube's header, title, Next bar and everything under
+   the player, and let the player fill the whole window. Search results stay as they are. */
+html.natee-watch ytm-mobile-topbar-renderer,
+html.natee-watch #header-bar,
+html.natee-watch header,
+html.natee-watch .mobile-topbar-header,
+html.natee-watch ytm-single-column-watch-next-results-renderer,
+html.natee-watch .watch-below-the-player,
+html.natee-watch ytm-engagement-panel,
+html.natee-watch ytm-pivot-bar-renderer,
+html.natee-watch .pivot-bar,
+html.natee-watch ytm-autonav-bar,
+html.natee-watch .ytm-autonav-bar,
+html.natee-watch ytm-watch-metadata-app-promo-renderer,
+html.natee-watch .slim-video-metadata-header {
+  display: none !important;
+}
+html.natee-watch, html.natee-watch body { background: #000 !important; overflow: hidden !important; }
+html.natee-watch #player-container-id,
+html.natee-watch .player-container,
+html.natee-watch #player {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important;
+  width: 100vw !important; height: 100vh !important;
+  max-height: none !important;
+  padding: 0 !important; margin: 0 !important;
+  z-index: 2147483000 !important;
+  background: #000 !important;
+}
+html.natee-watch #player-container-id video,
+html.natee-watch .player-container video,
+html.natee-watch .html5-video-container,
+html.natee-watch .html5-main-video {
+  width: 100vw !important; height: 100vh !important;
+  left: 0 !important; top: 0 !important;
+  object-fit: contain !important;
+}
