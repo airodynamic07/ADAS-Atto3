@@ -61,8 +61,8 @@ public final class InfoPanel implements Panel {
         leftCol.setOrientation(LinearLayout.VERTICAL);
         LinearLayout r2 = new LinearLayout(c);
         LinearLayout t2 = tile("Battery health");
-        health = big(t2); healthSub = small(t2); healthSub.setVisibility(View.GONE);   // shorter cards (2026-11-13)
-        LinearLayout t1 = tile("Trip (km · kWh/100)");
+        health = big(t2); health.setTextColor(0xFFFF8A1F);   // orange (user, 2026-11-13) healthSub = small(t2); healthSub.setVisibility(View.GONE);   // shorter cards (2026-11-13)
+        LinearLayout t1 = tile("Date");   // was the car's trip (user, 2026-11-13): day and month
         trip = big(t1); tripSub = small(t1); tripSub.setVisibility(View.GONE);
         r2.addView(t2, weight(1, true)); r2.addView(t1, weight(1, false));
         LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(-1, -2);
@@ -75,7 +75,7 @@ public final class InfoPanel implements Panel {
         LinearLayout oL = new LinearLayout(c), oR = new LinearLayout(c);
         oL.setOrientation(LinearLayout.VERTICAL); oR.setOrientation(LinearLayout.VERTICAL);
         oL.addView(label("Odometer"));
-        odo = big(oL);
+        odo = big(oL); odo.setTextColor(0xFFFF8A1F);   // orange (user, 2026-11-13)
         oR.addView(serviceLabel = label("Service in"));
         odoSub = Ui.text(c, "–", 15, th.text, true);
         odoSub.setSingleLine(true);
@@ -314,9 +314,10 @@ public final class InfoPanel implements Panel {
         drlBtn.setBackground(Ui.round(drlOn ? (Theme.SAFE & 0x00FFFFFF) | 0x33000000 : th.chip, drlOn ? Theme.SAFE : th.line, 14, c));
         doorsText.setTextColor(open || s.lock == 2 ? Theme.CAUTION : Theme.SAFE);
 
-        trip.setText(Double.isNaN(s.tripKm) ? "–" : String.format(Locale.US, "%.0f", s.tripKm)
-                + (Double.isNaN(s.kwhPer100) ? "" : String.format(Locale.US, " · %.1f", s.kwhPer100)));
-        tripSub.setText(Double.isNaN(s.kwhPer100) ? "" : String.format(Locale.US, "%.1f kWh/100", s.kwhPer100));
+        java.util.Date now = new java.util.Date();
+        trip.setText(new java.text.SimpleDateFormat("d MMM", Locale.US).format(now));
+        tripSub.setVisibility(View.VISIBLE);
+        tripSub.setText(new java.text.SimpleDateFormat("EEEE", Locale.US).format(now));
         health.setText(Double.isNaN(s.healthPct) ? "–" : String.format(Locale.US, "%.0f%%", s.healthPct));
         healthSub.setText(Double.isNaN(s.healthPct) ? (s.known ? "car not reporting" : "from the car") : "from the car");
         odo.setText(Double.isNaN(s.odometerKm) ? "–" : String.format(Locale.US, "%,d", Math.round(s.odometerKm)));
