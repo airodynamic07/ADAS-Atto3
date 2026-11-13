@@ -111,7 +111,7 @@ public final class MusicCard {
         hs2.addView(queueRow2);
         LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(-1, Ui.dp(c, 34));
         q2.topMargin = Ui.dp(c, 4);
-        root.addView(hs2, q2);
+        // root.addView(hs2, q2);   // second row removed (user, 2026-11-13)
         refresh();
     }
 
@@ -239,7 +239,7 @@ public final class MusicCard {
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -1);
             lp.rightMargin = Ui.dp(c, 6);
-            (shown % 2 == 0 ? queueRow : queueRow2).addView(cell, lp);   // two rows, songs in order down then across
+            queueRow.addView(cell, lp);   // one row again (user, 2026-11-13)
         }
         if (shown == 0) queueRow.addView(Ui.text(c, "Nothing more in the queue", 12, th.muted, false));
     }

@@ -61,7 +61,8 @@ public final class InfoPanel implements Panel {
         leftCol.setOrientation(LinearLayout.VERTICAL);
         LinearLayout r2 = new LinearLayout(c);
         LinearLayout t2 = tile("Battery health");
-        health = big(t2); health.setTextColor(0xFFFF8A1F);   // orange (user, 2026-11-13) healthSub = small(t2); healthSub.setVisibility(View.GONE);   // shorter cards (2026-11-13)
+        health = big(t2); health.setTextColor(0xFFFF8A1F);   // orange (user, 2026-11-13)
+        healthSub = small(t2); healthSub.setVisibility(View.GONE);   // shorter cards (2026-11-13)
         LinearLayout t1 = tile("Date");   // was the car's trip (user, 2026-11-13): day and month
         trip = big(t1); tripSub = small(t1); tripSub.setVisibility(View.GONE);
         r2.addView(t2, weight(1, true)); r2.addView(t1, weight(1, false));
