@@ -56,6 +56,10 @@ public final class Prefs {
     public static int drlOn(android.content.Context c) { return c.getSharedPreferences("adas_launcher", 0).getInt("drlOn", 1); }
     public static void setDrl(android.content.Context c, String key, int on) { c.getSharedPreferences("adas_launcher", 0).edit().putString("drlKey", key).putInt("drlOn", on).apply(); }
 
+    /** The song's video may play while driving, in the left window, for the passenger (user, 2026-11-13). Default on. */
+    public boolean videoWhileDriving() { return p.getBoolean("videoDriving", true); }
+    public void setVideoWhileDriving(boolean on) { p.edit().putBoolean("videoDriving", on).apply(); }
+
     /** Tyre pressure unit: "psi" (default), "bar" or "kpa". */
     public String tyreUnit() { return p.getString("tyreUnit", "psi"); }
     public void setTyreUnit(String u) { p.edit().putString("tyreUnit", u).apply(); }

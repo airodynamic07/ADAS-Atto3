@@ -79,6 +79,8 @@ public final class MusicCard {
         top.addView(Ui.chip(c, "⏭", false, th, v -> act(2)), sq());
         like = Ui.chip(c, "👍", false, th, v -> act(3));
         top.addView(like, sq());
+        // 🎬 the song's video in this window (user, 2026-11-13: passenger can watch while driving)
+        top.addView(Ui.chip(c, "🎬", false, th, v -> openVideo()), sq());
 
         // lyrics (from LRCLIB, matched by title/artist, in time with the song): previous, CURRENT, next lines
         LinearLayout ly = new LinearLayout(c);
@@ -88,7 +90,9 @@ public final class MusicCard {
         lyPrev = lyricLine(15, th.muted, false);
         lyNow = lyricLine(21, th.text, true);
         lyNext = lyricLine(15, th.muted, false);
-        ly.addView(lyPrev); ly.addView(lyNow); ly.addView(lyNext);
+        lyNext2 = lyricLine(14, th.muted, false);   // one more line (user, 2026-11-13)
+        lyNext2.setAlpha(.7f);
+        ly.addView(lyPrev); ly.addView(lyNow); ly.addView(lyNext); ly.addView(lyNext2);
         root.addView(ly, new LinearLayout.LayoutParams(-1, 0, 1f));
 
         // up next: the app's queue, swipe sideways, tap a song to play it
@@ -99,6 +103,15 @@ public final class MusicCard {
         queueRow.setGravity(Gravity.CENTER_VERTICAL);
         hs.addView(queueRow);
         root.addView(hs, new LinearLayout.LayoutParams(-1, Ui.dp(c, 34)));
+        // second row of Up next (user, 2026-11-13)
+        android.widget.HorizontalScrollView hs2 = new android.widget.HorizontalScrollView(c);
+        hs2.setHorizontalScrollBarEnabled(false);
+        queueRow2 = new LinearLayout(c);
+        queueRow2.setGravity(Gravity.CENTER_VERTICAL);
+        hs2.addView(queueRow2);
+        LinearLayout.LayoutParams q2 = new LinearLayout.LayoutParams(-1, Ui.dp(c, 34));
+        q2.topMargin = Ui.dp(c, 4);
+        root.addView(hs2, q2);
         refresh();
     }
 
@@ -144,7 +157,8 @@ public final class MusicCard {
             artist.setText("Play music in any app; it shows here");
             lab.setText("Now playing");
             art.setImageBitmap(null);
-            queueRow.removeAllViews(); queueKey = "";
+            queueRow.removeAllViews();
+        queueRow2.removeAllViews(); queueKey = "";
             return;
         }
         MediaMetadata md = mc.getMetadata();
@@ -165,13 +179,13 @@ public final class MusicCard {
         if (!key.equals(lyricsKey)) {
             lyricsKey = key;
             lyrics = new java.util.ArrayList<>();
-            lyPrev.setText(""); lyNext.setText("");
+            lyPrev.setText(""); lyNext.setText(""); lyNext2.setText("");
             lyNow.setText(t == null ? "" : "Looking for lyrics…");
             long dur = md == null ? 0 : md.getLong(MediaMetadata.METADATA_KEY_DURATION);
             if (t != null) Lyrics.find(t, a, dur, (k, lines, note) -> main.post(() -> {
                 if (!k.equals(lyricsKey)) return;
                 lyrics = lines;
-                if (lines.isEmpty()) { lyNow.setText(note); lyPrev.setText(""); lyNext.setText(""); }
+                if (lines.isEmpty()) { lyNow.setText(note); lyPrev.setText(""); lyNext.setText(""); lyNext2.setText(""); }
             }), key);
         }
         if (!lyrics.isEmpty() && st != null) {
@@ -182,6 +196,7 @@ public final class MusicCard {
             lyPrev.setText(i > 0 ? lyrics.get(i - 1).text : "");
             lyNow.setText(i >= 0 ? lyrics.get(i).text : "♪");
             lyNext.setText(i + 1 < lyrics.size() ? lyrics.get(i + 1).text : "");
+            lyNext2.setText(i + 2 < lyrics.size() ? lyrics.get(i + 2).text : "");
         }
     }
 
@@ -224,10 +239,33 @@ public final class MusicCard {
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -1);
             lp.rightMargin = Ui.dp(c, 6);
-            queueRow.addView(cell, lp);
+            (shown % 2 == 0 ? queueRow : queueRow2).addView(cell, lp);   // two rows, songs in order down then across
         }
         if (shown == 0) queueRow.addView(Ui.text(c, "Nothing more in the queue", 12, th.muted, false));
     }
+
+    private TextView lyNext2;
+    private LinearLayout queueRow2;
+    private Runnable videoOpener;
+    /** Set by the launcher: shows the current song's video over this card. */
+    public void setVideoOpener(Runnable r) { videoOpener = r; }
+    private void openVideo() { if (videoOpener != null) videoOpener.run(); }
+    /** "Title Artist" of the song playing now, for the video search; null if nothing plays. */
+    public String songQuery() {
+        MediaController mc = session();
+        if (mc == null || mc.getMetadata() == null) return null;
+        android.media.MediaMetadata m = mc.getMetadata();
+        String t = m.getString(android.media.MediaMetadata.METADATA_KEY_TITLE), a = m.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST);
+        return t == null ? null : (t + (a == null ? "" : " " + a));
+    }
+    /** Pause / resume the music app (so the video and the app don't play together). */
+    public boolean pauseMusic() {
+        MediaController mc = session();
+        if (mc == null || mc.getPlaybackState() == null || mc.getPlaybackState().getState() != PlaybackState.STATE_PLAYING) return false;
+        mc.getTransportControls().pause();
+        return true;
+    }
+    public void resumeMusic() { MediaController mc = session(); if (mc != null) mc.getTransportControls().play(); }
 
     private String lyricsKey = "";
     private java.util.List<Lyrics.Line> lyrics = new java.util.ArrayList<>();

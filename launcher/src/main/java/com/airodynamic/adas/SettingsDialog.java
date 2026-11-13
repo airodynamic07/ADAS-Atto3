@@ -141,6 +141,15 @@ public final class SettingsDialog {
             root.addView(sm);
         }
 
+        section(c, root, th, "Song video (🎬 on Now playing): " + (prefs.videoWhileDriving() ? "also while driving, for the passenger" : "only in P"));
+        LinearLayout vd = row(c);
+        vd.addView(Ui.chip(c, "While driving too", prefs.videoWhileDriving(), th, v -> {
+            prefs.setVideoWhileDriving(true);
+            android.widget.Toast.makeText(c, "Passenger only: the driver must not watch", android.widget.Toast.LENGTH_LONG).show();
+            redo.run(); }), weight(c));
+        vd.addView(Ui.chip(c, "Only in P", !prefs.videoWhileDriving(), th, v -> { prefs.setVideoWhileDriving(false); redo.run(); }), weight(c));
+        root.addView(vd);
+
         section(c, root, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
         for (String[] u : new String[][]{{"psi", "PSI"}, {"bar", "bar"}, {"kpa", "kPa"}}) {

@@ -61,9 +61,9 @@ public final class InfoPanel implements Panel {
         leftCol.setOrientation(LinearLayout.VERTICAL);
         LinearLayout r2 = new LinearLayout(c);
         LinearLayout t2 = tile("Battery health");
-        health = big(t2); healthSub = small(t2); healthSub.setText("from the car");
-        LinearLayout t1 = tile("Trip");
-        trip = big(t1); tripSub = small(t1);
+        health = big(t2); healthSub = small(t2); healthSub.setVisibility(View.GONE);   // shorter cards (2026-11-13)
+        LinearLayout t1 = tile("Trip (km · kWh/100)");
+        trip = big(t1); tripSub = small(t1); tripSub.setVisibility(View.GONE);
         r2.addView(t2, weight(1, true)); r2.addView(t1, weight(1, false));
         LinearLayout.LayoutParams r2lp = new LinearLayout.LayoutParams(-1, -2);
         r2lp.bottomMargin = Ui.dp(c, 6);
@@ -115,6 +115,7 @@ public final class InfoPanel implements Panel {
         dr.addView(drlBtn, new LinearLayout.LayoutParams(-2, -2));
         dw.addView(dr, new LinearLayout.LayoutParams(-1, -2));
         doorsText = Ui.text(c, "", 10, Theme.SAFE, false);
+        doorsText.setVisibility(View.GONE);   // the drawing's colours already show open / closed (user, 2026-11-13)
         doorsText.setGravity(Gravity.CENTER);
         dw.addView(doorsText, new LinearLayout.LayoutParams(-1, -2));
         top.addView(dw, new LinearLayout.LayoutParams(0, -2, 1.25f));
@@ -124,6 +125,7 @@ public final class InfoPanel implements Panel {
 
         // --- row 4: now playing (cover, song, prev/play/next) — moved here from the right window (2026-11-11)
         music = new MusicCard(c, th);
+        music.setVideoOpener(this::openVideo);
         root.addView(music.view(), new LinearLayout.LayoutParams(-1, 0, 1f));   // fills the window to the bottom (lyrics)
 
     }
@@ -248,11 +250,31 @@ public final class InfoPanel implements Panel {
 
     @Override public View view() { return root; }
 
+    // ---- the song's video over the Now playing card (user, 2026-11-13)
+    private boolean pausedForVideo, videoOpen;
+    static final String ACTION_VIDEO_CLOSE = "com.airodynamic.adas.VIDEO_CLOSE";
+    private void openVideo() {
+        String q = music.songQuery();
+        if (q == null) { android.widget.Toast.makeText(c, "Play a song first", android.widget.Toast.LENGTH_SHORT).show(); return; }
+        if (!prefs.videoWhileDriving() && !CarData.get(c).last().parked()) {
+            android.widget.Toast.makeText(c, "Video only in P (Settings)", android.widget.Toast.LENGTH_SHORT).show(); return;
+        }
+        if (!(c instanceof android.app.Activity)) return;
+        View v = music.view();
+        int[] l = new int[2];
+        v.getLocationOnScreen(l);
+        pausedForVideo = music.pauseMusic();
+        videoOpen = true;
+        String t = th == Theme.RED ? "red" : th == Theme.WHITE ? "white" : "blue";
+        VideoActivity.open((android.app.Activity) c, l[0], l[1], v.getWidth(), v.getHeight(), q, t);
+    }
+
     @Override public void setActive(boolean a) {
         active = a;
         main.removeCallbacks(slow);
         if (a) main.post(slow);
         music.setActive(a);
+        if (a && videoOpen) { videoOpen = false; if (pausedForVideo) music.resumeMusic(); pausedForVideo = false; }   // video closed
     }
 
     /** BYD's own settings (the DRL switch is there); if no BYD settings app is found, Android's Settings. */
@@ -277,6 +299,8 @@ public final class InfoPanel implements Panel {
             tyreT[i].setText(s.tyreC[i] == Integer.MIN_VALUE ? names[i] : s.tyreC[i] + "°C");
         }
         doors.set(s);
+        if (videoOpen && !prefs.videoWhileDriving() && !s.parked())   // "Video only in P": close it when leaving P
+            c.sendBroadcast(new android.content.Intent(ACTION_VIDEO_CLOSE).setPackage(c.getPackageName()));
         boolean open = s.anyOpen();
         String lock = s.lock == 1 ? " · 🔒 Locked" : s.lock == 2 ? " · Unlocked" : "";
         doorsText.setText((s.sunroofOpen ? "Sunroof open" : open ? "Something open" : "All closed") + lock
@@ -290,7 +314,8 @@ public final class InfoPanel implements Panel {
         drlBtn.setBackground(Ui.round(drlOn ? (Theme.SAFE & 0x00FFFFFF) | 0x33000000 : th.chip, drlOn ? Theme.SAFE : th.line, 14, c));
         doorsText.setTextColor(open || s.lock == 2 ? Theme.CAUTION : Theme.SAFE);
 
-        trip.setText(Double.isNaN(s.tripKm) ? "–" : String.format(Locale.US, "%.0f km", s.tripKm));
+        trip.setText(Double.isNaN(s.tripKm) ? "–" : String.format(Locale.US, "%.0f", s.tripKm)
+                + (Double.isNaN(s.kwhPer100) ? "" : String.format(Locale.US, " · %.1f", s.kwhPer100)));
         tripSub.setText(Double.isNaN(s.kwhPer100) ? "" : String.format(Locale.US, "%.1f kWh/100", s.kwhPer100));
         health.setText(Double.isNaN(s.healthPct) ? "–" : String.format(Locale.US, "%.0f%%", s.healthPct));
         healthSub.setText(Double.isNaN(s.healthPct) ? (s.known ? "car not reporting" : "from the car") : "from the car");
