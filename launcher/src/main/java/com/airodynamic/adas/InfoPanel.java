@@ -309,10 +309,10 @@ public final class InfoPanel implements Panel {
                     ? "\nroof " + (s.roofPos == Integer.MIN_VALUE ? "–" : s.roofPos) + " / " + (s.roofState == Integer.MIN_VALUE ? "–" : s.roofState) : "")
                 + (s.bootRaw.isEmpty() ? "" : "\nboot " + s.bootRaw)
                 + (s.drlRaw.isEmpty() ? "" : "\ndrl " + s.drlRaw));   // raw values, temporary
-        boolean drlOn = s.drl == 1;
-        drlBtn.setText(s.drl < 0 ? "◐ DRL ? ›" : drlOn ? "◐ DRL ON ›" : "◐ DRL OFF ›");
-        drlBtn.setTextColor(drlOn ? Theme.SAFE : th.muted);
-        drlBtn.setBackground(Ui.round(drlOn ? (Theme.SAFE & 0x00FFFFFF) | 0x33000000 : th.chip, drlOn ? Theme.SAFE : th.line, 14, c));
+        // just an orange "DRL" button: opens BYD's light settings (user, 2026-11-13)
+        drlBtn.setText("DRL");
+        drlBtn.setTextColor(0xFF1A0B00);
+        drlBtn.setBackground(Ui.round(0xFFFF8A1F, 0xFFFF8A1F, 14, c));
         doorsText.setTextColor(open || s.lock == 2 ? Theme.CAUTION : Theme.SAFE);
 
         java.util.Date now = new java.util.Date();

@@ -87,12 +87,15 @@ public final class MusicCard {
         ly.setOrientation(LinearLayout.VERTICAL);
         ly.setGravity(Gravity.CENTER);
         ly.setPadding(Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6), 0);
-        lyPrev = lyricLine(15, th.muted, false);
-        lyNow = lyricLine(21, th.text, true);
-        lyNext = lyricLine(15, th.muted, false);
-        lyNext2 = lyricLine(14, th.muted, false);   // one more line (user, 2026-11-13)
-        lyNext2.setAlpha(.7f);
-        ly.addView(lyPrev); ly.addView(lyNow); ly.addView(lyNext); ly.addView(lyNext2);
+        // bigger lyrics and one more line, using the room from the single Up next row (user, 2026-11-13)
+        lyPrev = lyricLine(17, th.muted, false);
+        lyNow = lyricLine(25, th.text, true);
+        lyNext = lyricLine(17, th.muted, false);
+        lyNext2 = lyricLine(16, th.muted, false);
+        lyNext2.setAlpha(.75f);
+        lyNext3 = lyricLine(15, th.muted, false);
+        lyNext3.setAlpha(.55f);
+        ly.addView(lyPrev); ly.addView(lyNow); ly.addView(lyNext); ly.addView(lyNext2); ly.addView(lyNext3);
         root.addView(ly, new LinearLayout.LayoutParams(-1, 0, 1f));
 
         // up next: the app's queue, swipe sideways, tap a song to play it
@@ -179,13 +182,13 @@ public final class MusicCard {
         if (!key.equals(lyricsKey)) {
             lyricsKey = key;
             lyrics = new java.util.ArrayList<>();
-            lyPrev.setText(""); lyNext.setText(""); lyNext2.setText("");
+            lyPrev.setText(""); lyNext.setText(""); lyNext2.setText(""); lyNext3.setText("");
             lyNow.setText(t == null ? "" : "Looking for lyrics…");
             long dur = md == null ? 0 : md.getLong(MediaMetadata.METADATA_KEY_DURATION);
             if (t != null) Lyrics.find(t, a, dur, (k, lines, note) -> main.post(() -> {
                 if (!k.equals(lyricsKey)) return;
                 lyrics = lines;
-                if (lines.isEmpty()) { lyNow.setText(note); lyPrev.setText(""); lyNext.setText(""); lyNext2.setText(""); }
+                if (lines.isEmpty()) { lyNow.setText(note); lyPrev.setText(""); lyNext.setText(""); lyNext2.setText(""); lyNext3.setText(""); }
             }), key);
         }
         if (!lyrics.isEmpty() && st != null) {
@@ -197,6 +200,7 @@ public final class MusicCard {
             lyNow.setText(i >= 0 ? lyrics.get(i).text : "♪");
             lyNext.setText(i + 1 < lyrics.size() ? lyrics.get(i + 1).text : "");
             lyNext2.setText(i + 2 < lyrics.size() ? lyrics.get(i + 2).text : "");
+            lyNext3.setText(i + 3 < lyrics.size() ? lyrics.get(i + 3).text : "");
         }
     }
 
@@ -244,7 +248,7 @@ public final class MusicCard {
         if (shown == 0) queueRow.addView(Ui.text(c, "Nothing more in the queue", 12, th.muted, false));
     }
 
-    private TextView lyNext2;
+    private TextView lyNext2, lyNext3;
     private LinearLayout queueRow2;
     private Runnable videoOpener;
     /** Set by the launcher: shows the current song's video over this card. */
