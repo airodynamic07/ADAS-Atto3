@@ -97,10 +97,6 @@ public final class TripEnergy implements CarData.Listener {
         dayKwh = Double.longBitsToDouble(store.getLong("kwh", 0));
         daySec = Double.longBitsToDouble(store.getLong("sec", 0));
         dayDrv = Math.max(daySec, Double.longBitsToDouble(store.getLong("drv", 0)));
-        calib = store.contains("calib") ? Double.longBitsToDouble(store.getLong("calib", 0)) : 1;
-        if (!(calib >= 0.3 && calib <= 2.0)) calib = 1;
-        powAcc = Double.longBitsToDouble(store.getLong("powAcc", 0));
-        batAcc = Double.longBitsToDouble(store.getLong("batAcc", 0));
         if (dayKwh < 0) dayKwh = 0;   // charging counted by an older version
         rollDay();
     }
@@ -189,34 +185,6 @@ public final class TripEnergy implements CarData.Listener {
     public synchronized List<Point> points() { return new ArrayList<>(points); }
 
     /** kWh/100 km over the whole trip, or NaN for the first 200 m. */
-    // ---- calibration (user, 2026-11-13: Today showed 32.9 kWh while the battery had only lost ~33 %
-    // of 60 kWh, ~20 kWh). The motor power reading over-counts, so NATEE compares the energy it added up
-    // with what the battery itself lost (remaining-energy reading, else battery % x 60.48 kWh) and
-    // scales the power by that ratio. Charging is left out. The ratio is kept between days.
-    private static final double PACK_KWH = 60.48;
-    private double calib = 1, powAcc, batAcc, lastBat = Double.NaN;
-    private void learnCalib(CarData.State s, boolean charging) {
-        double bat = !Double.isNaN(s.remainKwh) ? s.remainKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * PACK_KWH : Double.NaN;
-        if (Double.isNaN(bat)) return;
-        if (!Double.isNaN(lastBat)) {
-            double d = lastBat - bat;
-            if (!charging && !(d < 0 && (Double.isNaN(s.speedKmh) || s.speedKmh < 1))) batAcc += d;
-        }
-        lastBat = bat;
-        if (batAcc >= 1.0 && powAcc > 0.5) {
-            calib = Math.max(0.3, Math.min(2.0, batAcc / powAcc));
-            if (powAcc > 40) { batAcc *= .5; powAcc *= .5; }   // keep following slowly
-        }
-        if (store != null && System.currentTimeMillis() - calibSavedAt > 60_000) {
-            calibSavedAt = System.currentTimeMillis();
-            store.edit().putLong("calib", Double.doubleToLongBits(calib)).putLong("powAcc", Double.doubleToLongBits(powAcc))
-                    .putLong("batAcc", Double.doubleToLongBits(batAcc)).apply();
-        }
-    }
-    private long calibSavedAt;
-    /** Energy scale in use (1 = raw power reading). */
-    public double calib() { return calib; }
-
     public double avg() { return km >= 0.2 ? kwh / km * 100 : Double.NaN; }
 
     public synchronized void reset() {
@@ -253,9 +221,7 @@ public final class TripEnergy implements CarData.Listener {
                 dKwh = 0;
             } else if (!Double.isNaN(s.powerKw)) {
                 fromRemaining = false;
-                double raw = s.powerKw * dt / 3600.0;
-                powAcc += raw;
-                dKwh = raw * calib;   // matched to what the battery really lost (see learnCalib)
+                dKwh = s.powerKw * dt / 3600.0;
                 if (s.powerKw < 0) regenKwh += -dKwh;
             } else if (!Double.isNaN(s.remainKwh)) {
                 fromRemaining = true;
@@ -263,7 +229,6 @@ public final class TripEnergy implements CarData.Listener {
                 dKwh = (startRemain - s.remainKwh) - kwh;
                 if (dKwh < 0 && still) { startRemain = s.remainKwh + kwh; dKwh = 0; }   // charged while standing
             } else dKwh = 0;
-            learnCalib(s, charging);
             km += dKm;
             kwh += dKwh;
             rollDay();
