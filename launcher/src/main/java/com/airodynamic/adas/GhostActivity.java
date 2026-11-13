@@ -66,7 +66,7 @@ public class GhostActivity extends Activity {
         boolean big = mode == 0;
         bSmall.setVisibility(big ? android.view.View.VISIBLE : android.view.View.GONE);
         bStop.setVisibility(big ? android.view.View.VISIBLE : android.view.View.GONE);
-        bAgain.setVisibility(big ? android.view.View.VISIBLE : android.view.View.GONE);
+        bAgain.setVisibility(android.view.View.GONE);
         bEnlarge.setVisibility(big ? android.view.View.GONE : android.view.View.VISIBLE);
         bMove.setVisibility(big ? android.view.View.GONE : android.view.View.VISIBLE);
         rec.setVisibility(big ? android.view.View.GONE : android.view.View.VISIBLE);
@@ -161,9 +161,10 @@ public class GhostActivity extends Activity {
         FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         sl.topMargin = Ui.dp(this, 4);
         root.addView(bSmall, sl);
+        bSmall.setOnLongClickListener(v -> { netTest(); return true; });   // hold "Small": map-server test
         bAgain = Ui.chip(this, "⟳", false, th, v -> { if (gecko != null) gecko.reload(); });
         bAgain.setAlpha(0.85f);
-        bAgain.setOnLongClickListener(v -> { netTest(); return true; });
+        bAgain.setVisibility(android.view.View.GONE);   // removed (user, 2026-11-13); reload still happens by itself
         FrameLayout.LayoutParams al = new FrameLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         al.topMargin = Ui.dp(this, 4);
         al.rightMargin = Ui.dp(this, 330);
@@ -177,7 +178,7 @@ public class GhostActivity extends Activity {
         bStop.setAlpha(0.9f);
         FrameLayout.LayoutParams stl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         stl.topMargin = Ui.dp(this, 4);
-        stl.rightMargin = Ui.dp(this, 200);   // left of "Small", on the map, clear of Ghost Race's cards
+        stl.rightMargin = Ui.dp(this, 150);   // just left of "Small" (user, 2026-11-13)
         root.addView(bStop, stl);
         bEnlarge = Ui.chip(this, "⤢  Enlarge", false, th, v -> { mode = 0; place(); });
         FrameLayout.LayoutParams el = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.END);
