@@ -173,11 +173,10 @@
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode" />
-        <!-- the song's video over the Now playing card, never full screen. Same process as Ghost Race (2026-11-14):
-             two Firefox engines in two processes share the engine's helper processes and the second one stays black -->
+        <!-- the song's video over the Now playing card, never full screen; Android's own browser engine, own process -->
         <activity
             android:name=".VideoActivity"
-            android:process=":ghost"
+            android:process=":video"
             android:exported="false"
             android:excludeFromRecents="true"
             android:screenOrientation="landscape"

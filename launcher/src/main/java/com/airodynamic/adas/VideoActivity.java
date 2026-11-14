@@ -12,12 +12,13 @@ import android.widget.TextView;
 
 /**
  * The current song's video, in its own small window over the Now playing card (user, 2026-11-13):
- * YouTube's mobile site in Firefox's engine, own process (":video"), never full screen. It plays while
+ * YouTube's mobile site in Android's own browser engine (2026-11-14), own process (":video"), never full screen. It plays while
  * driving for the passenger (Settings can limit it to P). ✕ closes it and the music app plays again.
  */
 public class VideoActivity extends Activity {
     static final String X = "x", Y = "y", W = "w", H = "h", Q = "q", THEME = "theme";
-    private GeckoGhost gecko;
+    private android.webkit.WebView web;
+    private TextView status;
     private boolean fit;
     static int live;   // windows alive in this process
 
@@ -28,6 +29,9 @@ public class VideoActivity extends Activity {
     }
 
     @Override protected void onCreate(Bundle b) {
+        // (2026-11-14) Android's own browser engine in its own process: Firefox's engine stayed on "Loading…" on the car.
+        // A second process using it needs its own data folder.
+        try { android.webkit.WebView.setDataDirectorySuffix("video"); } catch (Throwable ignored) { }
         super.onCreate(b);
         live++;
         Intent in = getIntent();
@@ -57,9 +61,36 @@ public class VideoActivity extends Activity {
         try {
             String q = in.getStringExtra(Q);
             String url = "https://m.youtube.com/results?search_query=" + android.net.Uri.encode((q == null ? "" : q) + " official video");
-            gecko = new GeckoGhost(this, url, 0, null);   // same engine as Ghost Race (one engine per process, 2026-11-14)
-            gecko.installVideoFit();   // only the video, filling the box (user, 2026-11-13)
-            root.addView(gecko.view(), new FrameLayout.LayoutParams(-1, -1));
+            web = new android.webkit.WebView(this);
+            android.webkit.WebSettings ws = web.getSettings();
+            ws.setJavaScriptEnabled(true);
+            ws.setDomStorageEnabled(true);
+            ws.setMediaPlaybackRequiresUserGesture(false);
+            ws.setUseWideViewPort(true);
+            ws.setLoadWithOverviewMode(true);
+            web.setBackgroundColor(Color.BLACK);
+            final String fitCss = asset("ytfit/fit.css"), fitJs = asset("ytfit/fit.js");
+            web.setWebViewClient(new android.webkit.WebViewClient() {
+                @Override public void onPageStarted(android.webkit.WebView v, String u, android.graphics.Bitmap f) { show("Loading…"); fit(v); }
+                @Override public void onPageFinished(android.webkit.WebView v, String u) { show(null); fit(v); }
+                @Override public void onReceivedError(android.webkit.WebView v, android.webkit.WebResourceRequest r, android.webkit.WebResourceError e) {
+                    if (r.isForMainFrame()) show("Error: " + e.getDescription());
+                }
+                /** only the video, filling the box: the same rules as before, put into the page (user, 2026-11-13) */
+                private void fit(android.webkit.WebView v) {
+                    v.evaluateJavascript("(function(){if(!document.getElementById('natee-fit')){var s=document.createElement('style');s.id='natee-fit';"
+                            + "s.textContent=" + org.json.JSONObject.quote(fitCss) + ";(document.head||document.documentElement).appendChild(s);"
+                            + fitJs + "}})()", null);
+                }
+            });
+            web.setWebChromeClient(new android.webkit.WebChromeClient());
+            root.addView(web, new FrameLayout.LayoutParams(-1, -1));
+            status = Ui.text(this, "", 13, Color.WHITE, false);
+            status.setBackgroundColor(0xB0000000);
+            status.setPadding(16, 8, 16, 8);
+            status.setVisibility(android.view.View.GONE);
+            root.addView(status, new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START));
+            web.loadUrl(url);
         } catch (Throwable e) {
             TextView err = Ui.text(this, "Video couldn't start (" + e.getClass().getSimpleName() + ")", 15, Color.WHITE, true);
             err.setGravity(Gravity.CENTER);
@@ -73,7 +104,7 @@ public class VideoActivity extends Activity {
         // ⤢ fill (no bars, sides trimmed) ⇄ fit (whole picture with bars) (user, 2026-11-13)
         android.widget.Button fitB = Ui.chip(this, "⤢", false, th, v -> {
             fit = !fit;
-            if (gecko != null) gecko.evalHash(fit ? "natee-fit" : "natee-fill");
+            if (web != null) web.evaluateJavascript("location.hash='" + (fit ? "natee-fit" : "natee-fill") + "';", null);
         });
         fitB.setAlpha(0.85f);
         FrameLayout.LayoutParams fl = new FrameLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40), Gravity.TOP | Gravity.END);
@@ -91,12 +122,26 @@ public class VideoActivity extends Activity {
         closeGecko();
         super.onDestroy();
         live--;
-        // (2026-11-14) the video's process is no longer ended on close: the engine's helper processes outlived it and
-        // the next video started on them black or white. The engine now stays ready and only the page is closed,
-        // which also stops the sound.
     }
 
-    private void closeGecko() { if (gecko != null) { gecko.close(); gecko = null; } }
+    private void closeGecko() {
+        if (web != null) { try { web.loadUrl("about:blank"); web.destroy(); } catch (Throwable ignored) { } web = null; }   // stops the sound
+    }
+
+    private void show(String t) {
+        if (status == null) return;
+        status.setText(t == null ? "" : t);
+        status.setVisibility(t == null ? android.view.View.GONE : android.view.View.VISIBLE);
+    }
+
+    private String asset(String name) {
+        try (java.io.InputStream in = getAssets().open(name)) {
+            java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[4096]; int n;
+            while ((n = in.read(buf)) > 0) o.write(buf, 0, n);
+            return o.toString("UTF-8");
+        } catch (Exception e) { return ""; }
+    }
 
     @Override public void finish() { closeGecko(); super.finish(); overridePendingTransition(0, 0); }
 }

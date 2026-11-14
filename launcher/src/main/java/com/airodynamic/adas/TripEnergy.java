@@ -109,8 +109,18 @@ public final class TripEnergy implements CarData.Listener {
             if ("2026-11-13".equals(day)) ed.putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0);
             ed.apply();
         }
+        // (user, 2026-11-14) the energy was counted wrong until the Battery left version: wipe today and the whole
+        // history once, start again clean with this version
+        if (!store.getBoolean("wiped20261114", false)) {
+            dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0;
+            if (hist != null) hist.edit().clear().apply();
+            store.edit().putBoolean("wiped20261114", true).putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0)
+                    .putFloat("rawKm", 0).putFloat("rawKwh", 0).remove("last50b").apply();
+            wipeTrip = true;
+        }
         rollDay();
     }
+    private boolean wipeTrip;
     private void rollDay() {
         String d = dayNow();
         if (d.equals(day)) return;
@@ -341,6 +351,7 @@ public final class TripEnergy implements CarData.Listener {
     @Override public void onCar(CarData.State s) {
         if (s.at == 0 || !s.known) return;
         synchronized (this) {
+            if (wipeTrip) { wipeTrip = false; startedAt = 0; }   // the one-time wipe also starts a new trip
             if (startedAt == 0 || (lastAt > 0 && s.at - lastAt > NEW_TRIP_GAP_MS)) {
                 startedAt = s.at; km = kwh = regenKwh = 0; rawTripKm = rawTripKwh = 0; segKm = segKwh = segSpeedSum = 0; segN = 0;
                 startRemain = Double.NaN; points.clear(); lastAt = 0; clearStats(); lastLeft = Double.NaN;
