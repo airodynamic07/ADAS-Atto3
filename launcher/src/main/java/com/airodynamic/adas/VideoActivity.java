@@ -19,7 +19,7 @@ public class VideoActivity extends Activity {
     static final String X = "x", Y = "y", W = "w", H = "h", Q = "q", THEME = "theme";
     private GeckoGhost gecko;
     private boolean fit;
-    private static int live;   // windows alive in this process
+    static int live;   // windows alive in this process
 
     static void open(Activity from, int x, int y, int w, int h, String query, String theme) {
         from.startActivity(new Intent(from, VideoActivity.class).putExtra(X, x).putExtra(Y, y).putExtra(W, w).putExtra(H, h)
@@ -57,7 +57,7 @@ public class VideoActivity extends Activity {
         try {
             String q = in.getStringExtra(Q);
             String url = "https://m.youtube.com/results?search_query=" + android.net.Uri.encode((q == null ? "" : q) + " official video");
-            gecko = new GeckoGhost(this, url, 0, "video");   // own browser data: Ghost Race may be running too
+            gecko = new GeckoGhost(this, url, 0, null);   // same engine as Ghost Race (one engine per process, 2026-11-14)
             gecko.installVideoFit();   // only the video, filling the box (user, 2026-11-13)
             root.addView(gecko.view(), new FrameLayout.LayoutParams(-1, -1));
         } catch (Throwable e) {

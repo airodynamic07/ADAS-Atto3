@@ -230,7 +230,8 @@ public class GhostActivity extends Activity {
         super.onDestroy();
         // the Firefox engine is set up once per process: end this one so a new size applies next time
         // (this process only ever holds the Ghost Race window)
-        if (isFinishing()) android.os.Process.killProcess(android.os.Process.myPid());
+        // the song video shares this process (2026-11-14): only end it when no video window is open
+        if (isFinishing() && VideoActivity.live <= 0) android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     @Override public void finish() {

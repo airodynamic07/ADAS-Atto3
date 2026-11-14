@@ -180,12 +180,19 @@ public final class Ambient implements CarData.Listener {
             while (my == run && System.currentTimeMillis() - t0 < EFFECT_MS) {
                 int level;
                 if (style == 2) level = (i % 2 == 0) ? 1 : hi;                   // Flash: off-ish / on
+                // (user, 2026-11-14: over the speed it blinked in the D colour) the car puts its own colour back, so
+                // send ours again on every blink
+                if (i % 2 == 1) car.ambient("setIALColor", colour);
                 else { int k = i % (2 * (hi - 1)); level = 1 + (k < hi - 1 ? k : 2 * (hi - 1) - k); }  // Breathe: up and down
                 car.ambient("setIALBrightness", level);
                 i++;
                 try { Thread.sleep(step); } catch (InterruptedException e) { break; }
             }
-            if (my == run) { car.ambient("setIALBrightness", hi); effecting = false; }   // back to your normal brightness
+            if (my == run) {
+                car.ambient("setIALColor", colour);
+                car.ambient("setIALBrightness", hi); effecting = false;   // back to your normal brightness
+                h.postDelayed(() -> { if (my == run) CarData.get(c).ambient("setIALColor", colour); }, 1800);   // and once more
+            }
         });
     }
 }
