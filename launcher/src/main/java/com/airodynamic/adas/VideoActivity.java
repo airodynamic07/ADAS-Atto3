@@ -91,9 +91,9 @@ public class VideoActivity extends Activity {
         closeGecko();
         super.onDestroy();
         live--;
-        // Android can run this late, after the video was opened again for the next song: ending the process then
-        // killed the new window (black box, 2026-11-13). Only end it when no window is left.
-        if (isFinishing() && live <= 0) android.os.Process.killProcess(android.os.Process.myPid());
+        // (2026-11-14) the video's process is no longer ended on close: the engine's helper processes outlived it and
+        // the next video started on them black or white. The engine now stays ready and only the page is closed,
+        // which also stops the sound.
     }
 
     private void closeGecko() { if (gecko != null) { gecko.close(); gecko = null; } }
