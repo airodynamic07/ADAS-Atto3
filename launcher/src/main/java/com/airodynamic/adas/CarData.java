@@ -372,7 +372,10 @@ public final class CarData {
                 {"instrument.BYDAutoInstrumentDevice", "getInCarTemperature", ""}, {"ac.BYDAutoAcDevice", "getTemperature", "3"}}, -30, 70, 1);
         s.batteryC = pick(ctx, "battery", new String[][]{{"statistic.BYDAutoStatisticDevice", "getBatteryTemperature", ""},
                 {"bms.BYDAutoBmsDevice", "getBatteryTemperature", ""}, {"energy.BYDAutoEnergyDevice", "getBatteryTemperature", ""},
-                {"statistic.BYDAutoStatisticDevice", "getAverageBatteryTemperature", ""}}, -30, 80, 1);
+                {"statistic.BYDAutoStatisticDevice", "getAverageBatteryTemperature", ""},
+                {"statistic.BYDAutoStatisticDevice", "getHighestBatteryTemperature", ""}, {"statistic.BYDAutoStatisticDevice", "getBatteryHighestTemp", ""},
+                {"energy.BYDAutoEnergyDevice", "getPowerBatteryTemperature", ""}, {"bms.BYDAutoBmsDevice", "getMaxCellTemperature", ""},
+                {"bms.BYDAutoBmsDevice", "getHighestTemperature", ""}, {"charging.BYDAutoChargingDevice", "getBatteryTemperature", ""}}, -30, 80, 1);
         s.volt12 = pick(ctx, "volt12", new String[][]{{"bodywork.BYDAutoBodyworkDevice", "getBatteryVoltage", ""},
                 {"statistic.BYDAutoStatisticDevice", "getLowVoltageBatteryVoltage", ""}, {"power.BYDAutoPowerDevice", "getBatteryVoltage", ""},
                 {"instrument.BYDAutoInstrumentDevice", "getBatteryVoltage", ""}}, 8, 16, 0);

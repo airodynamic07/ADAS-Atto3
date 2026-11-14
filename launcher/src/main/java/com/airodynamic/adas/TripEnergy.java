@@ -122,19 +122,21 @@ public final class TripEnergy implements CarData.Listener {
     private android.content.SharedPreferences hist;
     private void saveHistory() {
         if (hist == null || day.isEmpty() || dayKm < 0.05) return;
-        hist.edit().putString(day, String.format(java.util.Locale.US, "%.3f,%.3f,%.0f", dayKm, Math.max(0, dayKwh), dayDrv)).apply();
+        hist.edit().putString(day, String.format(java.util.Locale.US, "%.3f,%.3f,%.0f,%.0f", dayKm, Math.max(0, dayKwh), dayDrv, daySec)).apply();
     }
-    /** Day → {km, kWh, seconds}, today included (live). */
+    /** Day → {km, kWh, seconds, moving seconds}, today included (live). Older days have no moving time: their
+     *  average speed uses the whole driving time. */
     public synchronized java.util.TreeMap<String, double[]> history() {
         rollDay();
         java.util.TreeMap<String, double[]> out = new java.util.TreeMap<>();
         if (hist != null) for (java.util.Map.Entry<String, ?> e : hist.getAll().entrySet()) {
             try {
                 String[] p = String.valueOf(e.getValue()).split(",");
-                out.put(e.getKey(), new double[]{Double.parseDouble(p[0]), Double.parseDouble(p[1]), Double.parseDouble(p[2])});
+                out.put(e.getKey(), new double[]{Double.parseDouble(p[0]), Double.parseDouble(p[1]), Double.parseDouble(p[2]),
+                        p.length > 3 ? Double.parseDouble(p[3]) : Double.parseDouble(p[2])});
             } catch (Exception ignored) { }
         }
-        if (dayKm >= 0.05) out.put(day, new double[]{dayKm, Math.max(0, dayKwh), dayDrv});
+        if (dayKm >= 0.05) out.put(day, new double[]{dayKm, Math.max(0, dayKwh), dayDrv, daySec});
         return out;
     }
     private void saveToday(long now) {

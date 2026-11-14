@@ -21,7 +21,7 @@ import java.util.TreeMap;
  * into one total row (tap to open), and a total per year. Today is live, in the accent colour.
  */
 final class HistoryOverlay extends FrameLayout {
-    private static final float[] COLS = {1.25f, 1f, 1f, .8f, .9f, 1.15f};
+    private static final float[] COLS = {1.25f, 1f, .9f, 1f, .8f, 1.15f};
     private static final String[] MONTHS = {"JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
             "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"};
     private static final String[] MON = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -53,7 +53,7 @@ final class HistoryOverlay extends FrameLayout {
         x.setOnClickListener(v -> onClose.run());
         head.addView(x, new LinearLayout.LayoutParams(Ui.dp(c, 42), Ui.dp(c, 42)));
         col.addView(head);
-        col.addView(row(new String[]{"Date", "Distance", "Energy", "kWh/100", "Avg speed", "Time"}, th.muted, false, 11, 0));
+        col.addView(row(new String[]{"Date", "Distance", "Avg speed", "Energy", "kWh/100", "Time"}, th.muted, false, 11, 0, Double.NaN));
 
         list = new LinearLayout(c);
         list.setOrientation(LinearLayout.VERTICAL);
@@ -94,7 +94,7 @@ final class HistoryOverlay extends FrameLayout {
         for (Map.Entry<String, TreeMap<String, List<Map.Entry<String, double[]>>>> ye : years.entrySet()) {
             String y = ye.getKey();
             boolean yearOpen = y.equals(thisYear) || open.contains(y);
-            double[] yt = new double[3];
+            double[] yt = new double[4];
             for (List<Map.Entry<String, double[]>> days : ye.getValue().values()) for (Map.Entry<String, double[]> d : days) add(yt, d.getValue());
             if (!y.equals(thisYear)) {   // an earlier year: folded into its total, tap to see its months
                 list.addView(heading("YEAR " + y + (yearOpen ? " ⌄" : " ›"), () -> toggle(y)));
@@ -105,7 +105,7 @@ final class HistoryOverlay extends FrameLayout {
                 String m = me.getKey();
                 int mi = Integer.parseInt(m.substring(5, 7)) - 1;
                 boolean current = m.equals(thisMonth), monthOpen = current || open.contains(m);
-                double[] mt = new double[3];
+                double[] mt = new double[4];
                 for (Map.Entry<String, double[]> d : me.getValue()) add(mt, d.getValue());
                 list.addView(heading(MONTHS[mi] + " " + y + (current ? "" : monthOpen ? " ⌄" : " ›"), current ? null : () -> toggle(m)));
                 list.addView(total(current ? "Month so far" : cap(MONTHS[mi]) + " total", mt, MONTH_COL));
@@ -115,7 +115,7 @@ final class HistoryOverlay extends FrameLayout {
                 for (Map.Entry<String, double[]> d : days) {
                     boolean isToday = d.getKey().equals(today);
                     int dd = Integer.parseInt(d.getKey().substring(8, 10));
-                    list.addView(row(cells(dd + " " + MON[mi] + (isToday ? " · today" : ""), d.getValue()), isToday ? th.accent : th.text, false, 13, 0));
+                    list.addView(row(cells(dd + " " + MON[mi] + (isToday ? " · today" : ""), d.getValue()), isToday ? th.accent : th.text, false, 13, 0, speed(d.getValue())));
                 }
             }
             if (y.equals(thisYear)) {
@@ -128,18 +128,21 @@ final class HistoryOverlay extends FrameLayout {
 
     private void toggle(String key) { if (!open.remove(key)) open.add(key); refresh(); }
 
-    private static void add(double[] t, double[] v) { t[0] += v[0]; t[1] += v[1]; t[2] += v[2]; }
+    private static void add(double[] t, double[] v) { t[0] += v[0]; t[1] += v[1]; t[2] += v[2]; t[3] += v[3]; }
     private static String cap(String s) { return s.charAt(0) + s.substring(1).toLowerCase(Locale.US); }
 
-    /** {label, km, kWh, kWh/100, km/h, "1 h 54 min"} */
+    /** Average speed while moving (stops not counted), km/h. */
+    private static double speed(double[] v) { return v[3] >= 60 ? v[0] / (v[3] / 3600.0) : Double.NaN; }
+
+    /** {label, km, km/h, kWh, kWh/100, "1 h 54 min"} — average speed next to the distance (user, 2026-11-14) */
     private static String[] cells(String label, double[] v) {
-        double km = v[0], kwh = v[1], sec = v[2];
+        double km = v[0], kwh = v[1], sec = v[2], sp = speed(v);
         long min = Math.round(sec / 60);
         return new String[]{label,
                 String.format(Locale.US, "%.1f km", km),
+                Double.isNaN(sp) ? "–" : Math.round(sp) + " km/h",
                 String.format(Locale.US, "%.1f kWh", kwh),
                 km >= 0.5 && kwh > 0 ? String.format(Locale.US, "%.1f", kwh / km * 100) : "–",
-                sec >= 60 ? Math.round(km / (sec / 3600.0)) + " km/h" : "–",
                 (min / 60) + " h " + String.format(Locale.US, "%02d", min % 60) + " min"};
     }
 
@@ -152,17 +155,17 @@ final class HistoryOverlay extends FrameLayout {
     }
 
     private LinearLayout total(String label, double[] v, int col) {
-        return row(cells(label, v), col, true, 13, (col & 0x00FFFFFF) | 0x26000000);
+        return row(cells(label, v), col, true, 13, (col & 0x00FFFFFF) | 0x26000000, speed(v));
     }
 
-    private LinearLayout row(String[] cells, int color, boolean bold, float size, int bg) {
+    private LinearLayout row(String[] cells, int color, boolean bold, float size, int bg, double speed) {
         Context c = getContext();
         LinearLayout r = new LinearLayout(c);
         r.setGravity(Gravity.CENTER_VERTICAL);
         r.setPadding(Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4));
         if (bg != 0) r.setBackground(Ui.round(bg, 0, 8, c));
         for (int i = 0; i < cells.length; i++) {
-            TextView t = Ui.text(c, cells[i], size, color, bold);
+            TextView t = Ui.text(c, cells[i], size, i == 2 && !Double.isNaN(speed) ? Theme.speedColour(speed) : color, bold);
             t.setSingleLine(true);
             t.setGravity(i == 0 ? Gravity.START : Gravity.END);
             r.addView(t, new LinearLayout.LayoutParams(0, -2, COLS[i]));

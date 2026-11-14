@@ -27,6 +27,8 @@ public enum Theme {
 
     public static final int SAFE = Color.parseColor("#3DD9C1");
     public static final int CAUTION = Color.parseColor("#FFB020");
+    /** Average speed colour (user, 2026-11-14): green under 60, blue 60–90, red over 90 km/h. */
+    public static int speedColour(double kmh) { return kmh > 90 ? 0xFFFF5A5A : kmh >= 60 ? 0xFF3AA0FF : 0xFF2EE59D; }
     public static final int DANGER = Color.parseColor("#FF4D3D");
     public static final int TRAFFIC = Color.parseColor("#9AA8C2");
     public static final int PERSON = Color.parseColor("#B8A4FF");

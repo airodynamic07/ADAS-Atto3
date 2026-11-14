@@ -23,8 +23,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private final LinearLayout root;
     private android.widget.GridLayout tray;
     private final Prefs prefs;
-    private TextView cabin, batt, volt;
-    private TextView outside, pm, limit, todayKm, todayKwh, todayAvg, todayDrive;
+    private TextView batt, volt;
+    private TextView outside, pm, limit, todayKm, todayKwh, todayAvg, todayDrive, todaySpd, tripSpd;
     private LinearLayout limitCard;
     private TextView used, avg, dist, power, soc, since, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty, regenPct;
     private SpecialRow recentRow, latestRow;
@@ -48,14 +48,13 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         final int rowH = Ui.dp(c, 44);
         LinearLayout row1 = new LinearLayout(c);
         LinearLayout tp = flatTile("PM2.5"); pm = big(tp);
-        LinearLayout to = flatTile("Range"); outside = big(to);   // was Outside (now in the weather card)
-        row1.addView(tp, wgap(1.2f));
-        row1.addView(to, wgap(.8f));
+        // PM2.5 takes the old PM2.5 + Range width so "moderate" fits; Range moves to the row below (user, 2026-11-14)
+        row1.addView(tp, wgap(2f));
         row1.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1f));
         root.addView(row1, gapH(rowH));
         LinearLayout rowN = new LinearLayout(c);
-        LinearLayout tc = flatTile("Cabin"); cabin = big(tc);
-        LinearLayout tb = flatTile("Battery"); batt = big(tb);
+        LinearLayout tc = flatTile("Range WLTP"); outside = big(tc);   // where Cabin was (user, 2026-11-14)
+        LinearLayout tb = flatTile("HV batt"); batt = big(tb);
         LinearLayout tvC = flatTile("12 V"); volt = big(tvC);
         rowN.addView(tc, wgap(1.2f)); rowN.addView(tb, wgap(.8f)); rowN.addView(tvC, new LinearLayout.LayoutParams(0, -1, 1f));
         root.addView(rowN, gapH(rowH));
@@ -92,7 +91,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         TextView tl = Ui.label(c, "Today", th); tl.setTextSize(10);
         td.addView(tl);
         TextView[] tv = statRow(td);
-        todayKm = tv[0]; todayKwh = tv[1]; todayAvg = tv[2]; todayDrive = tv[3];
+        todayKm = tv[0]; todaySpd = tv[1]; todayKwh = tv[2]; todayAvg = tv[3]; todayDrive = tv[4];
         LinearLayout.LayoutParams g1 = new LinearLayout.LayoutParams(-1, -2);
         g1.bottomMargin = Ui.dp(c, 6);
         root.addView(td, g1);
@@ -102,7 +101,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         TextView trl = Ui.label(c, "This trip", th); trl.setTextSize(10);
         en.addView(trl);
         TextView[] trv = statRow(en);
-        dist = trv[0]; used = trv[1]; avg = trv[2]; driveT = trv[3];
+        dist = trv[0]; tripSpd = trv[1]; used = trv[2]; avg = trv[3]; driveT = trv[4];
         LinearLayout foot = new LinearLayout(c);
         foot.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
         soc = Ui.text(c, "–", 11, th.text, true);
@@ -134,7 +133,15 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout t9 = tile("Battery used"); brakes = big(t9);
         r2.addView(t8, w(true)); r2.addView(t7, w(true)); r2.addView(t4, w(true)); r2.addView(t9, wide());
         for (LinearLayout r : new LinearLayout[]{r1, r2}) {   // the two card rows the same height (user, 2026-11-13)
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Ui.dp(c, 50));
+            // 1.5 times shorter, so the Best list shows more rows (user, 2026-11-14)
+            for (int k = 0; k < r.getChildCount(); k++) {
+                LinearLayout card = (LinearLayout) r.getChildAt(k);
+                card.setPadding(card.getPaddingLeft(), 0, card.getPaddingRight(), 0);
+                card.setGravity(Gravity.CENTER_VERTICAL);
+                ((TextView) card.getChildAt(0)).setTextSize(9.5f);
+                if (card.getChildCount() > 1 && card.getChildAt(1) instanceof TextView) ((TextView) card.getChildAt(1)).setTextSize(14);
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Ui.dp(c, 34));
             lp.bottomMargin = Ui.dp(c, 6);
             en.addView(r, lp);
         }
@@ -322,19 +329,20 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
     private static String pmLevel(int v) { return v < 0 ? "" : v <= 25 ? " good" : v <= 50 ? " moderate" : " unhealthy"; }
 
-    /** Distance · Used · Avg (kWh) · Drive: label above value, same columns as the cards. */
+    /** Distance · Avg km/h · Used · Avg (kWh) · Drive: label above value (avg speed added, user 2026-11-14). */
     private TextView[] statRow(LinearLayout parent) {
         LinearLayout r = new LinearLayout(c);
-        String[] labels = {"Distance (km)", "Used (kWh)", "Avg (kWh)", "Drive"};   // units on top (user, 2026-11-13)
-        TextView[] out = new TextView[4];
-        for (int i = 0; i < 4; i++) {
+        String[] labels = {"Distance (km)", "Avg km/h", "Used (kWh)", "Avg (kWh)", "Drive"};   // units on top (user, 2026-11-13)
+        float[] wts = {1.15f, .95f, 1f, 1f, .85f};
+        TextView[] out = new TextView[5];
+        for (int i = 0; i < 5; i++) {
             LinearLayout cl = col();
             cl.setPadding(Ui.dp(c, 7), 0, 0, 0);
             cl.addView(Ui.text(c, labels[i], 11, th.muted, false));
-            out[i] = Ui.text(c, "–", 19, i == 2 ? Theme.CAUTION : th.text, true);
+            out[i] = Ui.text(c, "–", 19, i == 3 ? Theme.CAUTION : th.text, true);
             out[i].setSingleLine(true);
             cl.addView(out[i]);
-            r.addView(cl, i == 3 ? wide() : w(true));
+            r.addView(cl, new LinearLayout.LayoutParams(0, -2, wts[i]));
         }
         parent.addView(r, new LinearLayout.LayoutParams(-1, -2));
         return out;
@@ -429,6 +437,12 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         brakes.setText(Math.round(Math.max(0, t.kwh) / 60.48 * 100) + " %");
 
         double tk = t.todayKm(), te = t.todayKwh();
+        // average speed while moving (stops not counted), coloured green < 60, blue 60–90, red > 90 (user, 2026-11-14)
+        double tsec = t.todaySec(), tdS = tsec >= 60 ? tk / (tsec / 3600.0) : Double.NaN, trS = t.avgMoving();
+        todaySpd.setText(Double.isNaN(tdS) ? "–" : String.valueOf(Math.round(tdS)));
+        if (!Double.isNaN(tdS)) todaySpd.setTextColor(Theme.speedColour(tdS));
+        tripSpd.setText(Double.isNaN(trS) ? "–" : String.valueOf(Math.round(trS)));
+        if (!Double.isNaN(trS)) tripSpd.setTextColor(Theme.speedColour(trS));
         todayKm.setText(String.format(Locale.US, "%.1f", tk));
         todayKwh.setText(String.format(Locale.US, "%.1f", te));
         todayAvg.setText(tk >= 0.5 && te > 0 ? String.format(Locale.US, "%.1f", te / tk * 100) : "–");
@@ -478,13 +492,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     }
 
     @Override public void onCar(CarData.State s) {
-        // Range at your driving: battery left ÷ today's average (or the car's own range early in the day)
-        TripEnergy te = TripEnergy.get(c);
-        double avgNow = te.todayKm() >= 5 && te.todayKwh() > 0 ? te.todayKwh() / te.todayKm() * 100 : Double.NaN;
-        double left = !Double.isNaN(s.remainKwh) ? s.remainKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 : Double.NaN;
-        outside.setText(!Double.isNaN(avgNow) && !Double.isNaN(left) && avgNow > 5 ? Math.round(left / avgNow * 100) + " km"
-                : s.rangeKm >= 0 ? s.rangeKm + " km" : "–");
-        cabin.setText(Double.isNaN(s.cabinC) ? "–" : Math.round(s.cabinC) + "°C");
+        // WLTP range (user, 2026-11-14): the car shows NEDC range; Atto 3 is rated 480 km NEDC and 420 km WLTP → × 0.875
+        outside.setText(s.rangeKm >= 0 ? Math.round(s.rangeKm * 420.0 / 480.0) + " km" : "–");
         batt.setText(Double.isNaN(s.batteryC) ? "–" : Math.round(s.batteryC) + "°C");
         volt.setText(Double.isNaN(s.volt12) ? "–" : String.format(Locale.US, "%.1f V", s.volt12));
         pm.setText((s.pmOut < 0 ? "–" : String.valueOf(s.pmOut)) + " / " + (s.pmIn < 0 ? "–" : String.valueOf(s.pmIn)) + pmLevel(s.pmOut));
