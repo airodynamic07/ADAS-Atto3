@@ -222,6 +222,9 @@ public final class TripEnergy implements CarData.Listener {
         calCarKm = store.getFloat("calCarKm", 0); calIntKm = store.getFloat("calIntKm", 0);
         // "…2": the old energy check (car's total counter) never got usable numbers, start fresh (2026-11-14)
         calCarKwh = store.getFloat("calCarKwh2", 0); calIntKwh = store.getFloat("calIntKwh2", 0);
+        // Start from what Air's photos showed (2026-11-14, 6:12 → 6:45 PM, 38 km): Battery left 25.0 → 19.5 = 5.5 kWh,
+        // launcher 8.9 kWh. So the correction works straight away (×0.62); driving keeps refining it.
+        if (!store.contains("calCarKwh2")) { calCarKwh = 5.5; calIntKwh = 8.9; }
     }
     private double kmFactor() {
         if (calCarKm < 5 || calIntKm <= 0) return 1;
