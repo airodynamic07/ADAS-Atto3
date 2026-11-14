@@ -32,23 +32,8 @@ final class GeckoGhost {
         if (runtime == null) {
             org.mozilla.geckoview.GeckoRuntimeSettings.Builder sb = new org.mozilla.geckoview.GeckoRuntimeSettings.Builder();
             if (density > 0) sb.displayDensityOverride(density);
-            // (2026-11-13) the car reaches the map server from Android (test: HTTP 200) but the Firefox engine got
-            // "NetworkError" for it. Switch off the engine's extras that commonly break on a car's mobile network:
-            // HTTP/3, IPv6, DNS-over-HTTPS and tracking protection.
-            try {
-                java.io.File cfg = new java.io.File(c.getFilesDir(), "gecko-natee.yaml");
-                try (java.io.FileWriter w = new java.io.FileWriter(cfg)) {
-                    w.write("prefs:\n  network.http.http3.enable: false\n  network.http.http3.enabled: false\n"
-                            + "  network.dns.disableIPv6: true\n  network.trr.mode: 5\n"
-                            + "  privacy.trackingprotection.enabled: false\n  network.http.speculative-parallel-limit: 0\n");
-                }
-                sb.configFilePath(cfg.getAbsolutePath());
-            } catch (Throwable ignored) { }
-            try {
-                sb.contentBlocking(new org.mozilla.geckoview.ContentBlocking.Settings.Builder()
-                        .antiTracking(org.mozilla.geckoview.ContentBlocking.AntiTracking.NONE)
-                        .enhancedTrackingProtectionLevel(org.mozilla.geckoview.ContentBlocking.EtpLevel.NONE).build());
-            } catch (Throwable ignored) { }
+            // (2026-11-14) the engine network settings tried in probe-133 (HTTP/3, IPv6, DNS-over-HTTPS off) are
+            // gone again: after them the night map failed too. Engine defaults, as when the night map worked.
             if (profile != null) {
                 java.io.File dir = new java.io.File(c.getFilesDir(), "gecko-" + profile);
                 //noinspection ResultOfMethodCallIgnored
