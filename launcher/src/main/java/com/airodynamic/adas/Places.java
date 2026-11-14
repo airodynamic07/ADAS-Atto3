@@ -86,12 +86,13 @@ public final class Places {
         public int tempC = Integer.MIN_VALUE, code = -1, rainPct = -1, rainHour = -1;
         /** next hour (user, 2026-11-13) */
         public int nextTempC = Integer.MIN_VALUE, nextCode = -1, nextRainPct = -1;
-        public String icon() { return icon(code); }
-        public String nextIcon() { return icon(nextCode); }
-        static String icon(int code) {
+        public boolean day = true, nextDay = true;   // night: moon instead of sun (user, 2026-11-14: sun at 10:30 PM)
+        public String icon() { return icon(code, day); }
+        public String nextIcon() { return icon(nextCode, nextDay); }
+        static String icon(int code, boolean day) {
             if (code < 0) return "–";
-            if (code == 0) return "☀";
-            if (code <= 3) return "⛅";
+            if (code == 0) return day ? "☀" : "🌙";
+            if (code <= 3) return day ? "⛅" : "☁";
             if (code <= 48) return "🌫";
             if (code <= 67 || (code >= 80 && code <= 82)) return "🌧";
             if (code >= 95) return "⛈";
@@ -106,7 +107,7 @@ public final class Places {
     public interface WeatherListener { void onWeather(Weather w); }
 
     public static void weather(Context c, WeatherListener l) {
-        if (cached != null && System.currentTimeMillis() - cachedAt < 15 * 60_000L) { l.onWeather(cached); return; }
+        if (cached != null && System.currentTimeMillis() - cachedAt < 10 * 60_000L) { l.onWeather(cached); return; }
         if (System.currentTimeMillis() - failedAt < 60_000L) return;
         startUpdates(c);
         Location l0 = last(c);
@@ -125,8 +126,8 @@ public final class Places {
         new Thread(() -> {
             try {
                 String url = String.format(Locale.US,
-                        "https://api.open-meteo.com/v1/forecast?latitude=%.3f&longitude=%.3f&current=temperature_2m,weather_code"
-                        + "&hourly=precipitation_probability,temperature_2m,weather_code&forecast_days=2&timezone=auto", loc.getLatitude(), loc.getLongitude());
+                        "https://api.open-meteo.com/v1/forecast?latitude=%.3f&longitude=%.3f&current=temperature_2m,weather_code,is_day,precipitation"
+                        + "&hourly=precipitation_probability,temperature_2m,weather_code,is_day&forecast_days=2&timezone=auto", loc.getLatitude(), loc.getLongitude());
                 HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
                 con.setConnectTimeout(8000);
                 con.setReadTimeout(10000);
@@ -143,9 +144,18 @@ public final class Places {
                 JSONObject cur = o.getJSONObject("current");
                 w.tempC = (int) Math.round(cur.getDouble("temperature_2m"));
                 w.code = cur.getInt("weather_code");
+                w.day = cur.optInt("is_day", 1) == 1;
+                // rain measured now (mm) beats a cloudy code: show rain
+                if (cur.optDouble("precipitation", 0) > 0.05 && (w.code < 51 || w.code > 82)) w.code = 61;
                 JSONArray p = o.getJSONObject("hourly").getJSONArray("precipitation_probability");
+                // this hour's place in the list, from the forecast's own local time (not the head unit's clock zone)
                 int now = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-                for (int h = now; h < Math.min(24, p.length()); h++) {
+                try {
+                    String ct = cur.getString("time").substring(0, 13);   // "2026-11-14T22"
+                    JSONArray times = o.getJSONObject("hourly").getJSONArray("time");
+                    for (int i = 0; i < times.length(); i++) if (times.getString(i).startsWith(ct)) { now = i; break; }
+                } catch (Exception ignored) { }
+                for (int h = now; h < Math.min(now + 24, p.length()); h++) {
                     int v = p.optInt(h, 0);
                     if (v > w.rainPct) { w.rainPct = v; w.rainHour = h; }
                 }
@@ -155,6 +165,7 @@ public final class Places {
                     w.nextTempC = (int) Math.round(hr.getJSONArray("temperature_2m").getDouble(nh));
                     w.nextCode = hr.getJSONArray("weather_code").optInt(nh, -1);
                     w.nextRainPct = p.optInt(nh, -1);
+                    w.nextDay = hr.optJSONArray("is_day") == null || hr.getJSONArray("is_day").optInt(nh, 1) == 1;
                 }
                 failedAt = 0;
                 cached = w;
