@@ -139,7 +139,7 @@ public final class TripEnergy implements CarData.Listener {
         last50.clear(); last50.addAll(fixed);
         StringBuilder b = new StringBuilder();
         for (double d : last50) b.append(String.format(java.util.Locale.US, "%.4f;", d));
-        store.edit().putBoolean("histScaled", true).putString("last50", b.toString()).apply();
+        store.edit().putBoolean("histScaled", true).putString("last50b", b.toString()).apply();
     }
 
     // ---- driving history (user, 2026-11-12): one entry per day, kept for good: "km,kWh,seconds"
@@ -187,7 +187,7 @@ public final class TripEnergy implements CarData.Listener {
     private void l50Load() {
         if (l50Loaded || store == null) return;
         l50Loaded = true;
-        for (String p : store.getString("last50", "").split(";")) try { if (!p.isEmpty()) last50.addLast(Double.parseDouble(p)); } catch (Exception ignored) { }
+        for (String p : store.getString("last50b", "").split(";")) try { if (!p.isEmpty()) last50.addLast(Double.parseDouble(p)); } catch (Exception ignored) { }
     }
     private void l50Add(double dKm, double dKwh) {
         if (store == null) return;
@@ -199,7 +199,7 @@ public final class TripEnergy implements CarData.Listener {
         while (last50.size() > 50) last50.removeFirst();
         StringBuilder b = new StringBuilder();
         for (double d : last50) b.append(String.format(java.util.Locale.US, "%.4f;", d));
-        store.edit().putString("last50", b.toString()).apply();
+        store.edit().putString("last50b", b.toString()).apply();
     }
     /** kWh per 100 km over your last (up to) 50 km; NaN before 10 km. */
     public synchronized double myAvg50() {
@@ -231,7 +231,15 @@ public final class TripEnergy implements CarData.Listener {
         double f = calCarKm / calIntKm;
         return f >= 0.85 && f <= 1.08 ? f : 1;
     }
+    // ---- (user, 2026-11-14 8:48 PM: steady 70 km/h, Battery left fell 1.3 kWh over 11.6 km = 11 kWh/100, launcher said
+    // 19) the motor-power reading can't be trusted for totals. Used / Avg / My range / history now come straight
+    // from the Battery left drop (0.1 kWh steps, matches the battery %). The power reading only gives the shape
+    // inside short stretches (Best km, Recent), scaled so its sum follows the battery: rf = battery drop ÷ power sum.
+    private double lastLeft = Double.NaN, bSum, pSum;
+    public double powerScale() { return pSum >= 1 && bSum > 0 ? Math.max(.2, Math.min(1.2, bSum / pSum)) : .6; }
+
     private double kwhFactor() {
+        if (true) return 1;   // replaced by the Battery left drop (see above)
         if (calIntKwh < 2 || calCarKwh <= 0) return 1;
         double f = calCarKwh / calIntKwh;
         return f >= 0.4 && f <= 1.3 ? f : 1;
@@ -265,10 +273,9 @@ public final class TripEnergy implements CarData.Listener {
     public synchronized String checkInfo() {
         calLoad();
         return String.format(java.util.Locale.US,
-                "Distance: car %.1f km · launcher %.1f km → correction ×%.2f\nEnergy (%s): car %.1f kWh · launcher %.1f kWh → correction ×%.2f\n"
-                        + "The correction starts after 5 km and 2 kWh of driving, then keeps adjusting.",
-                calCarKm, calIntKm, kmFactor(), "Battery left drop",
-                calCarKwh, calIntKwh, kwhFactor());
+                "Distance: car %.1f km · launcher %.1f km → correction ×%.2f\nEnergy: Used = the drop in Battery left (car's reading)."
+                        + " Motor power reading × %.2f for the Best stretches (recent: battery %.1f kWh · power %.1f kWh)",
+                calCarKm, calIntKm, kmFactor(), powerScale(), bSum, pSum);
     }
     private long lastAt;
     private double segKm, segKwh, segSpeedSum;
@@ -336,7 +343,7 @@ public final class TripEnergy implements CarData.Listener {
         synchronized (this) {
             if (startedAt == 0 || (lastAt > 0 && s.at - lastAt > NEW_TRIP_GAP_MS)) {
                 startedAt = s.at; km = kwh = regenKwh = 0; rawTripKm = rawTripKwh = 0; segKm = segKwh = segSpeedSum = 0; segN = 0;
-                startRemain = Double.NaN; points.clear(); lastAt = 0; clearStats();
+                startRemain = Double.NaN; points.clear(); lastAt = 0; clearStats(); lastLeft = Double.NaN;
             }
             double dt = lastAt == 0 ? 0 : Math.min(2.0, (s.at - lastAt) / 1000.0);   // seconds; gaps don't count
             lastAt = s.at;
@@ -372,12 +379,26 @@ public final class TripEnergy implements CarData.Listener {
                 dKwh = (startRemain - s.remainKwh) - kwh;
                 if (dKwh < 0 && still) { startRemain = s.remainKwh + kwh; dKwh = 0; }   // charged while standing
             } else dKwh = 0;
-            calibrate(s, dKm, fromRemaining ? 0 : dKwh, charging);
+            calibrate(s, dKm, 0, charging);   // distance check (energy: Battery left below)
             dKm *= kmFactor();
+            // Battery left drop since the last reading (charging never counts; a jump over 1 kWh = a gap, ignored)
+            double bK = Double.NaN;
+            if (!Double.isNaN(s.battLeftKwh)) {
+                if (charging || Double.isNaN(lastLeft)) bK = 0;
+                else { double d = lastLeft - s.battLeftKwh; bK = Math.abs(d) <= 1.0 ? d : 0; }
+                lastLeft = s.battLeftKwh;
+            }
+            double segKwhD = dKwh;
             if (!fromRemaining) {
-                double f = kwhFactor();
-                if (dKwh < 0) regenKwh += -dKwh * (f - 1);   // regen was added uncorrected just above
-                dKwh *= f;
+                double pK = dKwh;
+                if (!Double.isNaN(bK) && !charging) {
+                    bSum += bK; pSum += pK;
+                    if (pSum > 6) { bSum /= 2; pSum /= 2; }   // follows the last ~10–30 km
+                }
+                double rf = powerScale();
+                if (pK < 0) regenKwh += -pK * (rf - 1);   // regen was added unscaled just above
+                segKwhD = pK * rf;
+                dKwh = Double.isNaN(bK) ? segKwhD : bK;
             }
             km += dKm;
             kwh += dKwh;
@@ -403,7 +424,7 @@ public final class TripEnergy implements CarData.Listener {
             }
             saveToday(s.at);
             segKm += dKm;
-            segKwh += dKwh;
+            segKwh += segKwhD;
             if (!Double.isNaN(s.speedKmh)) { segSpeedSum += s.speedKmh; segN++; }
             if (!Double.isNaN(s.pedalPct)) { segPedalSum += s.pedalPct; segPedalN++; }
             if (!Double.isNaN(lastAlt) && s.at - lastAltAt < 5000) { altSum += lastAlt; altN++; }
