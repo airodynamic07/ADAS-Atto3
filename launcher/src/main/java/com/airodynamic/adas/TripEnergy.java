@@ -98,6 +98,9 @@ public final class TripEnergy implements CarData.Listener {
         daySec = Double.longBitsToDouble(store.getLong("sec", 0));
         dayDrv = Math.max(daySec, Double.longBitsToDouble(store.getLong("drv", 0)));
         if (dayKwh < 0) dayKwh = 0;   // charging counted by an older version
+        // not saved by a version before this one: then all of today so far was counted without correction
+        rawDayKm = store.contains("rawKm") ? store.getFloat("rawKm", 0) : dayKm;
+        rawDayKwh = store.contains("rawKwh") ? store.getFloat("rawKwh", 0) : dayKwh;
         // (user, 2026-11-13) today counted charging as used: delete 13 Nov completely, once
         if (!store.getBoolean("wiped20261113", false)) {
             if ("2026-11-13".equals(day)) { dayKm = dayKwh = daySec = dayDrv = 0; }
@@ -112,7 +115,7 @@ public final class TripEnergy implements CarData.Listener {
         String d = dayNow();
         if (d.equals(day)) return;
         saveHistory();   // the day that just ended keeps its numbers in the history
-        day = d; dayKm = dayKwh = daySec = dayDrv = 0;
+        day = d; dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0;
     }
 
     // ---- driving history (user, 2026-11-12): one entry per day, kept for good: "km,kWh,seconds"
@@ -137,7 +140,8 @@ public final class TripEnergy implements CarData.Listener {
     private void saveToday(long now) {
         if (store == null || now - savedAt < 20_000) return;
         savedAt = now;
-        store.edit().putString("day", day).putLong("km", Double.doubleToLongBits(dayKm)).putLong("kwh", Double.doubleToLongBits(dayKwh)).putLong("sec", Double.doubleToLongBits(daySec)).putLong("drv", Double.doubleToLongBits(dayDrv)).apply();
+        store.edit().putString("day", day).putLong("km", Double.doubleToLongBits(dayKm)).putLong("kwh", Double.doubleToLongBits(dayKwh)).putLong("sec", Double.doubleToLongBits(daySec)).putLong("drv", Double.doubleToLongBits(dayDrv))
+                .putFloat("rawKm", (float) rawDayKm).putFloat("rawKwh", (float) rawDayKwh).apply();
         saveHistory();
     }
 
@@ -147,6 +151,7 @@ public final class TripEnergy implements CarData.Listener {
     private double startRemain = Double.NaN;
     private double lastSoc = Double.NaN;
     private boolean chargingLatch;
+    private double rawDayKm, rawDayKwh, rawTripKm, rawTripKwh;   // counted while no correction was known yet
 
     // ---- check against the car's own counters (user, 2026-11-14: car 10 km / 1.4 kWh, here 11.3 km / 2.4 kWh).
     // Speed × time and power × time both read high on this car, so the sums are compared with the car's trip
@@ -270,7 +275,7 @@ public final class TripEnergy implements CarData.Listener {
         if (s.at == 0 || !s.known) return;
         synchronized (this) {
             if (startedAt == 0 || (lastAt > 0 && s.at - lastAt > NEW_TRIP_GAP_MS)) {
-                startedAt = s.at; km = kwh = regenKwh = 0; segKm = segKwh = segSpeedSum = 0; segN = 0;
+                startedAt = s.at; km = kwh = regenKwh = 0; rawTripKm = rawTripKwh = 0; segKm = segKwh = segSpeedSum = 0; segN = 0;
                 startRemain = Double.NaN; points.clear(); lastAt = 0; clearStats();
             }
             double dt = lastAt == 0 ? 0 : Math.min(2.0, (s.at - lastAt) / 1000.0);   // seconds; gaps don't count
@@ -319,6 +324,14 @@ public final class TripEnergy implements CarData.Listener {
             rollDay();
             dayKm += dKm;
             dayKwh += dKwh;
+            // (user, 2026-11-14, "option 1") what was counted before the correction was ready is corrected once, when it is
+            double fk = kmFactor(), fe = kwhFactor();
+            if (fk == 1) { rawDayKm += dKm; rawTripKm += dKm; }
+            else if (rawDayKm > 0 || rawTripKm > 0) { dayKm -= rawDayKm * (1 - fk); km -= rawTripKm * (1 - fk); rawDayKm = rawTripKm = 0; }
+            if (fe == 1) { if (!fromRemaining) { rawDayKwh += dKwh; rawTripKwh += dKwh; } }
+            else if (rawDayKwh != 0 || rawTripKwh != 0) {
+                dayKwh -= rawDayKwh * (1 - fe); kwh -= rawTripKwh * (1 - fe); regenKwh *= fe; rawDayKwh = rawTripKwh = 0;
+            }
             saveToday(s.at);
             segKm += dKm;
             segKwh += dKwh;
