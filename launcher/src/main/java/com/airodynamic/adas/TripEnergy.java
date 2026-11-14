@@ -132,7 +132,14 @@ public final class TripEnergy implements CarData.Listener {
             } catch (Exception ignored) { }
         }
         ed.apply();
-        store.edit().putBoolean("histScaled", true).apply();
+        // My range's last-50-km figures were counted the same too-high way: correct them too (user, 2026-11-14)
+        l50Load();
+        java.util.ArrayDeque<Double> fixed = new java.util.ArrayDeque<>();
+        for (double d : last50) fixed.addLast(d * f);
+        last50.clear(); last50.addAll(fixed);
+        StringBuilder b = new StringBuilder();
+        for (double d : last50) b.append(String.format(java.util.Locale.US, "%.4f;", d));
+        store.edit().putBoolean("histScaled", true).putString("last50", b.toString()).apply();
     }
 
     // ---- driving history (user, 2026-11-12): one entry per day, kept for good: "km,kWh,seconds"
@@ -177,12 +184,14 @@ public final class TripEnergy implements CarData.Listener {
     private final java.util.ArrayDeque<Double> last50 = new java.util.ArrayDeque<>();
     private double l50Km, l50Kwh;
     private boolean l50Loaded;
+    private void l50Load() {
+        if (l50Loaded || store == null) return;
+        l50Loaded = true;
+        for (String p : store.getString("last50", "").split(";")) try { if (!p.isEmpty()) last50.addLast(Double.parseDouble(p)); } catch (Exception ignored) { }
+    }
     private void l50Add(double dKm, double dKwh) {
         if (store == null) return;
-        if (!l50Loaded) {
-            l50Loaded = true;
-            for (String p : store.getString("last50", "").split(";")) try { if (!p.isEmpty()) last50.addLast(Double.parseDouble(p)); } catch (Exception ignored) { }
-        }
+        l50Load();
         l50Km += dKm; l50Kwh += dKwh;
         if (l50Km < 1) return;
         last50.addLast(l50Kwh / l50Km);
@@ -194,6 +203,7 @@ public final class TripEnergy implements CarData.Listener {
     }
     /** kWh per 100 km over your last (up to) 50 km; NaN before 10 km. */
     public synchronized double myAvg50() {
+        l50Load();
         if (last50.size() < 10) return Double.NaN;
         double sum = 0;
         for (double d : last50) sum += d;
