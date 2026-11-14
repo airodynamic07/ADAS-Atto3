@@ -390,6 +390,13 @@ public final class TripEnergy implements CarData.Listener {
             if (fk == 1) { rawDayKm += dKm; rawTripKm += dKm; }
             else if (rawDayKm > 0 || rawTripKm > 0) { dayKm -= rawDayKm * (1 - fk); km -= rawTripKm * (1 - fk); rawDayKm = rawTripKm = 0; }
             if (fe != 1) scaleOldHistory(fe);
+            // (user, 2026-11-14 7:33 PM: Today still 32.2 kWh / 23.5) an older version's check had already used up today's
+            // one-time correction with a factor of about 1; today was never really corrected: correct it once now
+            if (fe != 1 && store != null && "2026-11-14".equals(day) && rawDayKwh == 0 && !store.getBoolean("todayFix20261114", false)) {
+                dayKwh *= fe;
+                store.edit().putBoolean("todayFix20261114", true).apply();
+                savedAt = 0;
+            }
             if (fe == 1) { if (!fromRemaining) { rawDayKwh += dKwh; rawTripKwh += dKwh; } }
             else if (rawDayKwh != 0 || rawTripKwh != 0) {
                 dayKwh -= rawDayKwh * (1 - fe); kwh -= rawTripKwh * (1 - fe); regenKwh *= fe; rawDayKwh = rawTripKwh = 0;
