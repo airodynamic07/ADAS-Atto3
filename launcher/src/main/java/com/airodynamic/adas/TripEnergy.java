@@ -118,6 +118,23 @@ public final class TripEnergy implements CarData.Listener {
         day = d; dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0;
     }
 
+    /** (user, 2026-11-14: "yes") the days saved before the energy check worked read about 1.6x high: once the check has
+     *  its first correction, those days' kWh are corrected with it, one time only. Today is corrected separately. */
+    private void scaleOldHistory(double f) {
+        if (hist == null || store == null || store.getBoolean("histScaled", false)) return;
+        android.content.SharedPreferences.Editor ed = hist.edit();
+        for (java.util.Map.Entry<String, ?> e : hist.getAll().entrySet()) {
+            if (e.getKey().equals(day)) continue;
+            try {
+                String[] p = String.valueOf(e.getValue()).split(",");
+                p[1] = String.format(java.util.Locale.US, "%.3f", Double.parseDouble(p[1]) * f);
+                ed.putString(e.getKey(), android.text.TextUtils.join(",", p));
+            } catch (Exception ignored) { }
+        }
+        ed.apply();
+        store.edit().putBoolean("histScaled", true).apply();
+    }
+
     // ---- driving history (user, 2026-11-12): one entry per day, kept for good: "km,kWh,seconds"
     private android.content.SharedPreferences hist;
     private void saveHistory() {
@@ -359,6 +376,7 @@ public final class TripEnergy implements CarData.Listener {
             double fk = kmFactor(), fe = kwhFactor();
             if (fk == 1) { rawDayKm += dKm; rawTripKm += dKm; }
             else if (rawDayKm > 0 || rawTripKm > 0) { dayKm -= rawDayKm * (1 - fk); km -= rawTripKm * (1 - fk); rawDayKm = rawTripKm = 0; }
+            if (fe != 1) scaleOldHistory(fe);
             if (fe == 1) { if (!fromRemaining) { rawDayKwh += dKwh; rawTripKwh += dKwh; } }
             else if (rawDayKwh != 0 || rawTripKwh != 0) {
                 dayKwh -= rawDayKwh * (1 - fe); kwh -= rawTripKwh * (1 - fe); regenKwh *= fe; rawDayKwh = rawTripKwh = 0;
