@@ -49,7 +49,11 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         LinearLayout row1 = new LinearLayout(c);
         LinearLayout tp = flatTile("PM2.5"); pm = big(tp);
         // PM2.5 takes the old PM2.5 + Range width so "moderate" fits; Range moves to the row below (user, 2026-11-14)
-        row1.addView(tp, wgap(2f));
+        // exactly as wide as Range + the card next to it below (one gap included), so the theme card is exactly as
+        // wide as the card under it (user, 2026-11-14)
+        LinearLayout.LayoutParams pmLp = new LinearLayout.LayoutParams(Ui.dp(c, 6), -1, 2f);
+        pmLp.rightMargin = Ui.dp(c, 6);
+        row1.addView(tp, pmLp);
         row1.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1f));
         root.addView(row1, gapH(rowH));
         LinearLayout rowN = new LinearLayout(c);
