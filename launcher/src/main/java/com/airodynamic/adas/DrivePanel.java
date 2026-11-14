@@ -336,7 +336,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     /** Distance · Avg km/h · Used · Avg (kWh) · Drive: label above value (avg speed added, user 2026-11-14). */
     private TextView[] statRow(LinearLayout parent) {
         LinearLayout r = new LinearLayout(c);
-        String[] labels = {"Distance (km)", "Avg km/h", "Used (kWh)", "Avg (kWh)", "Drive"};   // units on top (user, 2026-11-13)
+        String[] labels = {"Distance (km)", "Avg km/h", "Used (kWh)", "kWh/100 km", "Drive"};   // units on top (user, 2026-11-13)
         float[] wts = {1.15f, .95f, 1f, 1f, .85f};
         TextView[] out = new TextView[5];
         for (int i = 0; i < 5; i++) {
