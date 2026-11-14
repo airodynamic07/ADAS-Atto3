@@ -111,10 +111,10 @@ public final class TripEnergy implements CarData.Listener {
         }
         // (user, 2026-11-14) the energy was counted wrong until the Battery left version: wipe today and the whole
         // history once, start again clean with this version
-        if (!store.getBoolean("wiped20261114b", false)) {   // "b": again, the first wipe still counted some energy twice
+        if (!store.getBoolean("wiped20261114c", false)) {   // "b": again, the first wipe still counted some energy twice
             dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0;
             if (hist != null) hist.edit().clear().apply();
-            store.edit().putBoolean("wiped20261114b", true).putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0)
+            store.edit().putBoolean("wiped20261114c", true).putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0)
                     .putFloat("rawKm", 0).putFloat("rawKwh", 0).remove("last50b").apply();
             wipeTrip = true;
         }
@@ -415,8 +415,9 @@ public final class TripEnergy implements CarData.Listener {
                 // reading used to count the power estimate, and the next reading then counted the same drop again.
                 // Now such a moment counts nothing: the next reading brings the whole drop. The estimate is only used
                 // when the car hasn't given Battery left for a minute.
-                boolean recent = !Double.isNaN(lastLeft) && s.at - lastLeftAt < 60_000;
-                dKwh = !Double.isNaN(bK) ? bK : recent ? 0 : segKwhD;
+                // (10:13 → 10:24 PM: still 1.6 vs 0.9) longer gaps did the same; once this trip has a Battery left reading,
+                // the estimate is never used again: the next reading always brings the whole drop.
+                dKwh = !Double.isNaN(bK) ? bK : !Double.isNaN(lastLeft) ? 0 : segKwhD;
             }
             km += dKm;
             kwh += dKwh;
