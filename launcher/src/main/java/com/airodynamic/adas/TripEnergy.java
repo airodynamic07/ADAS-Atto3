@@ -111,10 +111,10 @@ public final class TripEnergy implements CarData.Listener {
         }
         // (user, 2026-11-14) the energy was counted wrong until the Battery left version: wipe today and the whole
         // history once, start again clean with this version
-        if (!store.getBoolean("wiped20261114", false)) {
+        if (!store.getBoolean("wiped20261114b", false)) {   // "b": again, the first wipe still counted some energy twice
             dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0;
             if (hist != null) hist.edit().clear().apply();
-            store.edit().putBoolean("wiped20261114", true).putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0)
+            store.edit().putBoolean("wiped20261114b", true).putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0)
                     .putFloat("rawKm", 0).putFloat("rawKwh", 0).remove("last50b").apply();
             wipeTrip = true;
         }
@@ -246,6 +246,7 @@ public final class TripEnergy implements CarData.Listener {
     // from the Battery left drop (0.1 kWh steps, matches the battery %). The power reading only gives the shape
     // inside short stretches (Best km, Recent), scaled so its sum follows the battery: rf = battery drop ÷ power sum.
     private double lastLeft = Double.NaN, bSum, pSum;
+    private long lastLeftAt;
     public double powerScale() { return pSum >= 1 && bSum > 0 ? Math.max(.2, Math.min(1.2, bSum / pSum)) : .6; }
 
     private double kwhFactor() {
@@ -398,6 +399,7 @@ public final class TripEnergy implements CarData.Listener {
                 if (charging || Double.isNaN(lastLeft)) bK = 0;
                 else { double d = lastLeft - s.battLeftKwh; bK = Math.abs(d) <= 1.0 ? d : 0; }
                 lastLeft = s.battLeftKwh;
+                lastLeftAt = s.at;
             }
             double segKwhD = dKwh;
             if (!fromRemaining) {
@@ -409,7 +411,12 @@ public final class TripEnergy implements CarData.Listener {
                 double rf = powerScale();
                 if (pK < 0) regenKwh += -pK * (rf - 1);   // regen was added unscaled just above
                 segKwhD = pK * rf;
-                dKwh = Double.isNaN(bK) ? segKwhD : bK;
+                // (2026-11-14 9:40 → 9:55 PM: Battery left fell 1.4 kWh, Used rose 3.0) a moment without a Battery left
+                // reading used to count the power estimate, and the next reading then counted the same drop again.
+                // Now such a moment counts nothing: the next reading brings the whole drop. The estimate is only used
+                // when the car hasn't given Battery left for a minute.
+                boolean recent = !Double.isNaN(lastLeft) && s.at - lastLeftAt < 60_000;
+                dKwh = !Double.isNaN(bK) ? bK : recent ? 0 : segKwhD;
             }
             km += dKm;
             kwh += dKwh;
