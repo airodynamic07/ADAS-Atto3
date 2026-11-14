@@ -48,6 +48,7 @@ public final class CarData {
         public double pedalPct = Double.NaN;    // accelerator 0-100
         public double powerKw = Double.NaN;     // motor power: + driving, - regen
         public double remainKwh = Double.NaN;   // energy left in the battery
+        public double totalKwh = Double.NaN;    // the car's own "energy used since new" counter, if it has one
         public long at;                         // when this snapshot was read (ms)
 
         public boolean anyOpen() {
@@ -147,18 +148,18 @@ public final class CarData {
     private void autoFind(Context c) {
         if (searching) return;
         final android.content.SharedPreferences sp = c.getSharedPreferences("adas_launcher", 0);
-        if (System.currentTimeMillis() - sp.getLong("read_searched", 0) < 6 * 3600_000L) return;
+        if (System.currentTimeMillis() - sp.getLong("read_searched2", 0) < 6 * 3600_000L) return;
         searching = true;
         new Thread(() -> {
             try {
-                Map<String, Integer> all = snapshot("statistic.BYDAutoStatisticDevice", "instrument.BYDAutoInstrumentDevice",
+                Map<String, Double> all = snapshotAll("statistic.BYDAutoStatisticDevice", "instrument.BYDAutoInstrumentDevice",
                         "bodywork.BYDAutoBodyworkDevice", "bms.BYDAutoBmsDevice", "energy.BYDAutoEnergyDevice",
                         "power.BYDAutoPowerDevice", "engine.BYDAutoEngineDevice", "charging.BYDAutoChargingDevice");
-                android.content.SharedPreferences.Editor ed = sp.edit().putLong("read_searched", System.currentTimeMillis());
+                android.content.SharedPreferences.Editor ed = sp.edit().putLong("read_searched2", System.currentTimeMillis());
                 String volt = null, batt = null;
-                for (Map.Entry<String, Integer> e : all.entrySet()) {
+                for (Map.Entry<String, Double> e : all.entrySet()) {
                     String m = e.getKey().split("\\|")[1].toLowerCase(java.util.Locale.US);
-                    int v = e.getValue();
+                    double v = e.getValue();
                     if (volt == null && m.contains("volt") && !m.contains("cell") && ((v >= 9 && v <= 16) || (v >= 90 && v <= 160))) volt = e.getKey();
                     if (batt == null && m.contains("temp") && (m.contains("batt") || m.contains("cell") || m.contains("pack"))
                             && v >= -20 && v <= 70) batt = e.getKey();
@@ -177,8 +178,8 @@ public final class CarData {
         if (!chosen.isEmpty()) keys.add(chosen);
         for (String[] t : tries) keys.add(t[0] + "|" + t[1] + "|" + (t[2].isEmpty() ? "-1" : t[2]));
         for (String k : keys) {
-            Integer v;
-            try { v = readKey(k); } catch (Throwable e) { v = null; }
+            Double v;
+            try { v = readKeyD(k); } catch (Throwable e) { v = null; }
             if (v == null || !ok(v)) continue;
             double d = v;
             if (d >= lo && d <= hi) return d;
@@ -190,6 +191,38 @@ public final class CarData {
     }
 
     /** Reads one "device|method|arg" key (arg -1 = no argument). Read only. */
+    /** Same as readKey but keeps decimals (12.6 V). */
+    public Double readKeyD(String key) {
+        String[] k = key.split("\\|");
+        if (k.length != 3) return null;
+        int a = Integer.parseInt(k[2]);
+        Object v = a < 0 ? call(k[0], k[1]) : call(k[0], k[1], a);
+        return v instanceof Number ? ((Number) v).doubleValue() : v instanceof Boolean ? ((Boolean) v ? 1.0 : 0.0) : null;
+    }
+
+    /** Every number reading of these devices, decimals included ("device|method|arg" → value). Read only. */
+    public Map<String, Double> snapshotAll(String... classes) {
+        Map<String, Double> out = new java.util.TreeMap<>();
+        for (String cls : classes) {
+            Object d = dev(cls);
+            if (d == null) continue;
+            for (Method m : d.getClass().getMethods()) {
+                String n = m.getName();
+                if (!(n.startsWith("get") || n.startsWith("is")) || m.getDeclaringClass() == Object.class) continue;
+                Class<?> r = m.getReturnType();
+                if (!(r == int.class || r == double.class || r == float.class || r == long.class || r == Integer.class
+                        || r == Double.class || r == Float.class)) continue;
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 0) putD(out, cls + "|" + n + "|-1");
+                else if (p.length == 1 && p[0] == int.class) for (int a = 0; a <= 5; a++) putD(out, cls + "|" + n + "|" + a);
+            }
+        }
+        return out;
+    }
+    private void putD(Map<String, Double> out, String key) {
+        try { Double v = readKeyD(key); if (v != null && ok(v) && !v.isNaN()) out.put(key, v); } catch (Throwable ignored) { }
+    }
+
     public Integer readKey(String key) {
         String[] k = key.split("\\|");
         if (k.length != 3) return null;
@@ -389,6 +422,8 @@ public final class CarData {
             s.tripKm = ((Number) v).doubleValue() / 10.0;
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getAverageElectricConsumption", 1)) && ((Number) v).doubleValue() > 0)
             s.kwhPer100 = ((Number) v).doubleValue();
+        if (ok(v = call("statistic.BYDAutoStatisticDevice", "getTotalElecConValue")) && ((Number) v).doubleValue() > 0)
+            s.totalKwh = ((Number) v).doubleValue();
         s.healthPct = batteryHealth();
         s.powerKw = power();
         s.pedalPct = speedAndPedal()[1];

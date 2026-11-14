@@ -147,6 +147,64 @@ public final class TripEnergy implements CarData.Listener {
     private double startRemain = Double.NaN;
     private double lastSoc = Double.NaN;
     private boolean chargingLatch;
+
+    // ---- check against the car's own counters (user, 2026-11-14: car 10 km / 1.4 kWh, here 11.3 km / 2.4 kWh).
+    // Speed × time and power × time both read high on this car, so the sums are compared with the car's trip
+    // counter (0.1 km) and its energy counter (or, without one, the energy left in the battery), and corrected.
+    private double calCarKm, calIntKm, calCarKwh, calIntKwh, calLastTrip = Double.NaN, calLastE = Double.NaN;
+    private boolean calUsesTotal;
+    private long calSavedAt;
+    private boolean calLoaded;
+    private void calLoad() {
+        if (calLoaded || store == null) return;
+        calLoaded = true;
+        calCarKm = store.getFloat("calCarKm", 0); calIntKm = store.getFloat("calIntKm", 0);
+        calCarKwh = store.getFloat("calCarKwh", 0); calIntKwh = store.getFloat("calIntKwh", 0);
+        calUsesTotal = store.getBoolean("calTotal", false);
+    }
+    private double kmFactor() {
+        if (calCarKm < 5 || calIntKm <= 0) return 1;
+        double f = calCarKm / calIntKm;
+        return f >= 0.85 && f <= 1.08 ? f : 1;
+    }
+    private double kwhFactor() {
+        if (calIntKwh < 2 || calCarKwh <= 0) return 1;
+        double f = calCarKwh / calIntKwh;
+        return f >= 0.4 && f <= 1.3 ? f : 1;
+    }
+    private void calibrate(CarData.State s, double rawKm, double rawKwh, boolean charging) {
+        calLoad();
+        if (!Double.isNaN(s.tripKm)) {
+            double d = s.tripKm - calLastTrip;
+            if (!Double.isNaN(calLastTrip) && d >= 0 && d <= 0.5) { calCarKm += d; calIntKm += rawKm; }
+            calLastTrip = s.tripKm;
+        }
+        boolean total = !Double.isNaN(s.totalKwh);
+        if (total && !calUsesTotal) { calUsesTotal = true; calCarKwh = calIntKwh = 0; calLastE = Double.NaN; }
+        double e = calUsesTotal ? s.totalKwh : -s.remainKwh;   // both: goes up as energy is used
+        if (charging || Double.isNaN(e)) calLastE = Double.NaN;
+        else {
+            double d = e - calLastE;
+            if (!Double.isNaN(calLastE) && Math.abs(d) <= 0.5) { calCarKwh += d; calIntKwh += rawKwh; }
+            calLastE = e;
+        }
+        if (calIntKm > 300) { calIntKm /= 2; calCarKm /= 2; }       // older driving counts less
+        if (calIntKwh > 40) { calIntKwh /= 2; calCarKwh /= 2; }
+        if (store != null && s.at - calSavedAt > 60_000) {
+            calSavedAt = s.at;
+            store.edit().putFloat("calCarKm", (float) calCarKm).putFloat("calIntKm", (float) calIntKm)
+                    .putFloat("calCarKwh", (float) calCarKwh).putFloat("calIntKwh", (float) calIntKwh).putBoolean("calTotal", calUsesTotal).apply();
+        }
+    }
+    /** For Settings: what the check found so far. */
+    public synchronized String checkInfo() {
+        calLoad();
+        return String.format(java.util.Locale.US,
+                "Distance: car %.1f km · launcher %.1f km → correction ×%.2f\nEnergy (%s): car %.1f kWh · launcher %.1f kWh → correction ×%.2f\n"
+                        + "The correction starts after 5 km and 2 kWh of driving, then keeps adjusting.",
+                calCarKm, calIntKm, kmFactor(), calUsesTotal ? "car's energy counter" : "energy left in battery",
+                calCarKwh, calIntKwh, kwhFactor());
+    }
     private long lastAt;
     private double segKm, segKwh, segSpeedSum;
     private int segN, segPedalN, segPowerN;
@@ -249,6 +307,13 @@ public final class TripEnergy implements CarData.Listener {
                 dKwh = (startRemain - s.remainKwh) - kwh;
                 if (dKwh < 0 && still) { startRemain = s.remainKwh + kwh; dKwh = 0; }   // charged while standing
             } else dKwh = 0;
+            calibrate(s, dKm, fromRemaining ? 0 : dKwh, charging);
+            dKm *= kmFactor();
+            if (!fromRemaining) {
+                double f = kwhFactor();
+                if (dKwh < 0) regenKwh += -dKwh * (f - 1);   // regen was added uncorrected just above
+                dKwh *= f;
+            }
             km += dKm;
             kwh += dKwh;
             rollDay();

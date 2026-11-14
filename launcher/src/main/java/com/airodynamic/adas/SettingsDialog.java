@@ -183,6 +183,10 @@ public final class SettingsDialog {
         fr.addView(Ui.chip(c, "Find readings", false, th, v -> findReadings(c, th)), weight(c));
         root.addView(fr);
 
+        // trip distance and energy are checked against the car's own counters (user, 2026-11-14)
+        section(c, root, th, "Trip numbers · check against the car");
+        root.addView(Ui.text(c, TripEnergy.get(c).checkInfo(), 13, th.muted, false));
+
         section(c, root, th, "Problems");
         LinearLayout pb = row(c);
         pb.addView(Ui.chip(c, "Show crash log", false, th, v -> new Thread(() -> {
@@ -306,20 +310,20 @@ public final class SettingsDialog {
         android.widget.Toast.makeText(c, "Reading the car… (a few seconds)", android.widget.Toast.LENGTH_SHORT).show();
         android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
         new Thread(() -> {
-            java.util.Map<String, Integer> all = CarData.get(c).snapshot("ac.BYDAutoAcDevice", "statistic.BYDAutoStatisticDevice",
+            java.util.Map<String, Double> all = CarData.get(c).snapshotAll("ac.BYDAutoAcDevice", "statistic.BYDAutoStatisticDevice",
                     "instrument.BYDAutoInstrumentDevice", "bodywork.BYDAutoBodyworkDevice", "bms.BYDAutoBmsDevice",
                     "energy.BYDAutoEnergyDevice", "power.BYDAutoPowerDevice", "engine.BYDAutoEngineDevice", "charging.BYDAutoChargingDevice");
             final java.util.List<String> keys = new java.util.ArrayList<>();
             final java.util.List<String> labels = new java.util.ArrayList<>();
             // the air-conditioner's readings last: the first photo showed only those (2026-11-13)
-            java.util.List<java.util.Map.Entry<String, Integer>> sorted = new java.util.ArrayList<>(all.entrySet());
+            java.util.List<java.util.Map.Entry<String, Double>> sorted = new java.util.ArrayList<>(all.entrySet());
             java.util.Collections.sort(sorted, (x, y) -> Boolean.compare(x.getKey().startsWith("ac."), y.getKey().startsWith("ac.")));
-            for (java.util.Map.Entry<String, Integer> e : sorted) {
+            for (java.util.Map.Entry<String, Double> e : sorted) {
                 String m = e.getKey().split("\\|")[1].toLowerCase(java.util.Locale.US);
-                if (!(m.contains("temp") || m.contains("volt"))) continue;
+                if (!(m.contains("temp") || m.contains("volt") || m.contains("batter") || m.contains("elec") || m.contains("power"))) continue;
                 if (m.contains("color") || m.contains("antivirus") || m.contains("unit") || m.contains("mode")) continue;
                 keys.add(e.getKey());
-                labels.add(e.getKey().replaceAll(".*\\.BYDAuto|Device", "").replace("|-1", "") + " = " + e.getValue());
+                labels.add(e.getKey().replaceAll(".*\\.BYDAuto|Device", "").replace("|-1", "") + " = " + (e.getValue() == Math.rint(e.getValue()) ? String.valueOf(e.getValue().longValue()) : String.valueOf(e.getValue())));
             }
             ui.post(() -> {
                 if (keys.isEmpty()) { new AlertDialog.Builder(c).setTitle("No readings found").setPositiveButton("OK", null).show(); return; }
