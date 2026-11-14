@@ -187,15 +187,14 @@ public final class TripEnergy implements CarData.Listener {
     // Speed × time and power × time both read high on this car, so the sums are compared with the car's trip
     // counter (0.1 km) and its energy counter (or, without one, the energy left in the battery), and corrected.
     private double calCarKm, calIntKm, calCarKwh, calIntKwh, calLastTrip = Double.NaN, calLastE = Double.NaN;
-    private boolean calUsesTotal;
     private long calSavedAt;
     private boolean calLoaded;
     private void calLoad() {
         if (calLoaded || store == null) return;
         calLoaded = true;
         calCarKm = store.getFloat("calCarKm", 0); calIntKm = store.getFloat("calIntKm", 0);
-        calCarKwh = store.getFloat("calCarKwh", 0); calIntKwh = store.getFloat("calIntKwh", 0);
-        calUsesTotal = store.getBoolean("calTotal", false);
+        // "…2": the old energy check (car's total counter) never got usable numbers, start fresh (2026-11-14)
+        calCarKwh = store.getFloat("calCarKwh2", 0); calIntKwh = store.getFloat("calIntKwh2", 0);
     }
     private double kmFactor() {
         if (calCarKm < 5 || calIntKm <= 0) return 1;
@@ -214,9 +213,10 @@ public final class TripEnergy implements CarData.Listener {
             if (!Double.isNaN(calLastTrip) && d >= 0 && d <= 0.5) { calCarKm += d; calIntKm += rawKm; }
             calLastTrip = s.tripKm;
         }
-        boolean total = !Double.isNaN(s.totalKwh);
-        if (total && !calUsesTotal) { calUsesTotal = true; calCarKwh = calIntKwh = 0; calLastE = Double.NaN; }
-        double e = calUsesTotal ? s.totalKwh : -s.remainKwh;   // both: goes up as energy is used
+        // (user, 2026-11-14: 38 km, Battery left 25.0 → 19.5 = 5.5 kWh, launcher 8.9 kWh) the car's total energy counter
+        // doesn't move while driving, so the check never worked. Now it compares with Battery left, which drops live
+        // in 0.1 kWh steps and matches the battery % drop.
+        double e = -s.battLeftKwh;   // goes up as energy is used
         if (charging || Double.isNaN(e)) calLastE = Double.NaN;
         else {
             double d = e - calLastE;
@@ -228,7 +228,7 @@ public final class TripEnergy implements CarData.Listener {
         if (store != null && s.at - calSavedAt > 60_000) {
             calSavedAt = s.at;
             store.edit().putFloat("calCarKm", (float) calCarKm).putFloat("calIntKm", (float) calIntKm)
-                    .putFloat("calCarKwh", (float) calCarKwh).putFloat("calIntKwh", (float) calIntKwh).putBoolean("calTotal", calUsesTotal).apply();
+                    .putFloat("calCarKwh2", (float) calCarKwh).putFloat("calIntKwh2", (float) calIntKwh).apply();
         }
     }
     /** For Settings: what the check found so far. */
@@ -237,7 +237,7 @@ public final class TripEnergy implements CarData.Listener {
         return String.format(java.util.Locale.US,
                 "Distance: car %.1f km · launcher %.1f km → correction ×%.2f\nEnergy (%s): car %.1f kWh · launcher %.1f kWh → correction ×%.2f\n"
                         + "The correction starts after 5 km and 2 kWh of driving, then keeps adjusting.",
-                calCarKm, calIntKm, kmFactor(), calUsesTotal ? "car's energy counter" : "energy left in battery",
+                calCarKm, calIntKm, kmFactor(), "Battery left drop",
                 calCarKwh, calIntKwh, kwhFactor());
     }
     private long lastAt;
