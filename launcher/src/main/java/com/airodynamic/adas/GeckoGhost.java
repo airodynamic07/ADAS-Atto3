@@ -35,9 +35,15 @@ final class GeckoGhost {
             // (2026-11-14) the engine network settings tried in probe-133 (HTTP/3, IPv6, DNS-over-HTTPS off) are
             // gone again: after them the night map failed too. Engine defaults, as when the night map worked.
             if (profile != null) {
-                java.io.File dir = new java.io.File(c.getFilesDir(), "gecko-" + profile);
+                // (2026-11-14) the video worked once, then stayed black every time, even after restarts: most likely the
+                // engine's "in use" lock was left in this folder when the window's process was ended, so the engine
+                // couldn't open it again. Start from a new folder (the old one is deleted) and clear any stale lock.
+                deleteTree(new java.io.File(c.getFilesDir(), "gecko-" + profile));
+                java.io.File dir = new java.io.File(c.getFilesDir(), "gecko-" + profile + "2");
                 //noinspection ResultOfMethodCallIgnored
                 dir.mkdirs();
+                for (String n : new String[]{"parent.lock", ".parentlock", "lock"}) //noinspection ResultOfMethodCallIgnored
+                    new java.io.File(dir, n).delete();
                 writeUserJs(dir);
                 sb.arguments(new String[]{"-profile", dir.getAbsolutePath()});
             }
@@ -129,6 +135,13 @@ final class GeckoGhost {
      * thinks the car has no internet (it judges that by itself, and the car's own connection can confuse it); Android
      * still reached the map server then (test: HTTP 200). This keeps it online. (2026-11-14)
      */
+    private static void deleteTree(java.io.File f) {
+        java.io.File[] k = f.listFiles();
+        if (k != null) for (java.io.File x : k) deleteTree(x);
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
+    }
+
     private static void writeUserJs(java.io.File dir) {
         try (java.io.FileWriter w = new java.io.FileWriter(new java.io.File(dir, "user.js"))) {
             w.write("user_pref(\"network.manage-offline-status\", false);\n"

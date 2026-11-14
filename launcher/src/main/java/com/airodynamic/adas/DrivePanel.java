@@ -58,8 +58,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         root.addView(row1, gapH(rowH));
         LinearLayout rowN = new LinearLayout(c);
         LinearLayout tc = flatTile("Range WLTP"); outside = big(tc);   // where Cabin was (user, 2026-11-14)
-        LinearLayout tb = flatTile("HV batt"); batt = big(tb);
-        LinearLayout tvC = flatTile("12 V"); volt = big(tvC);
+        LinearLayout tb = flatTile("My range"); batt = big(tb);   // from your own driving (user, 2026-11-14)
+        LinearLayout tvC = flatTile("Battery left"); volt = big(tvC);   // kWh (user, 2026-11-14)
         rowN.addView(tc, wgap(1.2f)); rowN.addView(tb, wgap(.8f)); rowN.addView(tvC, new LinearLayout.LayoutParams(0, -1, 1f));
         root.addView(rowN, gapH(rowH));
 
@@ -498,8 +498,13 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     @Override public void onCar(CarData.State s) {
         // WLTP range (user, 2026-11-14): the car shows NEDC range; Atto 3 is rated 480 km NEDC and 420 km WLTP → × 0.875
         outside.setText(s.rangeKm >= 0 ? Math.round(s.rangeKm * 420.0 / 480.0) + " km" : "–");
-        batt.setText(Double.isNaN(s.batteryC) ? "–" : Math.round(s.batteryC) + "°C");
-        volt.setText(Double.isNaN(s.volt12) ? "–" : String.format(Locale.US, "%.1f V", s.volt12));
+        // My range = battery left ÷ your kWh/100 over your last 50 km × 100; before 10 km of your own driving the car's
+        // own "last 50 km" figure is used (user, 2026-11-14)
+        double left = !Double.isNaN(s.battLeftKwh) ? s.battLeftKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 : Double.NaN;
+        double mine = TripEnergy.get(c).myAvg50();
+        if (Double.isNaN(mine)) mine = s.last50;
+        batt.setText(!Double.isNaN(left) && !Double.isNaN(mine) && mine > 3 ? Math.round(left / mine * 100) + " km" : "–");
+        volt.setText(Double.isNaN(left) ? "–" : String.format(Locale.US, "%.1f kWh", left));
         pm.setText((s.pmOut < 0 ? "–" : String.valueOf(s.pmOut)) + " / " + (s.pmIn < 0 ? "–" : String.valueOf(s.pmIn)) + pmLevel(s.pmOut));
         pm.setTextColor(s.pmOut > 50 ? Theme.DANGER : s.pmOut > 25 ? Theme.CAUTION : th.text);
         // My speed limit: card turns red while over (warning only; SpeedAlert beeps)

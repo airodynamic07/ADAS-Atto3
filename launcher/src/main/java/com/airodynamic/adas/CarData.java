@@ -48,6 +48,8 @@ public final class CarData {
         public double pedalPct = Double.NaN;    // accelerator 0-100
         public double powerKw = Double.NaN;     // motor power: + driving, - regen
         public double remainKwh = Double.NaN;   // energy left in the battery
+        public double battLeftKwh = Double.NaN; // energy left in the battery, kWh (Power|getBatteryRemainPowerEV, 2026-11-14 list)
+        public double last50 = Double.NaN;      // the car's own kWh/100 over the last 50 km
         public double totalKwh = Double.NaN;    // the car's own "energy used since new" counter, if it has one
         public long at;                         // when this snapshot was read (ms)
 
@@ -427,6 +429,10 @@ public final class CarData {
             s.kwhPer100 = ((Number) v).doubleValue();
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getTotalElecConValue")) && ((Number) v).doubleValue() > 0)
             s.totalKwh = ((Number) v).doubleValue();
+        if (ok(v = call("power.BYDAutoPowerDevice", "getBatteryRemainPowerEV")) && ((Number) v).doubleValue() > 0
+                && ((Number) v).doubleValue() < 100) s.battLeftKwh = ((Number) v).doubleValue();
+        if (ok(v = call("statistic.BYDAutoStatisticDevice", "getLastElecConPHMValue")) && ((Number) v).doubleValue() > 3
+                && ((Number) v).doubleValue() < 60) s.last50 = ((Number) v).doubleValue();
         s.healthPct = batteryHealth();
         s.powerKw = power();
         s.pedalPct = speedAndPedal()[1];

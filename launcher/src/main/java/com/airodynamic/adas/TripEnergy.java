@@ -153,7 +153,35 @@ public final class TripEnergy implements CarData.Listener {
     private double startRemain = Double.NaN;
     private double lastSoc = Double.NaN;
     private boolean chargingLatch;
-    private double rawDayKm, rawDayKwh, rawTripKm, rawTripKwh;   // counted while no correction was known yet
+    private double rawDayKm, rawDayKwh, rawTripKm, rawTripKwh;
+
+    // ---- your own consumption over the last 50 km, across days (user, 2026-11-14: "My range" from my driving).
+    // One entry per km driven: the kWh it took (regen included, charging never). Kept after a restart.
+    private final java.util.ArrayDeque<Double> last50 = new java.util.ArrayDeque<>();
+    private double l50Km, l50Kwh;
+    private boolean l50Loaded;
+    private void l50Add(double dKm, double dKwh) {
+        if (store == null) return;
+        if (!l50Loaded) {
+            l50Loaded = true;
+            for (String p : store.getString("last50", "").split(";")) try { if (!p.isEmpty()) last50.addLast(Double.parseDouble(p)); } catch (Exception ignored) { }
+        }
+        l50Km += dKm; l50Kwh += dKwh;
+        if (l50Km < 1) return;
+        last50.addLast(l50Kwh / l50Km);
+        l50Km = 0; l50Kwh = 0;
+        while (last50.size() > 50) last50.removeFirst();
+        StringBuilder b = new StringBuilder();
+        for (double d : last50) b.append(String.format(java.util.Locale.US, "%.4f;", d));
+        store.edit().putString("last50", b.toString()).apply();
+    }
+    /** kWh per 100 km over your last (up to) 50 km; NaN before 10 km. */
+    public synchronized double myAvg50() {
+        if (last50.size() < 10) return Double.NaN;
+        double sum = 0;
+        for (double d : last50) sum += d;
+        return sum / last50.size() * 100;
+    }   // counted while no correction was known yet
 
     // ---- check against the car's own counters (user, 2026-11-14: car 10 km / 1.4 kWh, here 11.3 km / 2.4 kWh).
     // Speed × time and power × time both read high on this car, so the sums are compared with the car's trip
@@ -326,6 +354,7 @@ public final class TripEnergy implements CarData.Listener {
             rollDay();
             dayKm += dKm;
             dayKwh += dKwh;
+            l50Add(dKm, dKwh);
             // (user, 2026-11-14, "option 1") what was counted before the correction was ready is corrected once, when it is
             double fk = kmFactor(), fe = kwhFactor();
             if (fk == 1) { rawDayKm += dKm; rawTripKm += dKm; }
