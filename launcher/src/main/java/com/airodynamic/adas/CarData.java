@@ -429,11 +429,14 @@ public final class CarData {
             s.kwhPer100 = ((Number) v).doubleValue();
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getTotalElecConValue")) && ((Number) v).doubleValue() > 0)
             s.totalKwh = ((Number) v).doubleValue();
+        s.healthPct = batteryHealth();
+        // (user, 2026-11-15 charger test: 5 → 92 %, charger 51.4 kWh, car said +51.8 kWh) the car's Battery left is for a
+        // new battery: × battery health (89 %) gives the energy really there. Used / kWh/100 follow it; My range is unchanged.
         if (ok(v = call("power.BYDAutoPowerDevice", "getBatteryRemainPowerEV")) && ((Number) v).doubleValue() > 0
-                && ((Number) v).doubleValue() < 100) s.battLeftKwh = ((Number) v).doubleValue();
+                && ((Number) v).doubleValue() < 100)
+            s.battLeftKwh = ((Number) v).doubleValue() * (Double.isNaN(s.healthPct) ? 1 : s.healthPct / 100.0);
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getLastElecConPHMValue")) && ((Number) v).doubleValue() > 3
                 && ((Number) v).doubleValue() < 60) s.last50 = ((Number) v).doubleValue();
-        s.healthPct = batteryHealth();
         s.powerKw = power();
         s.pedalPct = speedAndPedal()[1];
         if (ok(v = call("statistic.BYDAutoStatisticDevice", "getRemainingBatteryPower")) && ((Number) v).intValue() > 10 && ((Number) v).intValue() < 1200)

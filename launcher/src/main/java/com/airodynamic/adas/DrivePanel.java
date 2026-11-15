@@ -500,7 +500,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         outside.setText(s.rangeKm >= 0 ? Math.round(s.rangeKm * 420.0 / 480.0) + " km" : "–");
         // My range = battery left ÷ your kWh/100 over your last 50 km × 100; before 10 km of your own driving the car's
         // own "last 50 km" figure is used (user, 2026-11-14)
-        double left = !Double.isNaN(s.battLeftKwh) ? s.battLeftKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 : Double.NaN;
+        double left = !Double.isNaN(s.battLeftKwh) ? s.battLeftKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 * (Double.isNaN(s.healthPct) ? 1 : s.healthPct / 100.0) : Double.NaN;
         double mine = TripEnergy.get(c).myAvg50();
         if (Double.isNaN(mine)) mine = s.last50;
         batt.setText(!Double.isNaN(left) && !Double.isNaN(mine) && mine > 3 ? Math.round(left / mine * 100) + " km" : "–");
