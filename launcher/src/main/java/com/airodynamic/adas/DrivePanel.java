@@ -26,6 +26,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private TextView batt, volt;
     private TextView outside, pm, limit, todayKm, todayKwh, todayAvg, todayDrive, todaySpd, tripSpd;
     private LinearLayout limitCard;
+    private TextView zeroLabel;
     private TextView used, avg, dist, power, soc, since, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty, regenPct;
     private SpecialRow recentRow, latestRow;
     private static final int BEST_N = 10;   // keep the 10 best, scroll to see them (user, 2026-11-12)
@@ -125,17 +126,21 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         tapButton(t1, mapB);
         t1.setOnClickListener(v -> openRoute());
         LinearLayout t2 = tile("Peak power"); power = big(t2);
-        LinearLayout t6 = tile("Best 0–100"); zeroTo = big(t6);
+        // Best 0–X km/h: orange button, tap to type the speed (user, 2026-11-15); swapped with Battery used
+        LinearLayout t6 = tile("Best 0–100 km/h"); zeroTo = big(t6);
+        zeroLabel = (TextView) t6.getChildAt(0);
+        tapButton(t6, zeroTo);
+        t6.setOnClickListener(v -> c.startActivity(new android.content.Intent(c, KmInputActivity.class).putExtra("mode", "zero")));
         LinearLayout t5 = tile("Regen (kWh · %)"); peak = big(t5);   // "0.8 · 12 %" on one line (user, 2026-11-13)
         regenPct = Ui.text(c, "", 11, TOP_GREEN, true);
-        r1.addView(t1, w(true)); r1.addView(t2, w(true)); r1.addView(t6, w(true)); r1.addView(t5, wide());
+        LinearLayout t9 = tile("Battery used"); brakes = big(t9);
+        r1.addView(t1, w(true)); r1.addView(t2, w(true)); r1.addView(t9, w(true)); r1.addView(t5, wide());
         LinearLayout t8 = tile("Every day"); TextView histB = big(t8); histB.setText("📅 History"); histB.setTextSize(13.5f); histB.setEllipsize(null);
         tapButton(t8, histB);
         t8.setOnClickListener(v -> { if (historyOpener != null) historyOpener.run(); });
         LinearLayout t7 = tile("Avg speed"); avgSpd = big(t7);
         LinearLayout t4 = tile("Top speed"); topSpd = big(t4);
-        LinearLayout t9 = tile("Battery used"); brakes = big(t9);
-        r2.addView(t8, w(true)); r2.addView(t7, w(true)); r2.addView(t4, w(true)); r2.addView(t9, wide());
+        r2.addView(t8, w(true)); r2.addView(t7, w(true)); r2.addView(t4, w(true)); r2.addView(t6, wide());
         for (LinearLayout r : new LinearLayout[]{r1, r2}) {   // the two card rows the same height (user, 2026-11-13)
             // 1.5 times shorter, so the Best list shows more rows (user, 2026-11-14)
             for (int k = 0; k < r.getChildCount(); k++) {
@@ -432,7 +437,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         if (cut > 0) rs.setSpan(new android.text.style.ForegroundColorSpan(TOP_GREEN), cut, rs.length(), 0);
         peak.setText(rs);
         power.setText(t.peakKw > 0 ? Math.round(t.peakKw) + " kW" : "–");
-        zeroTo.setText(Double.isNaN(t.best0100) ? "–" : String.format(Locale.US, "%.1f s", t.best0100));
+        zeroLabel.setText("Best 0–" + t.zeroToKmh + " km/h");
+        zeroTo.setText(Double.isNaN(t.best0100) ? "⏱ –" : String.format(Locale.US, "⏱ %.1f s", t.best0100));
         double am = t.avgWithStops();   // stops at lights included (user, 2026-11-15)
         avgSpd.setText(Double.isNaN(am) ? "–" : Math.round(am) + " km/h");
         long sec = Math.round(t.movingSec + t.stoppedSec);

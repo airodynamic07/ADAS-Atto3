@@ -152,6 +152,9 @@ public final class Prefs {
     /** Length of the "best stretches" on the trip card, km (user can type it; default 10). */
     public float bestKm() { return p.getFloat("bestKm", 10f); }
     public void setBestKm(float km) { p.edit().putFloat("bestKm", km).apply(); }
+    /** "Best 0–X km/h": the target speed X (user, 2026-11-15), 30–150, default 100. */
+    public int zeroToKmh() { return p.getInt("zeroToKmh", 100); }
+    public void setZeroToKmh(int k) { p.edit().putInt("zeroToKmh", k).apply(); }
 
     /** Assistant box: "gemini" (works in GBox with the user's account, 2026-11-11) or "chatgpt". */
     public String assistant() { return p.getString("assistant", "gemini"); }

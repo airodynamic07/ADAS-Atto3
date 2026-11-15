@@ -16,6 +16,8 @@ import android.widget.Toast;
 public class KmInputActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        // the same window for "Best 0–X km/h" (user, 2026-11-15)
+        if ("zero".equals(getIntent().getStringExtra("mode"))) { zeroTo(); return; }
         setTitle("Best stretch length");
         Theme th = new Prefs(this).theme();
         LinearLayout root = new LinearLayout(this);
@@ -48,6 +50,49 @@ public class KmInputActivity extends Activity {
                 finish();
             } catch (Exception e) {
                 Toast.makeText(this, "Type a number from 1 to 100", Toast.LENGTH_SHORT).show();
+            }
+        }), sl);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
+        bl.topMargin = Ui.dp(this, 12);
+        root.addView(btns, bl);
+        setContentView(root);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        in.requestFocus();
+    }
+
+    /** Type the target speed for "Best 0–X km/h" (30–150). */
+    private void zeroTo() {
+        setTitle("Best 0 – ? km/h");
+        Theme th = new Prefs(this).theme();
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        int p = Ui.dp(this, 20);
+        root.setPadding(p, Ui.dp(this, 12), p, Ui.dp(this, 12));
+        root.addView(Ui.text(this, "Time from standing still to this speed (30–150 km/h)", 15, th.muted, false));
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.BOTTOM);
+        final EditText in = new EditText(this);
+        in.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        in.setText(String.valueOf(new Prefs(this).zeroToKmh()));
+        in.setSelectAllOnFocus(true);
+        in.setTextSize(26);
+        row.addView(in, new LinearLayout.LayoutParams(0, -2, 1f));
+        row.addView(Ui.text(this, " km/h", 16, th.muted, false));
+        root.addView(row);
+        LinearLayout btns = new LinearLayout(this);
+        btns.setGravity(Gravity.END);
+        btns.addView(Ui.chip(this, "Cancel", false, th, v -> finish()));
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
+        sl.leftMargin = Ui.dp(this, 10);
+        btns.addView(Ui.chip(this, "OK", true, th, v -> {
+            try {
+                int k = Integer.parseInt(in.getText().toString().trim());
+                if (k < 30 || k > 150) throw new NumberFormatException();
+                new Prefs(this).setZeroToKmh(k);
+                TripEnergy.get(this).setZeroToKmh(k);
+                finish();
+            } catch (Exception e) {
+                Toast.makeText(this, "Type a speed from 30 to 150", Toast.LENGTH_SHORT).show();
             }
         }), sl);
         LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);

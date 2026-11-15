@@ -39,6 +39,7 @@ public final class TripEnergy implements CarData.Listener {
             instance.store = c.getApplicationContext().getSharedPreferences("today", Context.MODE_PRIVATE);
             instance.hist = c.getApplicationContext().getSharedPreferences("history", Context.MODE_PRIVATE);
             instance.loadToday();
+            instance.zeroToKmh = new Prefs(c).zeroToKmh();
             CarData.get(c).addListener(instance);
             instance.startGps(c.getApplicationContext());
         }
@@ -319,6 +320,13 @@ public final class TripEnergy implements CarData.Listener {
     public double bestKm() { return bestKm; }
     public synchronized void setBestKm(double k) { bestKm = Math.max(1, Math.min(100, k)); findBest(); for (Listener l : listeners) l.onTrip(this); }
     private long runStart; private double runMax; private boolean runArmed, brakeArmed = true;
+    /** Best 0–X: the target speed X in km/h (user, 2026-11-15). */
+    public volatile int zeroToKmh = 100;
+    /** A new target: the best time starts again from now (earlier runs were timed to the old speed). */
+    public synchronized void setZeroToKmh(int k) {
+        zeroToKmh = k; best0100 = Double.NaN; runs0100 = 0; runStart = 0;
+        for (Listener l : listeners) l.onTrip(this);
+    }
     private double prevV = Double.NaN, segSec;
 
     private void clearStats() {
@@ -509,7 +517,7 @@ public final class TripEnergy implements CarData.Listener {
         else if (runArmed && runStart == 0) { runStart = s.at; runMax = v; runArmed = false; }
         if (runStart > 0) {
             runMax = Math.max(runMax, v);
-            if (v >= 100) {
+            if (v >= zeroToKmh) {
                 double sec = (s.at - runStart) / 1000.0;
                 if (Double.isNaN(best0100) || sec < best0100) best0100 = sec;
                 runs0100++;
