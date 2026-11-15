@@ -437,13 +437,15 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         if (cut > 0) rs.setSpan(new android.text.style.ForegroundColorSpan(TOP_GREEN), cut, rs.length(), 0);
         peak.setText(rs);
         power.setText(t.peakKw > 0 ? Math.round(t.peakKw) + " kW" : "–");
+        // top line "Fastest 10 km · 6m 31s" (over an hour "1h 10m"), big "🏁 92 km/h" (user, 2026-11-15)
         double fk = t.fastKm;
-        zeroLabel.setText("Fastest " + (fk == Math.floor(fk) ? String.valueOf((int) fk) : String.format(Locale.US, "%.1f", fk)) + " km");
-        if (Double.isNaN(t.fastSpeed)) zeroTo.setText("🏁 –");
-        else {   // "92 km/h · 6:31" (h:mm:ss over an hour)
+        String name = "Fastest " + (fk == Math.floor(fk) ? String.valueOf((int) fk) : String.format(Locale.US, "%.1f", fk)) + " km";
+        if (Double.isNaN(t.fastSpeed)) { zeroLabel.setText(name); zeroTo.setText("🏁 –"); }
+        else {
             long fs = Math.round(t.fastSec);
-            String tm = fs >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", fs / 3600, fs / 60 % 60, fs % 60) : String.format(Locale.US, "%d:%02d", fs / 60, fs % 60);
-            zeroTo.setText(String.format(Locale.US, "🏁 %d km/h · %s", Math.round(t.fastSpeed), tm));
+            String tm = fs >= 3600 ? String.format(Locale.US, "%dh %02dm", fs / 3600, fs / 60 % 60) : String.format(Locale.US, "%dm %02ds", fs / 60, fs % 60);
+            zeroLabel.setText(name + " · " + tm);
+            zeroTo.setText(String.format(Locale.US, "🏁 %d km/h", Math.round(t.fastSpeed)));
         }
         double am = t.avgWithStops();   // stops at lights included (user, 2026-11-15)
         avgSpd.setText(Double.isNaN(am) ? "–" : Math.round(am) + " km/h");
