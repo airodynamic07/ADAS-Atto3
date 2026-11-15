@@ -440,12 +440,16 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         // top line "Fastest 10 km · 6m 31s" (over an hour "1h 10m"), big "🏁 92 km/h" (user, 2026-11-15)
         double fk = t.fastKm;
         String name = "Fastest " + (fk == Math.floor(fk) ? String.valueOf((int) fk) : String.format(Locale.US, "%.1f", fk)) + " km";
-        if (Double.isNaN(t.fastSpeed)) { zeroLabel.setText(name); zeroTo.setText("🏁 –"); }
+        // (user, 2026-11-15) flag on the title line; speed and time together on the big line: "92 km/h · 6m 31s"
+        zeroLabel.setText("🏁 " + name);
+        if (Double.isNaN(t.fastSpeed)) zeroTo.setText("–");
         else {
             long fs = Math.round(t.fastSec);
             String tm = fs >= 3600 ? String.format(Locale.US, "%dh %02dm", fs / 3600, fs / 60 % 60) : String.format(Locale.US, "%dm %02ds", fs / 60, fs % 60);
-            zeroLabel.setText(name + " · " + tm);
-            zeroTo.setText(String.format(Locale.US, "🏁 %d km/h", Math.round(t.fastSpeed)));
+            String sp = Math.round(t.fastSpeed) + " km/h";
+            android.text.SpannableString v = new android.text.SpannableString(sp + " · " + tm);
+            v.setSpan(new android.text.style.RelativeSizeSpan(0.9f), sp.length(), v.length(), 0);
+            zeroTo.setText(v);
         }
         double am = t.avgWithStops();   // stops at lights included (user, 2026-11-15)
         avgSpd.setText(Double.isNaN(am) ? "–" : Math.round(am) + " km/h");
