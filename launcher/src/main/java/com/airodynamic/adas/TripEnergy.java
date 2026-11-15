@@ -113,10 +113,10 @@ public final class TripEnergy implements CarData.Listener {
         }
         // (user, 2026-11-14) the energy was counted wrong until the Battery left version: wipe today and the whole
         // history once, start again clean with this version
-        if (!store.getBoolean("wiped20261115", false)) {   // "b": again, the first wipe still counted some energy twice
+        if (!store.getBoolean("wiped20261115b", false)) {   // "b": again, the first wipe still counted some energy twice
             dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0;
             if (hist != null) hist.edit().clear().apply();
-            store.edit().putBoolean("wiped20261115", true).putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0)
+            store.edit().putBoolean("wiped20261115b", true).putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0)
                     .putFloat("rawKm", 0).putFloat("rawKwh", 0).remove("last50b").apply();
             wipeTrip = true;
         }
@@ -417,12 +417,13 @@ public final class TripEnergy implements CarData.Listener {
                 fromRemaining = false;
                 dKwh = s.powerKw * dt / 3600.0;
                 if (s.powerKw < 0) regenKwh += -dKwh;
-            } else if (!Double.isNaN(s.remainKwh)) {
-                fromRemaining = true;
-                if (Double.isNaN(startRemain)) startRemain = s.remainKwh;
-                dKwh = (startRemain - s.remainKwh) - kwh;
-                if (dKwh < 0 && still) { startRemain = s.remainKwh + kwh; dKwh = 0; }   // charged while standing
-            } else dKwh = 0;
+            } else {
+                // (2026-11-15: Today 21.1 kWh, Battery left fell 13.7) no motor-power reading for a moment used to switch to
+                // the car's "remaining" value, which is the battery % x 10, not kWh, and reset the trip to it: about twice
+                // too much. A missing power reading now counts nothing; Battery left (below) brings the real drop.
+                fromRemaining = false;
+                dKwh = 0;
+            }
             calibrate(s, dKm, 0, charging);   // distance check (energy: Battery left below)
             dKm *= kmFactor();
             // Battery left drop since the last reading (charging never counts; a jump over 1 kWh = a gap, ignored)
