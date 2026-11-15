@@ -531,10 +531,15 @@ public final class TripEnergy implements CarData.Listener {
      */
     private void findBest() {
         int w = (int) Math.round(bestKm / STEP_KM), n = segs.size();
+        // (user, 2026-11-15: trip 21.6 kWh/100 but Recent 13.4 / Latest 14.9) stretches come from the motor-power reading;
+        // scale them with this trip's own Battery-left energy so all stretches together add up to the trip's Used
+        double sumSeg = 0;
+        for (double[] g : segs) sumSeg += g[0];
+        kTrip = sumSeg > 0.05 && kwh > 0 ? Math.max(.3, Math.min(3, kwh / sumSeg)) : 1;
         List<Best> out = new ArrayList<>();
         if (n >= w && w > 0) {
             double[] e = new double[n + 1], t = new double[n + 1];
-            for (int i = 0; i < n; i++) { e[i + 1] = e[i] + segs.get(i)[0]; t[i + 1] = t[i] + segs.get(i)[1]; }
+            for (int i = 0; i < n; i++) { e[i + 1] = e[i] + segs.get(i)[0] * kTrip; t[i + 1] = t[i] + segs.get(i)[1]; }
             Integer[] idx = new Integer[n - w + 1];
             for (int i = 0; i < idx.length; i++) idx[i] = i;
             java.util.Arrays.sort(idx, (a, b) -> Double.compare(e[a + w] - e[a], e[b + w] - e[b]));
@@ -564,7 +569,7 @@ public final class TripEnergy implements CarData.Listener {
             int st = Math.max(0, n - w);
             double len = (n - st) * STEP_KM;
             double e = 0, t = 0, lo = Double.MAX_VALUE, hi = 0;
-            for (int k = st; k < n; k++) { double[] g = segs.get(k); e += g[0]; t += g[1]; if (!Double.isNaN(g[2])) lo = Math.min(lo, g[2]); if (!Double.isNaN(g[3])) hi = Math.max(hi, g[3]); }
+            for (int k = st; k < n; k++) { double[] g = segs.get(k); e += g[0] * kTrip; t += g[1]; if (!Double.isNaN(g[2])) lo = Math.min(lo, g[2]); if (!Double.isNaN(g[3])) hi = Math.max(hi, g[3]); }
             lt = new Best();
             lt.kwh100 = e / len * 100;
             lt.speed = t > 0 ? len / (t / 3600.0) : Double.NaN;
@@ -579,7 +584,7 @@ public final class TripEnergy implements CarData.Listener {
         if (blocks > 0) {
             int st = (blocks - 1) * w;
             double e = 0, t = 0, lo = Double.MAX_VALUE, hi = 0;
-            for (int k = st; k < st + w; k++) { double[] g = segs.get(k); e += g[0]; t += g[1]; if (!Double.isNaN(g[2])) lo = Math.min(lo, g[2]); if (!Double.isNaN(g[3])) hi = Math.max(hi, g[3]); }
+            for (int k = st; k < st + w; k++) { double[] g = segs.get(k); e += g[0] * kTrip; t += g[1]; if (!Double.isNaN(g[2])) lo = Math.min(lo, g[2]); if (!Double.isNaN(g[3])) hi = Math.max(hi, g[3]); }
             lb = new Best();
             lb.kwh100 = e / bestKm * 100;
             lb.speed = t > 0 ? bestKm / (t / 3600.0) : Double.NaN;
@@ -589,6 +594,7 @@ public final class TripEnergy implements CarData.Listener {
         lastBlock = lb;
     }
     private volatile Best lastBlock;
+    private double kTrip = 1;
     /** The newest finished block of bestKm (fixed); latest() is the moving one being driven now. */
     public Best lastBlock() { return lastBlock; }
     private volatile Best latest;
