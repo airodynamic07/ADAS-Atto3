@@ -323,12 +323,19 @@ public final class TripEnergy implements CarData.Listener {
 
     private void clearStats() {
         topSpeed = topSpeedKm = peakKw = maxRegenKw = 0;
-        best0100 = Double.NaN; runs0100 = hardBrakes = 0; movingSec = stoppedSec = 0;
+        best0100 = Double.NaN; runs0100 = hardBrakes = 0; movingSec = stoppedSec = 0; driveSec = 0;
         synchronized (this) { fine.clear(); fineKm = -1; }
         best = new ArrayList<>(); latest = null; lastBlock = null; segs.clear(); segDecel = 0; hn = 0;
         segMin = segMax = Double.NaN;
         runStart = 0; runMax = 0; runArmed = false; brakeArmed = true; prevV = Double.NaN; segSec = 0;
     }
+
+    /** Time in a driving gear (R/N/D) or rolling this trip: stops at lights included, parked in P not (user, 2026-11-15). */
+    public double driveSec;
+    /** Average speed including standing still at lights (km/h); parked in P doesn't count. */
+    public double avgWithStops() { return driveSec > 30 ? km / (driveSec / 3600.0) : Double.NaN; }
+    /** Today's time in a driving gear, stops included. */
+    public double todayDrv() { rollDay(); return dayDrv; }
 
     /** Average speed while moving (km/h). */
     public double avgMoving() { return movingSec > 30 ? km / (movingSec / 3600.0) : Double.NaN; }
@@ -495,7 +502,7 @@ public final class TripEnergy implements CarData.Listener {
         segMax = Double.isNaN(segMax) ? v : Math.max(segMax, v);
         if (v > topSpeed) { topSpeed = v; topSpeedKm = km; }
         if (v > 2) { movingSec += dt; daySec += dt; } else stoppedSec += dt;
-        if (v > 1 || s.gear >= 2) dayDrv += dt;   // in R / N / D or rolling: driving time, stops at lights included
+        if (v > 1 || s.gear >= 2) { dayDrv += dt; driveSec += dt; }   // in R / N / D or rolling: driving time, stops at lights included
         // 0–100 km/h: starts when the car moves off from standing still, ends at 100;
         // dropped if the speed falls back 5 km/h or it takes longer than 40 s
         if (v <= 1) { runStart = 0; runArmed = true; }

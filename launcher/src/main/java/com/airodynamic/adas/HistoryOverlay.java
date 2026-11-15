@@ -132,7 +132,8 @@ final class HistoryOverlay extends FrameLayout {
     private static String cap(String s) { return s.charAt(0) + s.substring(1).toLowerCase(Locale.US); }
 
     /** Average speed while moving (stops not counted), km/h. */
-    private static double speed(double[] v) { return v[3] >= 60 ? v[0] / (v[3] / 3600.0) : Double.NaN; }
+    /** Average speed including stops at lights (time in a driving gear), the same as Today (user, 2026-11-15). */
+    private static double speed(double[] v) { return v[2] >= 60 ? v[0] / (v[2] / 3600.0) : Double.NaN; }
 
     /** {label, km, km/h, kWh, kWh/100, "1 h 54 min"} — average speed next to the distance (user, 2026-11-14) */
     private static String[] cells(String label, double[] v) {

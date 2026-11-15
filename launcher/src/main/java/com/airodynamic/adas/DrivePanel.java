@@ -433,7 +433,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         peak.setText(rs);
         power.setText(t.peakKw > 0 ? Math.round(t.peakKw) + " kW" : "–");
         zeroTo.setText(Double.isNaN(t.best0100) ? "–" : String.format(Locale.US, "%.1f s", t.best0100));
-        double am = t.avgMoving();
+        double am = t.avgWithStops();   // stops at lights included (user, 2026-11-15)
         avgSpd.setText(Double.isNaN(am) ? "–" : Math.round(am) + " km/h");
         long sec = Math.round(t.movingSec + t.stoppedSec);
         driveT.setText(String.format(Locale.US, "%d:%02d", sec / 3600, sec / 60 % 60));
@@ -442,7 +442,8 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
         double tk = t.todayKm(), te = t.todayKwh();
         // average speed while moving (stops not counted), coloured green < 60, blue 60–90, red > 90 (user, 2026-11-14)
-        double tsec = t.todaySec(), tdS = tsec >= 60 ? tk / (tsec / 3600.0) : Double.NaN, trS = t.avgMoving();
+        // (user, 2026-11-15) average speed including standing still at lights; parked in P doesn't count
+        double tsec = t.todayDrv(), tdS = tsec >= 60 ? tk / (tsec / 3600.0) : Double.NaN, trS = t.avgWithStops();
         todaySpd.setText(Double.isNaN(tdS) ? "–" : String.valueOf(Math.round(tdS)));
         if (!Double.isNaN(tdS)) todaySpd.setTextColor(Theme.speedColour(tdS));
         tripSpd.setText(Double.isNaN(trS) ? "–" : String.valueOf(Math.round(trS)));
