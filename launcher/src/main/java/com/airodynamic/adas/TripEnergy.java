@@ -40,6 +40,7 @@ public final class TripEnergy implements CarData.Listener {
             instance.hist = c.getApplicationContext().getSharedPreferences("history", Context.MODE_PRIVATE);
             instance.loadToday();
             instance.zeroToKmh = new Prefs(c).zeroToKmh();
+            instance.fastKm = Math.max(1, Math.min(100, new Prefs(c).fastKm()));
             CarData.get(c).addListener(instance);
             instance.startGps(c.getApplicationContext());
         }
@@ -320,6 +321,22 @@ public final class TripEnergy implements CarData.Listener {
     public double bestKm() { return bestKm; }
     public synchronized void setBestKm(double k) { bestKm = Math.max(1, Math.min(100, k)); findBest(); for (Listener l : listeners) l.onTrip(this); }
     private long runStart; private double runMax; private boolean runArmed, brakeArmed = true;
+    /** "Fastest X km" (user, 2026-11-15): the highest average speed over any X km of this trip, stops included. */
+    public volatile double fastKm = 10, fastSpeed = Double.NaN, fastSec = Double.NaN;
+    public synchronized void setFastKm(double k) { fastKm = Math.max(1, Math.min(100, k)); findBest(); for (Listener l : listeners) l.onTrip(this); }
+    private void findFastest() {
+        int w = (int) Math.round(fastKm / STEP_KM), n = segs.size();
+        fastSpeed = fastSec = Double.NaN;
+        if (w <= 0 || n < w) return;
+        double run = 0, bestT = Double.MAX_VALUE;
+        for (int i = 0; i < n; i++) {
+            run += segs.get(i)[1];
+            if (i >= w) run -= segs.get(i - w)[1];
+            if (i >= w - 1 && run > 0 && run < bestT) bestT = run;
+        }
+        if (bestT == Double.MAX_VALUE) return;
+        fastSec = bestT; fastSpeed = fastKm / (bestT / 3600.0);
+    }
     /** Best 0–X: the target speed X in km/h (user, 2026-11-15). */
     public volatile int zeroToKmh = 100;
     /** A new target: the best time starts again from now (earlier runs were timed to the old speed). */
@@ -333,7 +350,7 @@ public final class TripEnergy implements CarData.Listener {
         topSpeed = topSpeedKm = peakKw = maxRegenKw = 0;
         best0100 = Double.NaN; runs0100 = hardBrakes = 0; movingSec = stoppedSec = 0; driveSec = 0;
         synchronized (this) { fine.clear(); fineKm = -1; }
-        best = new ArrayList<>(); latest = null; lastBlock = null; segs.clear(); segDecel = 0; hn = 0;
+        best = new ArrayList<>(); latest = null; lastBlock = null; segs.clear(); fastSpeed = fastSec = Double.NaN; segDecel = 0; hn = 0;
         segMin = segMax = Double.NaN;
         runStart = 0; runMax = 0; runArmed = false; brakeArmed = true; prevV = Double.NaN; segSec = 0;
     }
@@ -545,6 +562,7 @@ public final class TripEnergy implements CarData.Listener {
      * every window of that length along the whole trip, best first, skipping any that overlap one already picked.
      */
     private void findBest() {
+        findFastest();
         int w = (int) Math.round(bestKm / STEP_KM), n = segs.size();
         // (user, 2026-11-15: trip 21.6 kWh/100 but Recent 13.4 / Latest 14.9) stretches come from the motor-power reading;
         // scale them with this trip's own Battery-left energy so all stretches together add up to the trip's Used

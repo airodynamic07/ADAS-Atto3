@@ -126,11 +126,11 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         tapButton(t1, mapB);
         t1.setOnClickListener(v -> openRoute());
         LinearLayout t2 = tile("Peak power"); power = big(t2);
-        // Best 0–X km/h: orange button, tap to type the speed (user, 2026-11-15); swapped with Battery used
-        LinearLayout t6 = tile("Best 0–100 km/h"); zeroTo = big(t6);
+        // Fastest X km: orange button, tap to type the km (user, 2026-11-15; replaces Best 0–100), swapped with Battery used
+        LinearLayout t6 = tile("Fastest 10 km"); zeroTo = big(t6);
         zeroLabel = (TextView) t6.getChildAt(0);
         tapButton(t6, zeroTo);
-        t6.setOnClickListener(v -> c.startActivity(new android.content.Intent(c, KmInputActivity.class).putExtra("mode", "zero")));
+        t6.setOnClickListener(v -> c.startActivity(new android.content.Intent(c, KmInputActivity.class).putExtra("mode", "fast")));
         LinearLayout t5 = tile("Regen (kWh · %)"); peak = big(t5);   // "0.8 · 12 %" on one line (user, 2026-11-13)
         regenPct = Ui.text(c, "", 11, TOP_GREEN, true);
         LinearLayout t9 = tile("Battery used"); brakes = big(t9);
@@ -437,8 +437,14 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         if (cut > 0) rs.setSpan(new android.text.style.ForegroundColorSpan(TOP_GREEN), cut, rs.length(), 0);
         peak.setText(rs);
         power.setText(t.peakKw > 0 ? Math.round(t.peakKw) + " kW" : "–");
-        zeroLabel.setText("Best 0–" + t.zeroToKmh + " km/h");
-        zeroTo.setText(Double.isNaN(t.best0100) ? "⏱ –" : String.format(Locale.US, "⏱ %.1f s", t.best0100));
+        double fk = t.fastKm;
+        zeroLabel.setText("Fastest " + (fk == Math.floor(fk) ? String.valueOf((int) fk) : String.format(Locale.US, "%.1f", fk)) + " km");
+        if (Double.isNaN(t.fastSpeed)) zeroTo.setText("🏁 –");
+        else {   // "92 km/h · 6:31" (h:mm:ss over an hour)
+            long fs = Math.round(t.fastSec);
+            String tm = fs >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", fs / 3600, fs / 60 % 60, fs % 60) : String.format(Locale.US, "%d:%02d", fs / 60, fs % 60);
+            zeroTo.setText(String.format(Locale.US, "🏁 %d km/h · %s", Math.round(t.fastSpeed), tm));
+        }
         double am = t.avgWithStops();   // stops at lights included (user, 2026-11-15)
         avgSpd.setText(Double.isNaN(am) ? "–" : Math.round(am) + " km/h");
         long sec = Math.round(t.movingSec + t.stoppedSec);

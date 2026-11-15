@@ -18,18 +18,20 @@ public class KmInputActivity extends Activity {
         super.onCreate(b);
         // the same window for "Best 0–X km/h" (user, 2026-11-15)
         if ("zero".equals(getIntent().getStringExtra("mode"))) { zeroTo(); return; }
-        setTitle("Best stretch length");
+        final boolean fast = "fast".equals(getIntent().getStringExtra("mode"));   // "Fastest X km" card (user, 2026-11-15)
+        setTitle(fast ? "Fastest stretch length" : "Best stretch length");
         Theme th = new Prefs(this).theme();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         int p = Ui.dp(this, 20);
         root.setPadding(p, Ui.dp(this, 12), p, Ui.dp(this, 12));
-        root.addView(Ui.text(this, "Find the 10 best stretches of this many km (1–100)", 15, th.muted, false));
+        root.addView(Ui.text(this, fast ? "Show the fastest stretch of this many km this trip (1–100)"
+                : "Find the 10 best stretches of this many km (1–100)", 15, th.muted, false));
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.BOTTOM);
         final EditText in = new EditText(this);
         in.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        double cur = TripEnergy.get(this).bestKm();
+        double cur = fast ? TripEnergy.get(this).fastKm : TripEnergy.get(this).bestKm();
         in.setText(cur == Math.floor(cur) ? String.valueOf((int) cur) : String.valueOf(cur));
         in.setSelectAllOnFocus(true);
         in.setTextSize(26);
@@ -45,8 +47,8 @@ public class KmInputActivity extends Activity {
             try {
                 float km = Float.parseFloat(in.getText().toString().trim());
                 if (km < 1 || km > 100) throw new NumberFormatException();
-                new Prefs(this).setBestKm(km);
-                TripEnergy.get(this).setBestKm(km);
+                if (fast) { new Prefs(this).setFastKm(km); TripEnergy.get(this).setFastKm(km); }
+                else { new Prefs(this).setBestKm(km); TripEnergy.get(this).setBestKm(km); }
                 finish();
             } catch (Exception e) {
                 Toast.makeText(this, "Type a number from 1 to 100", Toast.LENGTH_SHORT).show();
