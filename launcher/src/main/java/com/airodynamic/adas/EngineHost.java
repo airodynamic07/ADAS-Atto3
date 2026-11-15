@@ -83,6 +83,8 @@ public final class EngineHost {
         }, pf);
 
         engine = newWebView();
+        // Engine Sound keeps priority while other apps are busy (crackle with YouTube Music, 2026-11-15)
+        try { engine.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false); } catch (Throwable ignored) { }
         engine.addJavascriptInterface(new Bridge(), "AndroidBridge");
         engine.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
