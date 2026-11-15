@@ -111,10 +111,10 @@ public final class TripEnergy implements CarData.Listener {
         }
         // (user, 2026-11-14) the energy was counted wrong until the Battery left version: wipe today and the whole
         // history once, start again clean with this version
-        if (!store.getBoolean("wiped20261114c", false)) {   // "b": again, the first wipe still counted some energy twice
+        if (!store.getBoolean("wiped20261115", false)) {   // "b": again, the first wipe still counted some energy twice
             dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0;
             if (hist != null) hist.edit().clear().apply();
-            store.edit().putBoolean("wiped20261114c", true).putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0)
+            store.edit().putBoolean("wiped20261115", true).putLong("km", 0).putLong("kwh", 0).putLong("sec", 0).putLong("drv", 0)
                     .putFloat("rawKm", 0).putFloat("rawKwh", 0).remove("last50b").apply();
             wipeTrip = true;
         }
