@@ -139,7 +139,7 @@ final class GeckoGhost {
     java.util.function.Consumer<String> onNatee;
     private final android.widget.TextView status;
     private String lastUrl;
-    private final Runnable hideStatus = () -> { if ("Loading…".contentEquals(status.getText())) show(null); };
+    private final Runnable hideStatus = () -> { if ("Loading…".contentEquals(this.status.getText())) show(null); };
     private int restarts;
 
     private void show(String t) {
