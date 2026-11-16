@@ -15,6 +15,7 @@ import org.mozilla.geckoview.GeckoView;
  */
 final class GeckoGhost {
     private static GeckoRuntime runtime;
+    private static boolean freshCache;
     private final GeckoSession session;
     private final GeckoView view;
 
@@ -53,6 +54,7 @@ final class GeckoGhost {
                 if (ps != null) for (java.io.File p : ps) if (p.isDirectory() && p.getName().contains("default")) writeUserJs(p);
             }
             runtime = GeckoRuntime.create(c.getApplicationContext(), sb.build());
+            freshCache = profile == null;   // Ghost Race: start without saved web files (see below)
         }
         // "NATEELauncher/1" at the end of the browser name: Ghost Race turns Pro on here (Air's own car, 2026-11-12)
         String ua;
@@ -105,7 +107,20 @@ final class GeckoGhost {
             @Override public void onKill(GeckoSession s) { restart("was stopped by Android"); }
         });
         lastUrl = url;
-        session.loadUri(url);
+        // (2026-11-16) one map file at a time kept failing with "NetworkError" (day style, then the map icons) while
+        // Android reached the server fine: most likely a broken saved copy in the engine. Ghost Race starts with the
+        // engine's saved web files cleared (its trips and settings are kept), then loads.
+        if (freshCache) {
+            freshCache = false;
+            final boolean[] done = {false};
+            final Runnable go = () -> { if (!done[0]) { done[0] = true; session.loadUri(url); } };
+            try {
+                runtime.getStorageController().clearData(org.mozilla.geckoview.StorageController.ClearFlags.NETWORK_CACHE
+                        | org.mozilla.geckoview.StorageController.ClearFlags.IMAGE_CACHE)
+                        .accept(v -> view.post(go), e -> view.post(go));
+                view.postDelayed(go, 3000);   // never wait longer than this
+            } catch (Throwable t) { go.run(); }
+        } else session.loadUri(url);
     }
 
     private final android.widget.FrameLayout box;
