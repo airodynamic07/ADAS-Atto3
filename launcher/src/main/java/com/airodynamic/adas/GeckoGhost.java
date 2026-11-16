@@ -84,18 +84,22 @@ final class GeckoGhost {
         status.setVisibility(View.GONE);
         box.addView(status, new android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM | android.view.Gravity.START));
         session.setProgressDelegate(new GeckoSession.ProgressDelegate() {
-            @Override public void onPageStart(GeckoSession s, String u) { show("Loading…"); }
-            @Override public void onPageStop(GeckoSession s, boolean ok) { if (ok) show(null); }
+            @Override public void onPageStart(GeckoSession s, String u) {
+                if (u != null && u.startsWith("natee://")) return;
+                show("Loading…");
+                status.removeCallbacks(hideStatus); status.postDelayed(hideStatus, 15_000);   // never stuck on screen
+            }
+            @Override public void onPageStop(GeckoSession s, boolean ok) { if (ok || "Loading…".contentEquals(status.getText())) show(null); }
         });
         session.setNavigationDelegate(new GeckoSession.NavigationDelegate() {
             // Ghost Race's own Stop / Small buttons call "natee://stop" etc. (2026-11-16): handled here, never loaded
             @Override public GeckoResult<org.mozilla.geckoview.AllowOrDeny> onLoadRequest(GeckoSession s, LoadRequest r) {
-                if (r.uri != null && r.uri.startsWith("natee://")) {
-                    final String what = r.uri.substring(8).replace("/", "");
-                    if (onNatee != null) view.post(() -> onNatee.accept(what));
-                    return GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.DENY);
-                }
-                return null;
+                return natee(r);
+            }
+            // (2026-11-16) Ghost Race now sends them through a hidden mini-page: opening the link in the page itself
+            // cancelled everything it was still downloading (map, icons, route, trail)
+            @Override public GeckoResult<org.mozilla.geckoview.AllowOrDeny> onSubframeLoadRequest(GeckoSession s, LoadRequest r) {
+                return natee(r);
             }
             @Override public GeckoResult<String> onLoadError(GeckoSession s, String u, org.mozilla.geckoview.WebRequestError e) {
                 show("Engine error: " + errName(e.code) + " (" + e.code + ")\n" + (u == null ? "" : u));
@@ -123,11 +127,19 @@ final class GeckoGhost {
         } else session.loadUri(url);
     }
 
+    private GeckoResult<org.mozilla.geckoview.AllowOrDeny> natee(GeckoSession.NavigationDelegate.LoadRequest r) {
+        if (r.uri == null || !r.uri.startsWith("natee://")) return null;
+        final String what = r.uri.substring(8).replace("/", "");
+        if (onNatee != null) view.post(() -> onNatee.accept(what));
+        return GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.DENY);
+    }
+
     private final android.widget.FrameLayout box;
     /** "stop", "small", "hello" from Ghost Race's own buttons. */
     java.util.function.Consumer<String> onNatee;
     private final android.widget.TextView status;
     private String lastUrl;
+    private final Runnable hideStatus = () -> { if ("Loading…".contentEquals(status.getText())) show(null); };
     private int restarts;
 
     private void show(String t) {
