@@ -54,7 +54,9 @@ final class GeckoGhost {
                 if (ps != null) for (java.io.File p : ps) if (p.isDirectory() && p.getName().contains("default")) writeUserJs(p);
             }
             runtime = GeckoRuntime.create(c.getApplicationContext(), sb.build());
-            freshCache = profile == null;   // Ghost Race: start without saved web files (see below)
+            // (2026-11-16) no longer clearing the saved web files at start: that wasn't the cause of the black map
+            // (the 1x map density was), and keeping them means less downloading on the same roads
+            freshCache = false;
         }
         // "NATEELauncher/1" at the end of the browser name: Ghost Race turns Pro on here (Air's own car, 2026-11-12)
         String ua;
