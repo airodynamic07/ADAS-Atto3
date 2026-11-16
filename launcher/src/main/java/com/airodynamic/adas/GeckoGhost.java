@@ -86,6 +86,15 @@ final class GeckoGhost {
             @Override public void onPageStop(GeckoSession s, boolean ok) { if (ok) show(null); }
         });
         session.setNavigationDelegate(new GeckoSession.NavigationDelegate() {
+            // Ghost Race's own Stop / Small buttons call "natee://stop" etc. (2026-11-16): handled here, never loaded
+            @Override public GeckoResult<org.mozilla.geckoview.AllowOrDeny> onLoadRequest(GeckoSession s, LoadRequest r) {
+                if (r.uri != null && r.uri.startsWith("natee://")) {
+                    final String what = r.uri.substring(8).replace("/", "");
+                    if (onNatee != null) view.post(() -> onNatee.accept(what));
+                    return GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.DENY);
+                }
+                return null;
+            }
             @Override public GeckoResult<String> onLoadError(GeckoSession s, String u, org.mozilla.geckoview.WebRequestError e) {
                 show("Engine error: " + errName(e.code) + " (" + e.code + ")\n" + (u == null ? "" : u));
                 return null;
@@ -100,6 +109,8 @@ final class GeckoGhost {
     }
 
     private final android.widget.FrameLayout box;
+    /** "stop", "small", "hello" from Ghost Race's own buttons. */
+    java.util.function.Consumer<String> onNatee;
     private final android.widget.TextView status;
     private String lastUrl;
     private int restarts;

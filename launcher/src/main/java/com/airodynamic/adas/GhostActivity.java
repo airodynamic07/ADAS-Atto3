@@ -57,6 +57,17 @@ public class GhostActivity extends Activity {
     private android.widget.Button bSmall, bStop, bEnlarge, bMove, bAgain;
     private TextView rec;
 
+    private boolean pageButtons;
+
+    private void confirmStop() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Stop Ghost Race?").setMessage("Recording stops and Ghost Race closes.")
+                .setPositiveButton("Stop", (d, w) -> {
+                    sendBroadcast(new Intent(ACTION_STOPPED).setPackage(getPackageName()));
+                    finish();
+                }).setNegativeButton("Keep running", null).show();
+    }
+
     private void place() {
         if (areas == null || areas.length < 12) return;
         int o = mode * 4;
@@ -64,8 +75,9 @@ public class GhostActivity extends Activity {
         lp.x = areas[o]; lp.y = areas[o + 1]; lp.width = areas[o + 2]; lp.height = areas[o + 3];
         getWindow().setAttributes(lp);
         boolean big = mode == 0;
-        bSmall.setVisibility(big ? android.view.View.VISIBLE : android.view.View.GONE);
-        bStop.setVisibility(big ? android.view.View.VISIBLE : android.view.View.GONE);
+        // once Ghost Race shows its own ■ / ⇲ next to day/night, ours are hidden (an older Ghost Race keeps ours)
+        bSmall.setVisibility(big && !pageButtons ? android.view.View.VISIBLE : android.view.View.GONE);
+        bStop.setVisibility(big && !pageButtons ? android.view.View.VISIBLE : android.view.View.GONE);
         bAgain.setVisibility(android.view.View.GONE);
         bEnlarge.setVisibility(big ? android.view.View.GONE : android.view.View.VISIBLE);
         bMove.setVisibility(big ? android.view.View.GONE : android.view.View.VISIBLE);
@@ -169,19 +181,20 @@ public class GhostActivity extends Activity {
         al.topMargin = Ui.dp(this, 4);
         al.rightMargin = Ui.dp(this, 330);
         root.addView(bAgain, al);
-        bStop = Ui.chip(this, "■  Stop", false, th, v -> new android.app.AlertDialog.Builder(this)
-                .setTitle("Stop Ghost Race?").setMessage("Recording stops and Ghost Race closes.")
-                .setPositiveButton("Stop", (d, w) -> {
-                    sendBroadcast(new Intent(ACTION_STOPPED).setPackage(getPackageName()));
-                    finish();
-                }).setNegativeButton("Keep running", null).show());
+        bStop = Ui.chip(this, "■  Stop", false, th, v -> confirmStop());
+        // the new Ghost Race has ■ and ⇲ next to its day/night button (2026-11-16): those reach us here
+        if (gecko != null) gecko.onNatee = what -> {
+            if ("stop".equals(what)) confirmStop();
+            else if ("small".equals(what)) { mode = 1; place(); }
+            else if ("hello".equals(what)) { pageButtons = true; place(); }
+        };
         bStop.setAlpha(0.9f);
         FrameLayout.LayoutParams stl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         stl.topMargin = Ui.dp(this, 4);
         stl.rightMargin = Ui.dp(this, 150);   // just left of "Small" (user, 2026-11-13)
         root.addView(bStop, stl);
-        bEnlarge = Ui.chip(this, "⤢  Enlarge", false, th, v -> { mode = 0; place(); });
-        FrameLayout.LayoutParams el = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.END);
+        bEnlarge = Ui.chip(this, "⤢", false, th, v -> { mode = 0; place(); });   // symbol only (user, 2026-11-16)
+        FrameLayout.LayoutParams el = new FrameLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40), Gravity.TOP | Gravity.END);
         el.topMargin = el.rightMargin = Ui.dp(this, 6);
         root.addView(bEnlarge, el);
         bMove = Ui.chip(this, "→ 2", false, th, v -> { mode = mode == 1 ? 2 : 1; place(); });
