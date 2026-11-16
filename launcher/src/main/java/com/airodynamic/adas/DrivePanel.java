@@ -453,7 +453,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         }
         double am = t.avgWithStops();   // stops at lights included (user, 2026-11-15)
         avgSpd.setText(Double.isNaN(am) ? "–" : Math.round(am) + " km/h");
-        long sec = Math.round(t.movingSec + t.stoppedSec);
+        long sec = Math.round(t.driveSec);   // time in R/N/D or rolling: parked time doesn't count (user, 2026-11-16)
         driveT.setText(String.format(Locale.US, "%d:%02d", sec / 3600, sec / 60 % 60));
         // battery used = this trip's energy / 60.48 kWh; charging is never counted, so it keeps going past 100 %
         brakes.setText(Math.round(Math.max(0, t.kwh) / 60.48 * 100) + " %");

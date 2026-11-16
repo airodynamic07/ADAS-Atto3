@@ -122,7 +122,8 @@ public final class TripEnergy implements CarData.Listener {
         }
         rollDay();
     }
-    private boolean wipeTrip;
+    private boolean wipeTrip, newTripPending;
+    private long parkedSince;
     private void rollDay() {
         String d = dayNow();
         if (d.equals(day)) return;
@@ -385,7 +386,14 @@ public final class TripEnergy implements CarData.Listener {
         if (s.at == 0 || !s.known) return;
         synchronized (this) {
             if (wipeTrip) { wipeTrip = false; startedAt = 0; }   // the one-time wipe also starts a new trip
-            if (startedAt == 0 || (lastAt > 0 && s.at - lastAt > NEW_TRIP_GAP_MS)) {
+            // (user, 2026-11-16: trip "since 19:42" the evening before, Drive 11:57) the head unit kept running overnight, so the
+            // 10-minute gap never happened. Parked (not in R/N/D, not rolling) for 10 minutes = the next drive is a new trip.
+            boolean parkedNow = (Double.isNaN(s.speedKmh) || s.speedKmh < 1) && s.gear < 2;
+            if (parkedNow) { if (parkedSince == 0) parkedSince = s.at; if (s.at - parkedSince > NEW_TRIP_GAP_MS) newTripPending = true; }
+            else parkedSince = 0;
+            boolean startNew = newTripPending && !parkedNow;
+            if (startNew) newTripPending = false;
+            if (startNew || startedAt == 0 || (lastAt > 0 && s.at - lastAt > NEW_TRIP_GAP_MS)) {
                 startedAt = s.at; km = kwh = regenKwh = 0; rawTripKm = rawTripKwh = 0; segKm = segKwh = segSpeedSum = 0; segN = 0;
                 startRemain = Double.NaN; points.clear(); lastAt = 0; clearStats(); lastLeft = Double.NaN;
             }
