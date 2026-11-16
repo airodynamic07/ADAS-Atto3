@@ -82,6 +82,7 @@ final class GeckoGhost {
         status.setBackgroundColor(0xB0000000);
         status.setPadding(16, 8, 16, 8);
         status.setVisibility(View.GONE);
+        hideStatus = () -> { if ("Loading…".contentEquals(status.getText())) show(null); };
         box.addView(status, new android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM | android.view.Gravity.START));
         session.setProgressDelegate(new GeckoSession.ProgressDelegate() {
             @Override public void onPageStart(GeckoSession s, String u) {
@@ -139,7 +140,7 @@ final class GeckoGhost {
     java.util.function.Consumer<String> onNatee;
     private final android.widget.TextView status;
     private String lastUrl;
-    private final Runnable hideStatus = () -> { if ("Loading…".contentEquals(this.status.getText())) show(null); };
+    private Runnable hideStatus;
     private int restarts;
 
     private void show(String t) {
