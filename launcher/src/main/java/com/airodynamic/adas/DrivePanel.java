@@ -52,16 +52,24 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         // PM2.5 takes the old PM2.5 + Range width so "moderate" fits; Range moves to the row below (user, 2026-11-14)
         // exactly as wide as Range + the card next to it below (one gap included), so the theme card is exactly as
         // wide as the card under it (user, 2026-11-14)
-        LinearLayout.LayoutParams pmLp = new LinearLayout.LayoutParams(Ui.dp(c, 6), -1, 2f);
+        LinearLayout.LayoutParams pmLp = new LinearLayout.LayoutParams(Ui.dp(c, 6), -1, 1.9f);   // = Range WLTP + My range
         pmLp.rightMargin = Ui.dp(c, 6);
         row1.addView(tp, pmLp);
-        row1.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1f));
+        row1.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1.1f));   // = Battery left (user, 2026-11-16)
         root.addView(row1, gapH(rowH));
         LinearLayout rowN = new LinearLayout(c);
         LinearLayout tc = flatTile("Range WLTP"); outside = big(tc);   // where Cabin was (user, 2026-11-14)
         LinearLayout tb = flatTile("My range"); batt = big(tb);   // from your own driving (user, 2026-11-14)
         LinearLayout tvC = flatTile("Battery left"); volt = big(tvC);   // kWh (user, 2026-11-14)
-        rowN.addView(tc, wgap(1.2f)); rowN.addView(tb, wgap(.8f)); rowN.addView(tvC, new LinearLayout.LayoutParams(0, -1, 1f));
+        // (user, 2026-11-16: "My range 171…", "Battery left 29.5 k…" were cut) wider My range and Battery left, and the
+        // numbers shrink a little by themselves if they still don't fit, so they're never cut
+        rowN.addView(tc, wgap(1f)); rowN.addView(tb, wgap(.9f)); rowN.addView(tvC, new LinearLayout.LayoutParams(0, -1, 1.1f));
+        for (TextView v : new TextView[]{outside, batt, volt}) {
+            v.setEllipsize(null);
+            v.setLayoutParams(new LinearLayout.LayoutParams(0, -1, 1f));
+            v.setGravity(Gravity.CENTER_VERTICAL);
+            v.setAutoSizeTextTypeUniformWithConfiguration(10, 15, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        }
         root.addView(rowN, gapH(rowH));
 
         LinearLayout row2 = new LinearLayout(c);
