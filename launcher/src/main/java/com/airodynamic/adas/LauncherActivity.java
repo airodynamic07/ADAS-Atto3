@@ -80,6 +80,20 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         registerReceiver(ghostStopped, new IntentFilter(GhostActivity.ACTION_STOPPED));
         rebuild();
         ensureLocation();
+        takeShare(getIntent());
+    }
+
+    /** A place shared to NATEE (ShareActivity): open Ghost Race on it. */
+    private void takeShare(Intent i) {
+        if (i == null || (!i.hasExtra(ShareActivity.TEXT) && !i.hasExtra(ShareActivity.TITLE))) return;
+        String text = i.getStringExtra(ShareActivity.TEXT), title = i.getStringExtra(ShareActivity.TITLE);
+        i.removeExtra(ShareActivity.TEXT); i.removeExtra(ShareActivity.TITLE);
+        String share = (text == null || text.isEmpty() ? "" : "&share_text=" + android.net.Uri.encode(text))
+                + (title == null || title.isEmpty() ? "" : "&share_title=" + android.net.Uri.encode(title));
+        if (share.isEmpty()) return;
+        final String s = share;
+        // after the screen is laid out, so the Ghost Race window gets its place
+        getWindow().getDecorView().postDelayed(() -> engineHost().shareToGhost(s), 600);
     }
 
     /**
@@ -121,6 +135,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        takeShare(intent);
     }
 
     private Theme effectiveTheme() { return sportOn ? Theme.RED : prefs.theme(); }

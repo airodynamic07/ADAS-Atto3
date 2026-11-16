@@ -325,7 +325,7 @@ public final class EngineHost {
             if (r == null) { int[] l = new int[2]; root.getLocationOnScreen(l); r = new int[]{l[0], l[1], root.getWidth(), root.getHeight()}; }
             geckoOpen = true;
             ghostVisible = true;
-            try { GhostActivity.open(act, ghostAreas(r), theme); }
+            try { GhostActivity.open(act, ghostAreas(r), theme, takeShare()); }
             catch (Throwable t) { showDiag("Ghost Race window didn't open (" + t.getClass().getSimpleName() + ")"); ghostWindowClosed(); }
             return;
         }
@@ -385,6 +385,18 @@ public final class EngineHost {
     }
     private Area win1, win2;
     public void setWindowAreas(Area one, Area two) { win1 = one; win2 = two; }
+    /** A place shared to NATEE: Ghost Race opens (or comes to the front) with it in its destination search. */
+    private String pendingShare;
+    public void shareToGhost(String share) {
+        pendingShare = share;
+        if (geckoOpen && act != null) {
+            int[] r = ghostArea != null ? ghostArea.get() : null;
+            if (r != null) { try { GhostActivity.open(act, ghostAreas(r), theme, takeShare()); } catch (Throwable ignored) { } return; }
+        }
+        showGhost(true);
+    }
+    private String takeShare() { String s = pendingShare; pendingShare = null; return s; }
+
     /** The launcher came back to the front while Ghost Race still runs: put its window back on top. */
     public void reshowGhost() {
         if (!geckoOpen || act == null) return;

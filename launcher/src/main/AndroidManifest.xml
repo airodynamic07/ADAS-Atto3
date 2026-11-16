@@ -182,6 +182,20 @@
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode" />
+        <!-- "Share → NATEE Launcher" from Google Maps: the place opens in Ghost Race (user, 2026-11-16) -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:label="Ghost Race (NATEE)"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".KmInputActivity"
             android:exported="false"

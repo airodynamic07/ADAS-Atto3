@@ -38,13 +38,17 @@ public class GhostActivity extends Activity {
     };
     private GeckoGhost gecko;
 
+    static final String SHARE = "share";
+    private String shareHash;   // sent once with the next # change, then cleared
     static final String AREAS = "areas", ACTION_STOPPED = "com.airodynamic.adas.GHOST_STOPPED";
     /**
      * @param areas screen boxes {x, y, w, h} x3: big (windows 1+2), window 1, window 2. Ghost Race runs in its own
      *              task, so going Home or opening another app never ends it: it keeps recording (user, 2026-11-13).
      */
-    static void open(Activity from, int[] areas, String theme) {
-        Intent i = new Intent(from, GhostActivity.class).putExtra(AREAS, areas).putExtra(THEME, theme)
+    static void open(Activity from, int[] areas, String theme) { open(from, areas, theme, null); }
+    /** @param share "&share_text=…" for Ghost Race's destination search (a place shared to NATEE), or null */
+    static void open(Activity from, int[] areas, String theme, String share) {
+        Intent i = new Intent(from, GhostActivity.class).putExtra(AREAS, areas).putExtra(THEME, theme).putExtra(SHARE, share)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         from.startActivity(i);
         from.overridePendingTransition(0, 0);
@@ -86,7 +90,9 @@ public class GhostActivity extends Activity {
         FrameLayout.LayoutParams ml = (FrameLayout.LayoutParams) bMove.getLayoutParams();
         ml.gravity = Gravity.BOTTOM | (mode == 1 ? Gravity.END : Gravity.START);
         bMove.setLayoutParams(ml);
-        if (gecko != null) gecko.load(baseUrl + "#natee=" + theme + (big ? "" : "&mini=1"));   // # change: no reload
+        String sh = shareHash == null ? "" : shareHash;
+        shareHash = null;
+        if (gecko != null) gecko.load(baseUrl + "#natee=" + theme + (big ? "" : "&mini=1") + sh);   // # change: no reload
     }
 
     /** Hold ⟳: can this window reach the map servers? (white theme's day map failed, 2026-11-13) */
@@ -116,7 +122,10 @@ public class GhostActivity extends Activity {
     @Override protected void onNewIntent(Intent in) {
         super.onNewIntent(in);
         int[] a = in.getIntArrayExtra(AREAS);
-        if (a != null && a.length >= 12) { areas = a; place(); }
+        String sh = in.getStringExtra(SHARE);
+        if (sh != null && !sh.isEmpty()) { shareHash = sh; mode = 0; }   // big, so the destination search can be seen
+        if (a != null && a.length >= 12) areas = a;
+        if ((a != null && a.length >= 12) || shareHash != null) place();
     }
 
     @Override protected void onStop() {
@@ -127,6 +136,7 @@ public class GhostActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         Intent in = getIntent();
+        shareHash = in.getStringExtra(SHARE);   // a place shared to NATEE (ShareActivity)
         Window win = getWindow();
         win.requestFeature(Window.FEATURE_NO_TITLE);
         win.setBackgroundDrawableResource(android.R.color.transparent);
