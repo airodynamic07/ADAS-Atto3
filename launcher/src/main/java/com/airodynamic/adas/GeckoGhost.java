@@ -186,7 +186,14 @@ final class GeckoGhost {
     private static void writeUserJs(java.io.File dir) {
         try (java.io.FileWriter w = new java.io.FileWriter(new java.io.File(dir, "user.js"))) {
             w.write("user_pref(\"network.manage-offline-status\", false);\n"
-                    + "user_pref(\"network.offline-mirrors-connectivity\", false);\n");
+                    + "user_pref(\"network.offline-mirrors-connectivity\", false);\n"
+                    // (2026-11-18, car on the phone's hotspot: map and rerouting stall, "NetworkError") notice a dead
+                    // connection after a hotspot hiccup within seconds instead of minutes, then open a fresh one
+                    + "user_pref(\"network.http.http2.ping-threshold\", 10);\n"
+                    + "user_pref(\"network.http.http2.ping-timeout\", 5);\n"
+                    + "user_pref(\"network.http.connection-timeout\", 15);\n"
+                    + "user_pref(\"network.http.response.timeout\", 30);\n"
+                    + "user_pref(\"network.http.network-changed.timeout\", 3);\n");
         } catch (Throwable ignored) { }
     }
 

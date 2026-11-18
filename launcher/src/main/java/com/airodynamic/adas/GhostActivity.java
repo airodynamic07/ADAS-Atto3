@@ -99,8 +99,8 @@ public class GhostActivity extends Activity {
     private void netTest() {
         android.widget.Toast.makeText(this, "Testing the map servers…", android.widget.Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            String[] urls = {"https://tiles.openfreemap.org/styles/liberty", "https://tiles.openfreemap.org/styles/dark",
-                    "https://tiles.openfreemap.org/planet", "https://ghostrace.airodynamic.workers.dev/"};
+            String[] urls = {"https://tiles.openfreemap.org/planet", "https://tiles.openfreemap.org/sprites/ofm_f384/ofm@2x.json",
+                    "https://api.tomtom.com/", "https://ghostrace.airodynamic.workers.dev/", "https://www.google.com/generate_204"};
             StringBuilder sb = new StringBuilder();
             for (String u : urls) {
                 long t0 = System.currentTimeMillis();
@@ -114,6 +114,16 @@ public class GhostActivity extends Activity {
                 } catch (Throwable e) { res = e.getClass().getSimpleName() + ": " + e.getMessage(); }
                 sb.append(u.replace("https://", "")).append("\n   → ").append(res).append("  (").append(System.currentTimeMillis() - t0).append(" ms)\n");
             }
+            // download speed: the map's icon picture (a few hundred kB), read to the end
+            try {
+                long t0 = System.currentTimeMillis();
+                java.net.HttpURLConnection con = (java.net.HttpURLConnection) new java.net.URL("https://tiles.openfreemap.org/sprites/ofm_f384/ofm@2x.png?t=" + t0).openConnection();
+                con.setConnectTimeout(8000); con.setReadTimeout(15000);
+                long n = 0; byte[] buf = new byte[16384]; int r;
+                try (java.io.InputStream in = con.getInputStream()) { while ((r = in.read(buf)) > 0) n += r; }
+                long ms = Math.max(1, System.currentTimeMillis() - t0);
+                sb.append("\nDownload: ").append(n / 1024).append(" kB in ").append(ms).append(" ms = ").append(n * 1000 / 1024 / ms).append(" kB/s");
+            } catch (Throwable e) { sb.append("\nDownload: ").append(e.getClass().getSimpleName()); }
             runOnUiThread(() -> new android.app.AlertDialog.Builder(this).setTitle("Map server test (send a photo to Claude)")
                     .setMessage(sb.toString()).setPositiveButton("OK", null).show());
         }).start();
@@ -197,6 +207,7 @@ public class GhostActivity extends Activity {
             if ("stop".equals(what)) confirmStop();
             else if ("small".equals(what)) { mode = 1; place(); }
             else if ("hello".equals(what)) { pageButtons = true; place(); }
+            else if ("nettest".equals(what)) netTest();   // hold Ghost Race's own ⇲ (2026-11-18)
         };
         bStop.setAlpha(0.9f);
         FrameLayout.LayoutParams stl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
