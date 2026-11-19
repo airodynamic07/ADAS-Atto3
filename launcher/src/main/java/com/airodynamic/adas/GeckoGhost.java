@@ -132,7 +132,7 @@ final class GeckoGhost {
 
     private GeckoResult<org.mozilla.geckoview.AllowOrDeny> natee(GeckoSession.NavigationDelegate.LoadRequest r) {
         if (r.uri == null || !r.uri.startsWith("natee://")) return null;
-        final String what = r.uri.substring(8).replace("/", "");
+        final String what = r.uri.substring(8).replaceFirst("^/+", "");   // "stop", "small", "nettest?gl=…"
         if (onNatee != null) view.post(() -> onNatee.accept(what));
         return GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.DENY);
     }

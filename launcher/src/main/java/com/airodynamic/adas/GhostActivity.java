@@ -96,7 +96,8 @@ public class GhostActivity extends Activity {
     }
 
     /** Hold ⟳: can this window reach the map servers? (white theme's day map failed, 2026-11-13) */
-    private void netTest() {
+    private void netTest() { netTest(null); }
+    private void netTest(final String gl) {
         android.widget.Toast.makeText(this, "Testing the map servers…", android.widget.Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             String[] urls = {"https://tiles.openfreemap.org/planet", "https://tiles.openfreemap.org/sprites/ofm_f384/ofm@2x.json",
@@ -132,6 +133,7 @@ public class GhostActivity extends Activity {
                 sb.append("\nDownload: ").append(n / 1024).append(" kB in ").append(flow).append(" ms = ")
                         .append(n * 1000 / 1024 / flow).append(" kB/s (").append(String.format(java.util.Locale.US, "%.1f", n * 8.0 / 1000 / flow)).append(" Mbit/s)");
             } catch (Throwable e) { sb.append("\nDownload: ").append(e.getClass().getSimpleName()); }
+            if (gl != null) sb.append("\n\nMap drawn by: ").append(gl);
             runOnUiThread(() -> new android.app.AlertDialog.Builder(this).setTitle("Map server test (send a photo to Claude)")
                     .setMessage(sb.toString()).setPositiveButton("OK", null).show());
         }).start();
@@ -215,7 +217,12 @@ public class GhostActivity extends Activity {
             if ("stop".equals(what)) confirmStop();
             else if ("small".equals(what)) { mode = 1; place(); }
             else if ("hello".equals(what)) { pageButtons = true; place(); }
-            else if ("nettest".equals(what)) netTest();   // hold Ghost Race's own ⇲ (2026-11-18)
+            else if (what.startsWith("nettest")) {   // hold Ghost Race's own ⇲ (2026-11-18); ?gl= what draws the map
+                String gl = null;
+                int q = what.indexOf("gl=");
+                if (q >= 0) try { gl = java.net.URLDecoder.decode(what.substring(q + 3), "UTF-8"); } catch (Exception ignored) { }
+                netTest(gl);
+            }
         };
         bStop.setAlpha(0.9f);
         FrameLayout.LayoutParams stl = new FrameLayout.LayoutParams(-2, Ui.dp(this, 40), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
