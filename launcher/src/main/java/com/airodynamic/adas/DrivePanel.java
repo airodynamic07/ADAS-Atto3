@@ -530,7 +530,12 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         double left = !Double.isNaN(s.battLeftKwh) ? s.battLeftKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 * (Double.isNaN(s.healthPct) ? 1 : s.healthPct / 100.0) : Double.NaN;
         double mine = TripEnergy.get(c).myAvg50();
         if (Double.isNaN(mine)) mine = s.last50;
-        batt.setText(!Double.isNaN(left) && !Double.isNaN(mine) && mine > 3 ? Math.round(left / mine * 100) + " km" : "–");
+        // (user, 2026-11-20, "option A 50/50") half your own driving, half the WLTP range:
+        // My range = 50 % × (battery left ÷ your kWh/100 × 100) + 50 % × Range WLTP
+        double own = !Double.isNaN(left) && !Double.isNaN(mine) && mine > 3 ? left / mine * 100 : Double.NaN;
+        double wltp = s.rangeKm >= 0 ? s.rangeKm * 420.0 / 480.0 : Double.NaN;
+        double my = !Double.isNaN(own) && !Double.isNaN(wltp) ? (own + wltp) / 2 : own;
+        batt.setText(Double.isNaN(my) ? "–" : Math.round(my) + " km");
         volt.setText(Double.isNaN(left) ? "–" : String.format(Locale.US, "%.1f kWh", left));
         pm.setText((s.pmOut < 0 ? "–" : String.valueOf(s.pmOut)) + " / " + (s.pmIn < 0 ? "–" : String.valueOf(s.pmIn)) + pmLevel(s.pmOut));
         pm.setTextColor(s.pmOut > 50 ? Theme.DANGER : s.pmOut > 25 ? Theme.CAUTION : th.text);
