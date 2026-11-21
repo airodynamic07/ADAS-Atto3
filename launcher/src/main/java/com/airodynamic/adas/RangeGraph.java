@@ -17,7 +17,7 @@ import java.util.Locale;
 /**
  * Range graph in the right window (user, 2026-11-21): NEDC (the car's own range, grey), WLTP (blue) and My range
  * (orange) against the distance driven — for this trip, today, or since the last charge (tap to switch).
- * Across: starts at 0–20 km and shrinks to fit longer drives. Up: a 200 km window, taller when the lines spread
+ * Across: starts at 0–10 km and shrinks to fit longer drives. Up: a 200 km window, taller when the lines spread
  * further apart, so every line always fits. Each line ends with a dot and its current value. Read only.
  */
 final class RangeGraph extends LinearLayout {
@@ -170,11 +170,11 @@ final class RangeGraph extends LinearLayout {
         @Override protected void onDraw(Canvas cv) {
             List<double[]> pts = series[mode].pts;
             float w = getWidth(), h = getHeight();
-            float left = 26 * d, right = w - 2 * d, top = 4 * d, bottom = h - 11 * d;
-            // across: from this series' start, at least 20 km
+            float left = 32 * d, right = w - 2 * d, top = 6 * d, bottom = h - 14 * d;
+            // across: from this series' start, at least 10 km (user, 2026-11-21: was 20)
             double x0 = pts.isEmpty() ? 0 : pts.get(0)[0];
             double xEnd = pts.isEmpty() ? 0 : pts.get(pts.size() - 1)[0] - x0;
-            double xSpan = Math.max(20, xEnd);
+            double xSpan = Math.max(10, xEnd);
             // up: every value fits; at least 200 km tall, centred on the lines
             double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
             for (double[] p : pts) for (int k = 1; k <= 3; k++) if (!Double.isNaN(p[k])) { lo = Math.min(lo, p[k]); hi = Math.max(hi, p[k]); }
@@ -182,13 +182,13 @@ final class RangeGraph extends LinearLayout {
             double span = Math.max(200, (hi - lo) * 1.15);
             double mid = (hi + lo) / 2;
             double yMin = Math.floor((mid - span / 2) / 10) * 10, yMax = yMin + Math.ceil(span / 10) * 10;
-            text.setTextSize(8.5f * d);
+            text.setTextSize(11f * d);   // axis numbers bigger (user, 2026-11-21)
             text.setColor(th.muted);
             text.setTypeface(android.graphics.Typeface.DEFAULT);
             for (int g = 0; g <= 2; g++) {
                 float y = top + (bottom - top) * g / 2f;
                 cv.drawLine(left, y, right, y, grid);
-                cv.drawText(String.valueOf(Math.round(yMax - (yMax - yMin) * g / 2.0)), 0, y + 3 * d, text);
+                cv.drawText(String.valueOf(Math.round(yMax - (yMax - yMin) * g / 2.0)), 0, y + 4 * d, text);
             }
             for (int g = 0; g <= 2; g++) {
                 float x = left + (right - left) * g / 2f;
@@ -223,7 +223,7 @@ final class RangeGraph extends LinearLayout {
                 cv.drawPath(path, line);
             }
             // dots and values at the line ends; labels kept apart so they never sit on top of each other
-            text.setTextSize(10 * d);
+            text.setTextSize(13.5f * d);   // line-end values bigger (user, 2026-11-21)
             text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             Integer[] order = {0, 1, 2};
             java.util.Arrays.sort(order, (a, b) -> Float.compare(endY[a], endY[b]));
@@ -235,7 +235,7 @@ final class RangeGraph extends LinearLayout {
                 cv.drawCircle(endX[i], endY[i], (i == 2 ? 3.4f : 2.8f) * d, dot);
                 String lab = Math.round(endV[i]) + " km";
                 float tw = text.measureText(lab);
-                float ly = Math.max(endY[i] + 3.5f * d, lastLabelY + 10 * d);
+                float ly = Math.max(endY[i] + 5f * d, lastLabelY + 14 * d);
                 ly = Math.min(ly, bottom);
                 lastLabelY = ly;
                 float lx = endX[i] + 5 * d + tw <= right ? endX[i] + 5 * d : endX[i] - 5 * d - tw;   // left of the dot at the edge
