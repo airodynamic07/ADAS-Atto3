@@ -232,13 +232,13 @@ public final class SettingsDialog {
             });
         }).start()), weight(c));
         String[] reports = ProblemLog.all(c);
-        pb.addView(Ui.chip(c, "Voice reports (" + reports.length + ")", false, th, v -> {
-            TextView t = Ui.text(c, reports.length == 0 ? "No reports yet. Say \"Hey Natee chat\", then \"report a problem: …\"" : android.text.TextUtils.join("\n\n", reports), 12, th.text, false);
+        pb.addView(Ui.chip(c, "Voice reports & ideas (" + reports.length + ")", false, th, v -> {
+            TextView t = Ui.text(c, reports.length == 0 ? "Nothing yet. Say \"Hey Natee chat\", then \"report a problem: …\" or \"idea: …\"" : android.text.TextUtils.join("\n\n", reports), 12, th.text, false);
             t.setTextIsSelectable(true);
             t.setPadding(24, 16, 24, 16);
             ScrollView sv3 = new ScrollView(c);
             sv3.addView(t);
-            new AlertDialog.Builder(c).setTitle("Voice problem reports (send a photo to Claude)").setView(sv3)
+            new AlertDialog.Builder(c).setTitle("Voice reports & ideas (send a photo to Claude)").setView(sv3)
                     .setNegativeButton("Clear all", (d, i) -> { ProblemLog.clear(c); redo.run(); })
                     .setPositiveButton("Close", null).show();
         }), weight(c));

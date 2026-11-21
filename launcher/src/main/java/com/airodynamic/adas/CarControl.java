@@ -43,9 +43,12 @@ final class CarControl {
                 .put("action", new JSONObject().put("type", "string").put("description", "play, pause, next, previous, or search (play a song / artist / playlist)"))
                 .put("query", new JSONObject().put("type", "string").put("description", "for search: what to play")))
                 .put("required", new JSONArray().put("action"));
-        f.put(fn("report_problem", "Save a problem report for the developer (Claude) when the driver says something isn't working,"
-                + " e.g. 'report a problem: the map is stuck'. Put the driver's description in their own words, clear and complete.",
-                props("description", "string", "what is wrong, in the driver's words")));
+        JSONObject rp = new JSONObject().put("type", "object").put("properties", new JSONObject()
+                .put("kind", new JSONObject().put("type", "string").put("description", "problem (something not working) or idea (a new function the driver wants)"))
+                .put("description", new JSONObject().put("type", "string").put("description", "what is wrong or what the driver wants, in their words, clear and complete")))
+                .put("required", new JSONArray().put("kind").put("description"));
+        f.put(fn("report_problem", "Save a note for the developer (Claude): a problem when something isn't working ('report a problem: the map"
+                + " is stuck'), or an idea for a new function ('idea: show the charging time on the dashboard').", rp));
         f.put(fn("music", "Control the music: play, pause, next or previous song, or play something by name.", mp));
         return new JSONArray().put(new JSONObject().put("functionDeclarations", f));
     }
@@ -75,8 +78,9 @@ final class CarControl {
                 case "report_problem": {
                     String d = a.optString("description", "").trim();
                     if (d.isEmpty()) return res(false, "what's the problem?");
-                    ProblemLog.add(c, d, chatSoFar);
-                    return res(true, "saved; the driver can find it in Settings → Problems → Voice reports and send a photo to Claude");
+                    boolean idea = a.optString("kind", "problem").toLowerCase(Locale.US).startsWith("idea");
+                    ProblemLog.add(c, (idea ? "💡 IDEA: " : "⚠ PROBLEM: ") + d, chatSoFar);
+                    return res(true, "saved; the driver can find it in Settings → Problems → Voice reports & ideas and send a photo to Claude");
                 }
                 case "open_app": return openApp(a.optString("name", ""));
                 case "music": return music(a.optString("action", ""), a.optString("query", ""));
