@@ -35,8 +35,9 @@ import okio.ByteString;
 /**
  * "Hey Natee chat" (user, 2026-11-21): a voice chat with Google's Gemini (Live API), straight from the launcher, no
  * Gemini app needed. An offline wake-word listener (Vosk, nothing leaves the car) waits for "hey natee chat"; then a
- * bubble opens over the screen and the voice goes to Gemini, which answers by voice and text. Talk only: Gemini has
- * no way to change anything in the car.
+ * bubble opens over the screen and the voice goes to Gemini, which answers by voice and text. It can read the car's
+ * information and change comfort things only (fan, temperature, A/C, cabin light, sunshade: see CarControl), never
+ * anything about driving (user's OK for comfort controls, 2026-11-21).
  * Ends with ✕, "bye natee", or 20 s of quiet.
  */
 public final class AiChat extends Service {
@@ -66,6 +67,7 @@ public final class AiChat extends Service {
     @Override public void onCreate() {
         super.onCreate();
         prefs = new Prefs(this);
+        control = new CarControl(this);
         alive = true;
         startWake();
     }
@@ -142,7 +144,7 @@ public final class AiChat extends Service {
         if (key.isEmpty()) { status("Hey Natee chat: add your Gemini API key in Settings → AI chat"); return; }
         chatting = true; muted = false; ready = false;
         lastActive = System.currentTimeMillis();
-        you.setLength(0); gem.setLength(0); newTurn = true;
+        you.setLength(0); gem.setLength(0); newTurn = true; lastAction = "";
         showBubble();
         setState("connecting…");
         beep();
@@ -200,9 +202,15 @@ public final class AiChat extends Service {
             JSONObject sys = new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text",
                     "You are Natee, a friendly voice assistant in the driver's BYD Atto 3 electric car in Thailand. The driver is"
                             + " driving: keep answers short and easy to listen to (one to three sentences), no lists or links."
-                            + " You cannot see the road or control anything in the car. " + li)));
+                            + " You cannot see the road. You can read the car's information with get_car_info (use it whenever the"
+                            + " driver asks about the car: range, battery, tyres, air, temperatures, trip, doors) and change comfort"
+                            + " things only: fan, temperature, A/C on/off, cabin light, sunshade. Never anything about driving."
+                            + " Understand casual requests (\"too hot\" = temperature down 1-2 degrees or fan up). After a change,"
+                            + " say in a few words what you did (\"Fan 4.\"); if the result says it failed, say so plainly."
+                            + " Before opening or closing the sunshade, ask the driver to confirm, and only call it after a yes. " + li)));
             JSONObject setup = new JSONObject().put("model", model).put("generationConfig", gen).put("systemInstruction", sys)
-                    .put("inputAudioTranscription", new JSONObject()).put("outputAudioTranscription", new JSONObject());
+                    .put("inputAudioTranscription", new JSONObject()).put("outputAudioTranscription", new JSONObject())
+                    .put("tools", CarControl.tools());
             return new JSONObject().put("setup", setup).toString();
         } catch (Exception e) { return "{}"; }
     }
@@ -212,13 +220,15 @@ public final class AiChat extends Service {
             JSONObject m = new JSONObject(text);
             if (m.has("setupComplete")) { main.post(this::onReady); return; }
             if (m.has("goAway")) return;
+            JSONObject tc = m.optJSONObject("toolCall");
+            if (tc != null) { runTools(tc.optJSONArray("functionCalls")); return; }
             JSONObject sc = m.optJSONObject("serverContent");
             if (sc == null) return;
             JSONObject it = sc.optJSONObject("inputTranscription");
             if (it != null && it.optString("text").length() > 0) {
                 final String t = it.optString("text");
                 main.post(() -> {
-                    if (newTurn) { you.setLength(0); gem.setLength(0); newTurn = false; }
+                    if (newTurn) { you.setLength(0); gem.setLength(0); lastAction = ""; newTurn = false; }
                     you.append(t); lastActive = System.currentTimeMillis(); showText();
                     String all = you.toString().toLowerCase(java.util.Locale.US);
                     if (all.contains("bye natee") || all.contains("bye natty") || all.contains("bye nate") || all.contains("บาย")) main.postDelayed(this::endChat, 1500);
@@ -241,6 +251,27 @@ public final class AiChat extends Service {
             if (sc.optBoolean("turnComplete")) main.post(() -> { newTurn = true; lastActive = System.currentTimeMillis(); });
         } catch (Exception ignored) { }
     }
+
+    /** Gemini asked to read or change something: run it (comfort only, see CarControl) and send the answer back. */
+    private void runTools(JSONArray calls) {
+        if (calls == null) return;
+        try {
+            JSONArray out = new JSONArray();
+            for (int i = 0; i < calls.length(); i++) {
+                JSONObject fc = calls.getJSONObject(i);
+                String name = fc.optString("name");
+                JSONObject args = fc.optJSONObject("args");
+                JSONObject r = control.run(name, args == null ? new JSONObject() : args);
+                if (!"get_car_info".equals(name)) main.post(() -> { lastAction = name.replace('_', ' ') + ": " + r.optString("result"); showText(); });
+                out.put(new JSONObject().put("id", fc.optString("id")).put("name", name).put("response", r));
+            }
+            lastActive = System.currentTimeMillis();
+            WebSocket s = ws;
+            if (s != null) s.send(new JSONObject().put("toolResponse", new JSONObject().put("functionResponses", out)).toString());
+        } catch (Exception ignored) { }
+    }
+    private CarControl control;
+    private String lastAction = "";
 
     private void onReady() {
         if (!chatting) return;
@@ -377,6 +408,7 @@ public final class AiChat extends Service {
             b.append("Gemini: ", new android.text.style.ForegroundColorSpan(0xFFB388FF), 0);
             b.append(gem.toString().trim());
         }
+        if (lastAction.length() > 0) b.append(b.length() > 0 ? "\n" : "").append("✓ " + lastAction, new android.text.style.ForegroundColorSpan(0xFF2EE59D), 0);
         gemV.setText(b);
     }
 

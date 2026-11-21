@@ -150,7 +150,7 @@ public final class SettingsDialog {
         vd.addView(Ui.chip(c, "Only in P", !prefs.videoWhileDriving(), th, v -> { prefs.setVideoWhileDriving(false); redo.run(); }), weight(c));
         root.addView(vd);
 
-        // "Hey Natee chat": voice chat with Gemini (user, 2026-11-21). Talk only, it can't change anything in the car.
+        // "Hey Natee chat": voice chat with Gemini (user, 2026-11-21). Reads the car; changes comfort things only (CarControl).
         String key = prefs.aiKey();
         section(c, root, th, "AI chat (Gemini) · say \"Hey Natee chat\": " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
         LinearLayout ai = row(c);
