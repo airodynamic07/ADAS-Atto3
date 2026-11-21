@@ -294,6 +294,7 @@ public final class InfoPanel implements Panel {
     }
 
     @Override public void onCar(CarData.State s) {
+        music.setPm(s.pmOut, s.pmIn);
         String[] names = {"FL", "FR", "RL", "RR"};
         for (int i = 0; i < 4; i++) {
             double b = s.tyreBar[i];

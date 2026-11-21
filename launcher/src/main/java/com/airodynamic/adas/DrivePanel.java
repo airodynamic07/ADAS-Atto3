@@ -23,8 +23,9 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     private final LinearLayout root;
     private android.widget.GridLayout tray;
     private final Prefs prefs;
-    private TextView batt, volt;
-    private TextView outside, pm, limit, todayKm, todayKwh, todayAvg, todayDrive, todaySpd, tripSpd;
+    private TextView volt;
+    private RangeGraph graph;
+    private TextView limit, todayKm, todayKwh, todayAvg, todayDrive, todaySpd, tripSpd;
     private LinearLayout limitCard;
     private TextView zeroLabel;
     private TextView used, avg, dist, power, soc, since, topSpd, peak, zeroTo, avgSpd, driveT, brakes, bestTitle, bestEmpty, regenPct;
@@ -47,30 +48,24 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         //     [PM2.5 | Outside | theme dots]  /  [My speed limit | apps in one row]  /  [Today in one line]
         // (user, 2026-11-13) rows 1, new row and 2 the same height; row 1 and the new row on the same 3 columns
         final int rowH = Ui.dp(c, 44);
-        LinearLayout row1 = new LinearLayout(c);
-        LinearLayout tp = flatTile("PM2.5"); pm = big(tp);
-        // PM2.5 takes the old PM2.5 + Range width so "moderate" fits; Range moves to the row below (user, 2026-11-14)
-        // exactly as wide as Range + the card next to it below (one gap included), so the theme card is exactly as
-        // wide as the card under it (user, 2026-11-14)
-        LinearLayout.LayoutParams pmLp = new LinearLayout.LayoutParams(Ui.dp(c, 6), -1, 1.9f);   // = Range WLTP + My range
-        pmLp.rightMargin = Ui.dp(c, 6);
-        row1.addView(tp, pmLp);
-        row1.addView(themeControls, new LinearLayout.LayoutParams(0, -1, 1.1f));   // = Battery left (user, 2026-11-16)
-        root.addView(row1, gapH(rowH));
-        LinearLayout rowN = new LinearLayout(c);
-        LinearLayout tc = flatTile("Range WLTP"); outside = big(tc);   // where Cabin was (user, 2026-11-14)
-        LinearLayout tb = flatTile("My range"); batt = big(tb);   // from your own driving (user, 2026-11-14)
+        // (user, 2026-11-21) the PM2.5 / Range WLTP / My range cards became one range graph across two rows;
+        // theme dots stay top right and Battery left stays under them. PM2.5 moved into the weather card.
+        LinearLayout top2 = new LinearLayout(c);
+        graph = new RangeGraph(c, th);
+        LinearLayout.LayoutParams gLp = new LinearLayout.LayoutParams(Ui.dp(c, 6), -1, 1.9f);
+        gLp.rightMargin = Ui.dp(c, 6);
+        top2.addView(graph, gLp);
+        LinearLayout rightCol = new LinearLayout(c);
+        rightCol.setOrientation(LinearLayout.VERTICAL);
+        rightCol.addView(themeControls, gapH(rowH));
         LinearLayout tvC = flatTile("Battery left"); volt = big(tvC);   // kWh (user, 2026-11-14)
-        // (user, 2026-11-16: "My range 171…", "Battery left 29.5 k…" were cut) wider My range and Battery left, and the
-        // numbers shrink a little by themselves if they still don't fit, so they're never cut
-        rowN.addView(tc, wgap(1f)); rowN.addView(tb, wgap(.9f)); rowN.addView(tvC, new LinearLayout.LayoutParams(0, -1, 1.1f));
-        for (TextView v : new TextView[]{outside, batt, volt}) {
-            v.setEllipsize(null);
-            v.setLayoutParams(new LinearLayout.LayoutParams(0, -1, 1f));
-            v.setGravity(Gravity.CENTER_VERTICAL);
-            v.setAutoSizeTextTypeUniformWithConfiguration(10, 15, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
-        }
-        root.addView(rowN, gapH(rowH));
+        volt.setEllipsize(null);
+        volt.setLayoutParams(new LinearLayout.LayoutParams(0, -1, 1f));
+        volt.setGravity(Gravity.CENTER_VERTICAL);
+        volt.setAutoSizeTextTypeUniformWithConfiguration(10, 15, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        rightCol.addView(tvC, new LinearLayout.LayoutParams(-1, rowH));
+        top2.addView(rightCol, new LinearLayout.LayoutParams(0, -1, 1.1f));
+        root.addView(top2, gapH(rowH * 2 + Ui.dp(c, 6)));
 
         LinearLayout row2 = new LinearLayout(c);
         limitCard = flatTile("Limit");
@@ -344,8 +339,6 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
         limit.setText(prefs.speedLimit() + (prefs.speedVoice() ? " 🔊" : " 🔇"));
     }
 
-    private static String pmLevel(int v) { return v < 0 ? "" : v <= 25 ? " good" : v <= 50 ? " moderate" : " unhealthy"; }
-
     /** Distance · Avg km/h · Used · Avg (kWh) · Drive: label above value (avg speed added, user 2026-11-14). */
     private TextView[] statRow(LinearLayout parent) {
         LinearLayout r = new LinearLayout(c);
@@ -524,21 +517,18 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
     @Override public void onCar(CarData.State s) {
         // WLTP range (user, 2026-11-14): the car shows NEDC range; Atto 3 is rated 480 km NEDC and 420 km WLTP → × 0.875
-        outside.setText(s.rangeKm >= 0 ? Math.round(s.rangeKm * 420.0 / 480.0) + " km" : "–");
         // My range = battery left ÷ your kWh/100 over your last 50 km × 100; before 10 km of your own driving the car's
         // own "last 50 km" figure is used (user, 2026-11-14)
         double left = !Double.isNaN(s.battLeftKwh) ? s.battLeftKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 * (Double.isNaN(s.healthPct) ? 1 : s.healthPct / 100.0) : Double.NaN;
         double mine = TripEnergy.get(c).myAvg50();
         if (Double.isNaN(mine)) mine = s.last50;
-        // (user, 2026-11-20, "option A 50/50") half your own driving, half the WLTP range:
-        // My range = 50 % × (battery left ÷ your kWh/100 × 100) + 50 % × Range WLTP
+        // (user, 2026-11-21, was 50/50) mostly your own driving:
+        // My range = 80 % × (battery left ÷ your kWh/100 × 100) + 20 % × Range WLTP
         double own = !Double.isNaN(left) && !Double.isNaN(mine) && mine > 3 ? left / mine * 100 : Double.NaN;
         double wltp = s.rangeKm >= 0 ? s.rangeKm * 420.0 / 480.0 : Double.NaN;
-        double my = !Double.isNaN(own) && !Double.isNaN(wltp) ? (own + wltp) / 2 : own;
-        batt.setText(Double.isNaN(my) ? "–" : Math.round(my) + " km");
+        double my = !Double.isNaN(own) && !Double.isNaN(wltp) ? 0.8 * own + 0.2 * wltp : own;
+        graph.update(s, s.rangeKm >= 0 ? s.rangeKm : Double.NaN, wltp, my);
         volt.setText(Double.isNaN(left) ? "–" : String.format(Locale.US, "%.1f kWh", left));
-        pm.setText((s.pmOut < 0 ? "–" : String.valueOf(s.pmOut)) + " / " + (s.pmIn < 0 ? "–" : String.valueOf(s.pmIn)) + pmLevel(s.pmOut));
-        pm.setTextColor(s.pmOut > 50 ? Theme.DANGER : s.pmOut > 25 ? Theme.CAUTION : th.text);
         // My speed limit: card turns red while over (warning only; SpeedAlert beeps)
         boolean over = SpeedAlert.get(c).over();
         limitCard.setBackground(over ? Ui.round(Theme.DANGER, Theme.DANGER, 12, c) : Ui.round(th.card, th.line, 12, c));

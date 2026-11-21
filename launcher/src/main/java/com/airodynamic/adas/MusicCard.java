@@ -151,6 +151,19 @@ public final class MusicCard {
         wl.addView(Ui.text(c, "In 1 hour", 11, th.muted, false));
         wxNext = Ui.text(c, "", 18, th.text, true); wl.addView(wxNext);
         wx.addView(wl, new LinearLayout.LayoutParams(-2, -2));
+        // PM2.5 on the weather line (user, 2026-11-21): "PM2.5 out / in" over "48 / 7 moderate", wide enough for the word
+        android.view.View sep = new android.view.View(c);
+        sep.setBackgroundColor(th.line);
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(Ui.dp(c, 1), Ui.dp(c, 32));
+        sl.leftMargin = sl.rightMargin = Ui.dp(c, 10);
+        wx.addView(sep, sl);
+        LinearLayout wp = new LinearLayout(c); wp.setOrientation(LinearLayout.VERTICAL);
+        wp.setMinimumWidth(Ui.dp(c, 150));
+        wp.addView(Ui.text(c, "PM2.5 out / in", 11, th.muted, false));
+        wxPm = Ui.text(c, "–", 18, th.text, true);
+        wxPm.setSingleLine(true);
+        wp.addView(wxPm);
+        wx.addView(wp, new LinearLayout.LayoutParams(-2, -2));
         wx.setBackground(Ui.round(th.card, th.line, 14, c));
         weatherCard = wx;   // its own card under the music box, not inside it (user, 2026-11-13)
 
@@ -308,7 +321,29 @@ public final class MusicCard {
     private TextView lyNext2, lyNext3;
     private LinearLayout seekBox;
     private android.widget.SeekBar seek;
-    private TextView seekPos, seekLen, wxNowIcon, wxNow, wxNextIcon, wxNext;
+    private TextView seekPos, seekLen, wxNowIcon, wxNow, wxNextIcon, wxNext, wxPm;
+    private int pmShownOut = -2, pmShownIn = -2;
+
+    private static int pmColour(int v, int normal) { return v < 0 ? normal : v <= 25 ? 0xFF2EE59D : v <= 50 ? 0xFFFF8A1F : Theme.DANGER; }
+
+    /** PM2.5 outside / inside; the word and the outside number take the outside level's colour (user, 2026-11-21). */
+    public void setPm(int out, int in) {
+        if (wxPm == null || (out == pmShownOut && in == pmShownIn)) return;
+        pmShownOut = out; pmShownIn = in;
+        String o = out < 0 ? "–" : String.valueOf(out), i = in < 0 ? "–" : String.valueOf(in);
+        String word = out < 0 ? "" : out <= 25 ? " good" : out <= 50 ? " moderate" : " unhealthy";
+        android.text.SpannableStringBuilder b = new android.text.SpannableStringBuilder();
+        b.append(o, new android.text.style.ForegroundColorSpan(pmColour(out, th.text)), 0);
+        b.append(" / ");
+        b.append(i, new android.text.style.ForegroundColorSpan(pmColour(in, th.text)), 0);
+        if (!word.isEmpty()) {
+            int st = b.length();
+            b.append(word);
+            b.setSpan(new android.text.style.ForegroundColorSpan(pmColour(out, th.text)), st, b.length(), 0);
+            b.setSpan(new android.text.style.RelativeSizeSpan(0.8f), st, b.length(), 0);
+        }
+        wxPm.setText(b);
+    }
     private long wxAt;
     private final Runnable hideSeek = () -> { if (seekBox != null) seekBox.setVisibility(android.view.View.GONE); };
     private void hideSeekLater() { main.removeCallbacks(hideSeek); main.postDelayed(hideSeek, 3000); }
