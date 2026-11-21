@@ -22,7 +22,8 @@ import java.util.Locale;
  */
 final class RangeGraph extends LinearLayout {
     static final int NEDC = 0xFF9AA0A8, WLTP = 0xFF3AA0FF, MY = 0xFFFF8A1F;
-    private static final String[] MODES = {"Trip", "Today", "Charge"};
+    private static final String[] MODES = {"Trip", "Today", "Charge to charge"};
+    private static final String[] MENU = {"This trip", "Today", "Charge to charge"};
     private static final double STEP_KM = 0.1;
     private static final int MAX_POINTS = 600;
 
@@ -58,7 +59,7 @@ final class RangeGraph extends LinearLayout {
     private final Theme th;
     private final SharedPreferences store;
     private final Series[] series = {new Series(), new Series(), new Series()};
-    private final TextView[] chips = new TextView[3];
+    private TextView pick;
     private final Plot plot;
     private int mode;
     private double lastTripKm = -1, lastTodayKm = -1, totalKm, chargeBaseKm;
@@ -86,17 +87,13 @@ final class RangeGraph extends LinearLayout {
         top.addView(legend(c, "WLTP", WLTP));
         top.addView(legend(c, "My range", MY));
         top.addView(new View(c), new LayoutParams(0, 1, 1f));
-        for (int i = 0; i < 3; i++) {
-            final int m = i;
-            TextView t = Ui.text(c, MODES[i], 10.5f, th.muted, true);
-            t.setGravity(Gravity.CENTER);
-            t.setPadding(Ui.dp(c, 7), Ui.dp(c, 1), Ui.dp(c, 7), Ui.dp(c, 1));
-            t.setOnClickListener(v -> { mode = m; store.edit().putInt("mode", m).apply(); showMode(); });
-            LayoutParams lp = new LayoutParams(-2, -2);
-            lp.leftMargin = Ui.dp(c, 4);
-            top.addView(t, lp);
-            chips[i] = t;
-        }
+        // one button: shows what you see; a tap pops up the choices (user, 2026-11-21: was three chips, "Charge" got cut off)
+        pick = Ui.text(c, "", 10.5f, 0xFF2A1400, true);
+        pick.setGravity(Gravity.CENTER);
+        pick.setPadding(Ui.dp(c, 9), Ui.dp(c, 1), Ui.dp(c, 9), Ui.dp(c, 1));
+        pick.setBackground(Ui.round(MY, MY, 10, c));
+        pick.setOnClickListener(v -> openMenu());
+        top.addView(pick, new LayoutParams(-2, -2));
         addView(top, new LayoutParams(-1, -2));
         plot = new Plot(c);
         addView(plot, new LayoutParams(-1, 0, 1f));
@@ -113,12 +110,31 @@ final class RangeGraph extends LinearLayout {
     }
 
     private void showMode() {
-        for (int i = 0; i < 3; i++) {
-            boolean on = i == mode;
-            chips[i].setBackground(on ? Ui.round(0xFFFF8A1F, 0xFFFF8A1F, 10, getContext()) : Ui.round(0, th.line, 10, getContext()));
-            chips[i].setTextColor(on ? 0xFF2A1400 : th.muted);
-        }
+        pick.setText(MODES[mode] + " ▾");
         plot.invalidate();
+    }
+
+    private void openMenu() {
+        Context c = getContext();
+        LinearLayout box = new LinearLayout(c);
+        box.setOrientation(VERTICAL);
+        box.setBackground(Ui.round(th.panel, 0xFF3A6FD8, 12, c));
+        int pad = Ui.dp(c, 2);
+        box.setPadding(pad, pad, pad, pad);
+        final android.widget.PopupWindow pw = new android.widget.PopupWindow(box, Ui.dp(c, 190), -2, true);
+        for (int i = 0; i < 3; i++) {
+            final int m = i;
+            boolean on = i == mode;
+            TextView t = Ui.text(c, (on ? "✓ " : "") + MENU[i], 14, on ? MY : th.text, on);
+            t.setPadding(Ui.dp(c, 14), Ui.dp(c, 10), Ui.dp(c, 14), Ui.dp(c, 10));
+            if (on) t.setBackground(Ui.round(0x33FF8A1F, 0x33FF8A1F, 10, c));
+            t.setOnClickListener(v -> { mode = m; store.edit().putInt("mode", m).apply(); showMode(); pw.dismiss(); });
+            box.addView(t, new LayoutParams(-1, -2));
+        }
+        pw.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0));   // a tap outside closes it
+        pw.setOutsideTouchable(true);
+        pw.setElevation(Ui.dp(c, 8));
+        pw.showAsDropDown(pick, 0, Ui.dp(c, 4), Gravity.END);
     }
 
     /** A new reading: the three ranges (NaN when unknown) and the car's state. */
@@ -170,7 +186,11 @@ final class RangeGraph extends LinearLayout {
         @Override protected void onDraw(Canvas cv) {
             List<double[]> pts = series[mode].pts;
             float w = getWidth(), h = getHeight();
-            float left = 32 * d, right = w - 2 * d, top = 6 * d, bottom = h - 14 * d;
+            // the values sit in their own column right of the lines, so they never cover them (user, 2026-11-21)
+            text.setTextSize(13.5f * d);
+            text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            float labW = text.measureText("888 km");
+            float left = 32 * d, right = w - labW - 10 * d, top = 6 * d, bottom = h - 14 * d;
             // across: from this series' start, at least 10 km (user, 2026-11-21: was 20)
             double x0 = pts.isEmpty() ? 0 : pts.get(0)[0];
             double xEnd = pts.isEmpty() ? 0 : pts.get(pts.size() - 1)[0] - x0;
@@ -227,20 +247,22 @@ final class RangeGraph extends LinearLayout {
             text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             Integer[] order = {0, 1, 2};
             java.util.Arrays.sort(order, (a, b) -> Float.compare(endY[a], endY[b]));
-            float lastLabelY = -1e9f;
+            float[] ly = new float[3];
+            float prev = -1e9f;
             for (int i : order) {
                 if (Double.isNaN(endV[i])) continue;
+                ly[i] = Math.max(Math.max(endY[i] + 5f * d, top + 10 * d), prev + 15 * d);
+                prev = ly[i];
+            }
+            float over = prev - (bottom + 4 * d);   // pushed past the bottom: move the whole column up
+            for (int i = 0; i < 3; i++) {
+                if (Double.isNaN(endV[i])) continue;
+                if (over > 0) ly[i] -= over;
                 Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
                 dot.setColor(colors[i]);
                 cv.drawCircle(endX[i], endY[i], (i == 2 ? 3.4f : 2.8f) * d, dot);
-                String lab = Math.round(endV[i]) + " km";
-                float tw = text.measureText(lab);
-                float ly = Math.max(endY[i] + 5f * d, lastLabelY + 14 * d);
-                ly = Math.min(ly, bottom);
-                lastLabelY = ly;
-                float lx = endX[i] + 5 * d + tw <= right ? endX[i] + 5 * d : endX[i] - 5 * d - tw;   // left of the dot at the edge
                 text.setColor(colors[i]);
-                cv.drawText(lab, lx, ly, text);
+                cv.drawText(Math.round(endV[i]) + " km", right + 8 * d, ly[i], text);
             }
         }
     }

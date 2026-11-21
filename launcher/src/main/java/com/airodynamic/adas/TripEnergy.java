@@ -215,6 +215,16 @@ public final class TripEnergy implements CarData.Listener {
         store.edit().putString("last50b", b.toString()).apply();
     }
     /** kWh per 100 km over your last (up to) 50 km; NaN before 10 km. */
+    /** kWh/100 km over your last 10 km (user, 2026-11-21: My range should follow your driving more closely). */
+    public synchronized double myAvg10() {
+        l50Load();
+        if (last50.size() < 10) return Double.NaN;
+        double sum = 0; int n = 0;
+        java.util.Iterator<Double> it = last50.descendingIterator();
+        while (it.hasNext() && n < 10) { sum += it.next(); n++; }
+        return sum / n * 100;
+    }
+
     public synchronized double myAvg50() {
         l50Load();
         if (last50.size() < 10) return Double.NaN;
