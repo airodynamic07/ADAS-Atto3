@@ -36,6 +36,8 @@ final class RangeGraph extends LinearLayout {
     private static final class Series {
         final List<double[]> pts = new ArrayList<>();
         void add(double[] p) {
+            // the distance can be corrected a little downwards: never go backwards, the line just carries on
+            if (!pts.isEmpty() && p[0] < pts.get(pts.size() - 1)[0]) p[0] = pts.get(pts.size() - 1)[0];
             if (pts.isEmpty() || p[0] - pts.get(pts.size() - 1)[0] >= STEP_KM) pts.add(p);
             else pts.set(pts.size() - 1, p);   // the newest point always shows the current values
             if (pts.size() > MAX_POINTS) {     // keep it small: drop every other point
@@ -156,6 +158,7 @@ final class RangeGraph extends LinearLayout {
         private final SharedPreferences store;
         final Series[] series = {new Series(), new Series(), new Series()};
         private double lastTripKm = -1, lastTodayKm = -1, totalKm, chargeBaseKm;
+        private long tripStart;
         private double lastSoc = Double.NaN;
         private String day;
         private long savedAt;
@@ -166,6 +169,7 @@ final class RangeGraph extends LinearLayout {
             day = store.getString("day", "");
             series[0].load(store.getString("trip", ""));
             lastTripKm = Double.longBitsToDouble(store.getLong("tripKm", Double.doubleToLongBits(-1)));
+            tripStart = store.getLong("tripStart", 0);
             series[1].load(store.getString("today", ""));
             series[2].load(store.getString("charge", ""));
             totalKm = Double.longBitsToDouble(store.getLong("total", 0));
@@ -202,8 +206,9 @@ final class RangeGraph extends LinearLayout {
                 if (!Double.isNaN(lastSoc) && still && s.socPct >= lastSoc + 1) { series[2].pts.clear(); chargeBaseKm = totalKm; }
                 if (Double.isNaN(lastSoc) || !still || s.socPct < lastSoc || s.socPct >= lastSoc + 1) lastSoc = s.socPct;
             }
-            // a new trip starts the "Trip" line again
-            if (te.km < lastTripKm - 0.05) series[0].pts.clear();
+            // a new trip starts the "Trip" line again (2026-11-21: only a real new trip; the trip distance is sometimes
+            // corrected a little downwards, and that used to wipe the line, leaving just a dot)
+            if (te.startedAt != tripStart) { if (tripStart != 0 || te.km < lastTripKm - 1) series[0].pts.clear(); tripStart = te.startedAt; }
             lastTripKm = te.km;
             if (Double.isNaN(nedc) && Double.isNaN(wltp) && Double.isNaN(my)) return;
             series[0].add(new double[]{te.km, nedc, wltp, my});
@@ -211,7 +216,7 @@ final class RangeGraph extends LinearLayout {
             series[2].add(new double[]{totalKm - chargeBaseKm, nedc, wltp, my});
             if (s.at - savedAt > 30_000) {
                 savedAt = s.at;
-                store.edit().putString("day", day).putString("trip", series[0].save()).putLong("tripKm", Double.doubleToLongBits(lastTripKm))
+                store.edit().putString("day", day).putString("trip", series[0].save()).putLong("tripKm", Double.doubleToLongBits(lastTripKm)).putLong("tripStart", tripStart)
                         .putString("today", series[1].save()).putString("charge", series[2].save())
                         .putLong("total", Double.doubleToLongBits(totalKm)).putLong("chargeBase", Double.doubleToLongBits(chargeBaseKm)).apply();
             }
