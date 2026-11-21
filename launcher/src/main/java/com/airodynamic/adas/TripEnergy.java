@@ -125,6 +125,7 @@ public final class TripEnergy implements CarData.Listener {
     }
     private boolean wipeTrip, newTripPending;
     private long parkedSince;
+    private int lastPower = -1, lastLock;
     private void rollDay() {
         String d = dayNow();
         if (d.equals(day)) return;
@@ -400,8 +401,16 @@ public final class TripEnergy implements CarData.Listener {
             // (user, 2026-11-16: trip "since 19:42" the evening before, Drive 11:57) the head unit kept running overnight, so the
             // 10-minute gap never happened. Parked (not in R/N/D, not rolling) for 10 minutes = the next drive is a new trip.
             boolean parkedNow = (Double.isNaN(s.speedKmh) || s.speedKmh < 1) && s.gear < 2;
-            if (parkedNow) { if (parkedSince == 0) parkedSince = s.at; if (s.at - parkedSince > NEW_TRIP_GAP_MS) newTripPending = true; }
-            else parkedSince = 0;
+            // (user, 2026-11-21) a new trip only after the car was turned off, or with Reset; waiting parked no longer
+            // starts one. "Turned off": the car's power went off, or the car was locked while parked (you left it),
+            // or the head unit was asleep for 10 minutes (no readings, below).
+            // locked from unlocked while parked = you got out and locked it (the doors also lock by themselves while
+            // driving, so just "locked" isn't enough)
+            boolean lockedNow = parkedNow && lastLock == 2 && s.lock == 1;
+            boolean powerOff = lastPower >= 2 && s.powerLevel >= 0 && s.powerLevel <= 1;
+            if (parkedNow && (lockedNow || powerOff)) newTripPending = true;
+            if (s.powerLevel >= 0) lastPower = s.powerLevel;
+            if (s.lock != 0) lastLock = s.lock;
             boolean startNew = newTripPending && !parkedNow;
             if (startNew) newTripPending = false;
             if (startNew || startedAt == 0 || (lastAt > 0 && s.at - lastAt > NEW_TRIP_GAP_MS)) {

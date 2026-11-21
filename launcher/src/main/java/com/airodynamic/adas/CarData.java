@@ -44,6 +44,7 @@ public final class CarData {
         public int drl = -1;                    // daytime running lights: 1 on, 0 off, -1 unknown (read only)
         public String drlRaw = "";             // raw back-door readings (which one works is still to confirm)
         public int lock;                        // 0 unknown, 1 locked, 2 unlocked
+        public int powerLevel = -1;             // car power: 0 off, 1 ACC, 2 on, 3 ready (BYD bodywork), -1 unknown (2026-11-21, not yet confirmed on this car)
         public double lat = Double.NaN, lng = Double.NaN;
         public double pedalPct = Double.NaN;    // accelerator 0-100
         public double powerKw = Double.NaN;     // motor power: + driving, - regen
@@ -473,6 +474,7 @@ public final class CarData {
             int l = ((Number) v).intValue();
             s.lock = l == 2 ? 1 : l == 1 ? 2 : 0;
         }
+        if (ok(v = call("bodywork.BYDAutoBodyworkDevice", "getPowerLevel")) && v instanceof Number) s.powerLevel = ((Number) v).intValue();
         v = call("radar.BYDAutoRadarDevice", "getAllRadarDistance");
         if (v instanceof int[]) s.radar = (int[]) v;
         return s;
