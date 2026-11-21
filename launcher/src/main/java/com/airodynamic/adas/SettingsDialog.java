@@ -150,6 +150,33 @@ public final class SettingsDialog {
         vd.addView(Ui.chip(c, "Only in P", !prefs.videoWhileDriving(), th, v -> { prefs.setVideoWhileDriving(false); redo.run(); }), weight(c));
         root.addView(vd);
 
+        // "Hey Natee chat": voice chat with Gemini (user, 2026-11-21). Talk only, it can't change anything in the car.
+        String key = prefs.aiKey();
+        section(c, root, th, "AI chat (Gemini) · say \"Hey Natee chat\": " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
+        LinearLayout ai = row(c);
+        ai.addView(Ui.chip(c, "On", prefs.aiChat(), th, v -> { prefs.setAiChat(true); AiChat.sync(c); redo.run(); }), weight(c));
+        ai.addView(Ui.chip(c, "Off", !prefs.aiChat(), th, v -> { prefs.setAiChat(false); AiChat.sync(c); redo.run(); }), weight(c));
+        ai.addView(Ui.chip(c, key.isEmpty() ? "API key: add ›" : "API key: " + key.substring(0, Math.min(4, key.length())) + "•••• ›", false, th, v -> {
+            android.widget.EditText e = new android.widget.EditText(c);
+            e.setSingleLine(true);
+            e.setHint("paste your key from aistudio.google.com");
+            e.setText(prefs.aiKey());
+            new AlertDialog.Builder(c).setTitle("Gemini API key").setView(e)
+                    .setPositiveButton("Save", (d, i) -> { prefs.setAiKey(e.getText().toString()); redo.run(); })
+                    .setNegativeButton("Cancel", null).show();
+        }), weight(c));
+        root.addView(ai);
+        LinearLayout al = row(c);
+        for (String[] l : new String[][]{{"auto", "Thai + English"}, {"en", "English"}, {"th", "Thai"}}) {
+            al.addView(Ui.chip(c, l[1], prefs.aiLang().equals(l[0]), th, v -> { prefs.setAiLang(l[0]); redo.run(); }), weight(c));
+        }
+        root.addView(al);
+        LinearLayout av = row(c);
+        for (String[] vo : new String[][]{{"Aoede", "Female · calm"}, {"Kore", "Female · bright"}, {"Charon", "Male · deep"}, {"Puck", "Male · lively"}}) {
+            av.addView(Ui.chip(c, vo[1], prefs.aiVoice().equals(vo[0]), th, v -> { prefs.setAiVoice(vo[0]); redo.run(); }), weight(c));
+        }
+        root.addView(av);
+
         section(c, root, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
         for (String[] u : new String[][]{{"psi", "PSI"}, {"bar", "bar"}, {"kpa", "kPa"}}) {

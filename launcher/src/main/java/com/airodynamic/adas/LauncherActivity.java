@@ -75,6 +75,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         prefs = new Prefs(this);
         SpeedAlert.get(this);   // my speed limit warning, also while other apps are open
         TripEnergy.get(this);   // counts this trip's energy even while other apps are open
+        AiChat.sync(this);      // "Hey Natee chat" wake word, when switched on in Settings
         turnCam = new TurnCamera(this, feed, prefs);
         registerReceiver(themeRequest, new IntentFilter(ACTION_THEME_REQUEST));
         registerReceiver(ghostStopped, new IntentFilter(GhostActivity.ACTION_STOPPED));

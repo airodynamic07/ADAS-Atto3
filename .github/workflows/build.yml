@@ -24,6 +24,16 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Wake-word model for "Hey Natee chat" (Vosk small English, Apache 2.0; not kept in git)
+        run: |
+          curl -sSfL -o /tmp/vosk.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+          mkdir -p launcher/src/main/assets
+          rm -rf launcher/src/main/assets/vosk-model
+          unzip -q /tmp/vosk.zip -d /tmp/vosk
+          mv /tmp/vosk/vosk-model-small-en-us-0.15 launcher/src/main/assets/vosk-model
+          echo "small-en-us-0.15" > launcher/src/main/assets/vosk-model/uuid
+          du -sh launcher/src/main/assets/vosk-model
+
       - name: Build APKs (probe + launcher)
         run: |
           chmod +x gradlew

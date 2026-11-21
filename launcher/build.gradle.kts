@@ -51,6 +51,10 @@ dependencies {
     // Firefox's browser engine (MPL 2.0): Ghost Race's map needs a newer browser than the car's WebView.
     // ESR 128 line (compileSdk 34 / minSdk 21 fit this project).
     implementation("org.mozilla.geckoview:geckoview:[128.0,129.0)")
+    // "Hey Natee chat" (2026-11-21): Vosk offline wake word (Apache 2.0) + OkHttp WebSocket for Gemini Live (Apache 2.0)
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // Self-update through the car's own ADB (Apache 2.0)
     implementation("dev.mobile:dadb:1.2.8") {
         exclude(group = "org.junit.platform")

@@ -35,6 +35,15 @@ public final class Prefs {
     public int speedLimit() { return p.getInt("speedLimit", 100); }
     public void setSpeedLimit(int v) { p.edit().putInt("speedLimit", v).apply(); }
     public boolean speedVoice() { return p.getBoolean("speedVoice", true); }
+    /** "Hey Natee chat" (Gemini voice chat, user 2026-11-21): on/off, the user's own API key (stays on the head unit), voice, language. */
+    public boolean aiChat() { return p.getBoolean("aiChat", false); }
+    public void setAiChat(boolean on) { p.edit().putBoolean("aiChat", on).apply(); }
+    public String aiKey() { return p.getString("aiKey", "").trim(); }
+    public void setAiKey(String k) { p.edit().putString("aiKey", k == null ? "" : k.trim()).apply(); }
+    public String aiVoice() { return p.getString("aiVoice", "Aoede"); }
+    public void setAiVoice(String v) { p.edit().putString("aiVoice", v).apply(); }
+    public String aiLang() { return p.getString("aiLang", "auto"); }
+    public void setAiLang(String l) { p.edit().putString("aiLang", l).apply(); }
     public void setSpeedVoice(boolean on) { p.edit().putBoolean("speedVoice", on).apply(); }
 
     /** Graph moving average in metres for the speed / power line: 0 = real time, 100…500; default 200 (user, 2026-11-12). */
