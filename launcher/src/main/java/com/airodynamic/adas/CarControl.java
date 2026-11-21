@@ -35,7 +35,7 @@ final class CarControl {
         f.put(fn("set_cabin_light", "Switch the cabin / reading light on or off.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("sunshade", "Open, close or stop the sunroof sunshade. Only after the driver confirmed it.",
                 props("action", "string", "open, close or stop")));
-        f.put(fn("open_app", "Open an app installed on the car screen by its name (e.g. Google Maps, YouTube Music, Spotify, Waze, Ghost Race is not an app).",
+        f.put(fn("open_app", "Open an app on the car screen by its name, including the apps inside GBox (e.g. Google Maps, YouTube Music, Spotify, Waze).",
                 props("name", "string", "the app's name as the driver said it")));
         JSONObject mp = new JSONObject().put("type", "object").put("properties", new JSONObject()
                 .put("action", new JSONObject().put("type", "string").put("description", "play, pause, next, previous, or search (play a song / artist / playlist)"))
@@ -187,12 +187,15 @@ final class CarControl {
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
 
     private JSONObject openApp(String name) throws Exception {
-        String want = norm(name);
+        String want = norm(name).replace("gbox", "").replace("ingbox", "");
         if (want.isEmpty()) return res(false, "which app?");
         Apps.App best = null; int bestScore = 0;
         for (Apps.App a : Apps.all(c)) {
-            String l = norm(a.label);
+            String l = norm(a.label).replace("gbox", "");
             int sc = l.equals(want) ? 3 : l.startsWith(want) || want.startsWith(l) ? 2 : l.contains(want) || want.contains(l) ? 1 : 0;
+            if (sc == 0) continue;
+            // the GBox copy wins over the car's own copy of the same app (those lack Google services, user 2026-11-21)
+            sc = sc * 2 + (a.pkg.startsWith("com.gbox.") ? 1 : 0);
             if (sc > bestScore) { bestScore = sc; best = a; }
         }
         if (best == null) return res(false, "no app called " + name + " on this car");
