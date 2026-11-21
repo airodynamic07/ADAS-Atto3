@@ -21,6 +21,8 @@ final class CarControl {
     private static final String AC = "ac.BYDAutoAcDevice", BODY = "bodywork.BYDAutoBodyworkDevice", LIGHT = "light.BYDAutoLightDevice";
 
     private final Context c;
+    /** The chat so far, saved with a problem report (set by AiChat). */
+    volatile String chatSoFar = "";
     CarControl(Context c) { this.c = c.getApplicationContext(); }
 
     // ------------------------------------------------------------ tools for Gemini
@@ -41,6 +43,9 @@ final class CarControl {
                 .put("action", new JSONObject().put("type", "string").put("description", "play, pause, next, previous, or search (play a song / artist / playlist)"))
                 .put("query", new JSONObject().put("type", "string").put("description", "for search: what to play")))
                 .put("required", new JSONArray().put("action"));
+        f.put(fn("report_problem", "Save a problem report for the developer (Claude) when the driver says something isn't working,"
+                + " e.g. 'report a problem: the map is stuck'. Put the driver's description in their own words, clear and complete.",
+                props("description", "string", "what is wrong, in the driver's words")));
         f.put(fn("music", "Control the music: play, pause, next or previous song, or play something by name.", mp));
         return new JSONArray().put(new JSONObject().put("functionDeclarations", f));
     }
@@ -67,6 +72,12 @@ final class CarControl {
                 case "set_ac": return ac(a.optBoolean("on", true));
                 case "set_cabin_light": return light(a.optBoolean("on", true));
                 case "sunshade": return shade(a.optString("action", ""));
+                case "report_problem": {
+                    String d = a.optString("description", "").trim();
+                    if (d.isEmpty()) return res(false, "what's the problem?");
+                    ProblemLog.add(c, d, chatSoFar);
+                    return res(true, "saved; the driver can find it in Settings → Problems → Voice reports and send a photo to Claude");
+                }
                 case "open_app": return openApp(a.optString("name", ""));
                 case "music": return music(a.optString("action", ""), a.optString("query", ""));
                 default: return res(false, "unknown tool " + name);
