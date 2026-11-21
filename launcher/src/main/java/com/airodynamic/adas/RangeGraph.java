@@ -21,7 +21,12 @@ import java.util.Locale;
  * further apart, so every line always fits. Each line ends with a dot and its current value. Read only.
  */
 final class RangeGraph extends LinearLayout {
-    static final int NEDC = 0xFF9AA0A8, WLTP = 0xFF3AA0FF, MY = 0xFFFF8A1F;
+    static final int NEDC = 0xFF9AA0A8, WLTP = 0xFF3AA0FF, EPA = 0xFFB388FF, MY = 0xFFFF8A1F;
+    /** EPA (US test): no official Atto 3 figure, estimated as WLTP − 12 % (user, 2026-11-21). */
+    static final double EPA_OF_WLTP = 0.88;
+
+    /** line k of a point: 0 NEDC, 1 WLTP, 2 EPA (from WLTP), 3 My range */
+    private static double val(double[] p, int k) { return k == 2 ? p[2] * EPA_OF_WLTP : k == 3 ? p[3] : p[k + 1]; }
     private static final String[] MODES = {"Trip", "Today", "Charge to charge"};
     private static final String[] MENU = {"This trip", "Today", "Charge to charge"};
     private static final double STEP_KM = 0.1;
@@ -85,6 +90,7 @@ final class RangeGraph extends LinearLayout {
         top.setGravity(Gravity.CENTER_VERTICAL);
         top.addView(legend(c, "NEDC", NEDC));
         top.addView(legend(c, "WLTP", WLTP));
+        top.addView(legend(c, "EPA", EPA));
         top.addView(legend(c, "My range", MY));
         top.addView(new View(c), new LayoutParams(0, 1, 1f));
         // one button: shows what you see; a tap pops up the choices (user, 2026-11-21: was three chips, "Charge" got cut off)
@@ -105,7 +111,7 @@ final class RangeGraph extends LinearLayout {
         android.text.SpannableString s = new android.text.SpannableString(t.getText());
         s.setSpan(new android.text.style.ForegroundColorSpan(color), 0, 1, 0);
         t.setText(s);
-        t.setPadding(0, 0, Ui.dp(c, 8), 0);
+        t.setPadding(0, 0, Ui.dp(c, 6), 0);
         return t;
     }
 
@@ -197,7 +203,7 @@ final class RangeGraph extends LinearLayout {
             double xSpan = Math.max(10, xEnd);
             // up: every value fits; at least 200 km tall, centred on the lines
             double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
-            for (double[] p : pts) for (int k = 1; k <= 3; k++) if (!Double.isNaN(p[k])) { lo = Math.min(lo, p[k]); hi = Math.max(hi, p[k]); }
+            for (double[] p : pts) for (int k = 0; k < 4; k++) { double v = val(p, k); if (!Double.isNaN(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
             if (lo == Double.MAX_VALUE) { lo = 150; hi = 350; }
             double span = Math.max(200, (hi - lo) * 1.15);
             double mid = (hi + lo) / 2;
@@ -223,44 +229,45 @@ final class RangeGraph extends LinearLayout {
                 cv.drawText(msg, (left + right - text.measureText(msg)) / 2, (top + bottom) / 2, text);
                 return;
             }
-            int[] colors = {NEDC, WLTP, MY};
-            float[] endX = new float[3], endY = new float[3];
-            double[] endV = new double[3];
-            for (int k = 0; k < 3; k++) {
+            int[] colors = {NEDC, WLTP, EPA, MY};
+            float[] endX = new float[4], endY = new float[4];
+            double[] endV = new double[4];
+            for (int k = 0; k < 4; k++) {
                 path.reset();
                 boolean started = false;
                 endV[k] = Double.NaN;
                 for (double[] p : pts) {
-                    if (Double.isNaN(p[k + 1])) continue;
+                    double v = val(p, k);
+                    if (Double.isNaN(v)) continue;
                     float x = (float) (left + (right - left) * (p[0] - x0) / xSpan);
-                    float y = (float) (bottom - (bottom - top) * (p[k + 1] - yMin) / (yMax - yMin));
+                    float y = (float) (bottom - (bottom - top) * (v - yMin) / (yMax - yMin));
                     if (!started) { path.moveTo(x, y); started = true; } else path.lineTo(x, y);
-                    endX[k] = x; endY[k] = y; endV[k] = p[k + 1];
+                    endX[k] = x; endY[k] = y; endV[k] = v;
                 }
                 if (!started) continue;
                 line.setColor(colors[k]);
-                line.setStrokeWidth((k == 2 ? 2.6f : 2f) * d);
+                line.setStrokeWidth((k == 3 ? 2.6f : 2f) * d);
                 cv.drawPath(path, line);
             }
             // dots and values at the line ends; labels kept apart so they never sit on top of each other
             text.setTextSize(13.5f * d);   // line-end values bigger (user, 2026-11-21)
             text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-            Integer[] order = {0, 1, 2};
+            Integer[] order = {0, 1, 2, 3};
             java.util.Arrays.sort(order, (a, b) -> Float.compare(endY[a], endY[b]));
-            float[] ly = new float[3];
+            float[] ly = new float[4];
             float prev = -1e9f;
             for (int i : order) {
                 if (Double.isNaN(endV[i])) continue;
-                ly[i] = Math.max(Math.max(endY[i] + 5f * d, top + 10 * d), prev + 15 * d);
+                ly[i] = Math.max(Math.max(endY[i] + 5f * d, top + 10 * d), prev + 13.5f * d);   // four values now: a little tighter
                 prev = ly[i];
             }
             float over = prev - (bottom + 4 * d);   // pushed past the bottom: move the whole column up
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < 4; i++) {
                 if (Double.isNaN(endV[i])) continue;
                 if (over > 0) ly[i] -= over;
                 Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
                 dot.setColor(colors[i]);
-                cv.drawCircle(endX[i], endY[i], (i == 2 ? 3.4f : 2.8f) * d, dot);
+                cv.drawCircle(endX[i], endY[i], (i == 3 ? 3.4f : 2.8f) * d, dot);
                 text.setColor(colors[i]);
                 cv.drawText(Math.round(endV[i]) + " km", right + 8 * d, ly[i], text);
             }
