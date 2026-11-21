@@ -35,6 +35,13 @@ final class CarControl {
         f.put(fn("set_cabin_light", "Switch the cabin / reading light on or off.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("sunshade", "Open, close or stop the sunroof sunshade. Only after the driver confirmed it.",
                 props("action", "string", "open, close or stop")));
+        f.put(fn("open_app", "Open an app installed on the car screen by its name (e.g. Google Maps, YouTube Music, Spotify, Waze, Ghost Race is not an app).",
+                props("name", "string", "the app's name as the driver said it")));
+        JSONObject mp = new JSONObject().put("type", "object").put("properties", new JSONObject()
+                .put("action", new JSONObject().put("type", "string").put("description", "play, pause, next, previous, or search (play a song / artist / playlist)"))
+                .put("query", new JSONObject().put("type", "string").put("description", "for search: what to play")))
+                .put("required", new JSONArray().put("action"));
+        f.put(fn("music", "Control the music: play, pause, next or previous song, or play something by name.", mp));
         return new JSONArray().put(new JSONObject().put("functionDeclarations", f));
     }
 
@@ -60,6 +67,8 @@ final class CarControl {
                 case "set_ac": return ac(a.optBoolean("on", true));
                 case "set_cabin_light": return light(a.optBoolean("on", true));
                 case "sunshade": return shade(a.optString("action", ""));
+                case "open_app": return openApp(a.optString("name", ""));
+                case "music": return music(a.optString("action", ""), a.optString("query", ""));
                 default: return res(false, "unknown tool " + name);
             }
         } catch (Throwable e) {
@@ -172,6 +181,59 @@ final class CarControl {
         JSONObject o = answer(r, "sunshade " + (code == 1 ? "opening" : "closing"));
         try { o.put("note", "first test: if it moved the wrong way, tell the driver to say stop and tell Claude"); } catch (Exception ignored) { }
         return o;
+    }
+
+    // ------------------------------------------------------------ apps and music (user, 2026-11-21)
+    private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    private JSONObject openApp(String name) throws Exception {
+        String want = norm(name);
+        if (want.isEmpty()) return res(false, "which app?");
+        Apps.App best = null; int bestScore = 0;
+        for (Apps.App a : Apps.all(c)) {
+            String l = norm(a.label);
+            int sc = l.equals(want) ? 3 : l.startsWith(want) || want.startsWith(l) ? 2 : l.contains(want) || want.contains(l) ? 1 : 0;
+            if (sc > bestScore) { bestScore = sc; best = a; }
+        }
+        if (best == null) return res(false, "no app called " + name + " on this car");
+        final Apps.App app = best;
+        main.post(() -> Apps.open(c, app.pkg, CarData.get(c).last()));   // video apps still only in P
+        boolean video = Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked();
+        return res(!video, video ? app.label + " is a video app: it opens only in P" : "opening " + app.label);
+    }
+
+    private static String norm(String s) { return s == null ? "" : s.toLowerCase(Locale.US).replaceAll("[^a-z0-9ก-๙]", ""); }
+
+    private JSONObject music(String action, String query) throws Exception {
+        android.media.session.MediaController mc = musicSession();
+        String a = action.toLowerCase(Locale.US);
+        if (mc == null) {
+            for (String y : MusicCard.YTM) if (Apps.installed(c, y)) {
+                main.post(() -> Apps.open(c, y, CarData.get(c).last()));
+                return res(false, "no music was playing: opened YouTube Music, ask again in a few seconds");
+            }
+            return res(false, "no music app is playing (and Notification access may be off)");
+        }
+        android.media.session.MediaController.TransportControls t = mc.getTransportControls();
+        switch (a) {
+            case "play": t.play(); return res(true, "playing");
+            case "pause": case "stop": t.pause(); return res(true, "paused");
+            case "next": t.skipToNext(); return res(true, "next song");
+            case "previous": case "back": t.skipToPrevious(); return res(true, "previous song");
+            default:
+                if (query.isEmpty()) return res(false, "what should I play?");
+                t.playFromSearch(query, new android.os.Bundle());
+                return res(true, "asked " + Apps.label(c, mc.getPackageName()) + " to play " + query + " (some apps don't support this)");
+        }
+    }
+
+    private android.media.session.MediaController musicSession() {
+        try {
+            android.media.session.MediaSessionManager m = (android.media.session.MediaSessionManager) c.getSystemService(Context.MEDIA_SESSION_SERVICE);
+            for (android.media.session.MediaController mc : m.getActiveSessions(NowPlaying.component(c)))
+                for (String y : MusicCard.YTM) if (y.equals(mc.getPackageName())) return mc;
+            return NowPlaying.active(c);
+        } catch (Throwable e) { return null; }
     }
 
     // ------------------------------------------------------------ helpers
