@@ -63,25 +63,17 @@ final class RangeGraph extends LinearLayout {
 
     private final Theme th;
     private final SharedPreferences store;
-    private final Series[] series = {new Series(), new Series(), new Series()};
     private TextView pick;
     private final Plot plot;
     private int mode;
-    private double lastTripKm = -1, lastTodayKm = -1, totalKm, chargeBaseKm;
-    private double lastSoc = Double.NaN;
-    private String day = "";
-    private long savedAt;
+    private final Rec rec;
 
     RangeGraph(Context c, Theme th) {
         super(c);
         this.th = th;
         store = c.getSharedPreferences("range_graph", Context.MODE_PRIVATE);
         mode = store.getInt("mode", 0);
-        day = store.getString("day", "");
-        series[1].load(store.getString("today", ""));
-        series[2].load(store.getString("charge", ""));
-        totalKm = Double.longBitsToDouble(store.getLong("total", 0));
-        chargeBaseKm = Double.longBitsToDouble(store.getLong("chargeBase", 0));
+        rec = Rec.get(c);
 
         setOrientation(VERTICAL);
         setBackground(Ui.round(th.card, th.line, 12, c));
@@ -143,34 +135,89 @@ final class RangeGraph extends LinearLayout {
         pw.showAsDropDown(pick, 0, Ui.dp(c, 4), Gravity.END);
     }
 
-    /** A new reading: the three ranges (NaN when unknown) and the car's state. */
-    void update(CarData.State s, double nedc, double wltp, double my) {
-        TripEnergy te = TripEnergy.get(getContext());
-        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
-        if (!today.equals(day)) { day = today; series[1].pts.clear(); lastTodayKm = -1; }
-        // total distance driven, for "since charge": what today's distance added since the last reading
-        double tk = te.todayKm();
-        if (lastTodayKm >= 0) totalKm += tk >= lastTodayKm ? tk - lastTodayKm : tk;
-        lastTodayKm = tk;
-        // charged: battery % went up while standing still -> "Charge" starts again
-        boolean still = Double.isNaN(s.speedKmh) || s.speedKmh < 1;
-        if (!Double.isNaN(s.socPct)) {
-            if (!Double.isNaN(lastSoc) && still && s.socPct >= lastSoc + 1) { series[2].pts.clear(); chargeBaseKm = totalKm; }
-            if (Double.isNaN(lastSoc) || !still || s.socPct < lastSoc || s.socPct >= lastSoc + 1) lastSoc = s.socPct;
+    /** Redraw with the newest readings (the recording itself runs all the time in {@link Rec}). */
+    void refresh() { plot.postInvalidate(); }
+
+    /**
+     * The recording (user, 2026-11-21: "this trip 3 km already but the graph didn't develop"): it used to record only
+     * while the launcher screen was showing, so a drive with another app in front was missed. Now it listens to the car
+     * all the time, next to the trip energy counter.
+     */
+    static final class Rec implements CarData.Listener {
+        private static Rec instance;
+        static synchronized Rec get(Context c) {
+            if (instance == null) {
+                instance = new Rec(c.getApplicationContext());
+                CarData.get(c).addListener(instance);
+            }
+            return instance;
         }
-        // a new trip starts the "Trip" line again
-        if (te.km < lastTripKm - 0.05) series[0].pts.clear();
-        lastTripKm = te.km;
-        if (Double.isNaN(nedc) && Double.isNaN(wltp) && Double.isNaN(my)) return;
-        series[0].add(new double[]{te.km, nedc, wltp, my});
-        series[1].add(new double[]{tk, nedc, wltp, my});
-        series[2].add(new double[]{totalKm - chargeBaseKm, nedc, wltp, my});
-        if (s.at - savedAt > 30_000) {
-            savedAt = s.at;
-            store.edit().putString("day", day).putString("today", series[1].save()).putString("charge", series[2].save())
-                    .putLong("total", Double.doubleToLongBits(totalKm)).putLong("chargeBase", Double.doubleToLongBits(chargeBaseKm)).apply();
+        private final Context app;
+        private final SharedPreferences store;
+        final Series[] series = {new Series(), new Series(), new Series()};
+        private double lastTripKm = -1, lastTodayKm = -1, totalKm, chargeBaseKm;
+        private double lastSoc = Double.NaN;
+        private String day;
+        private long savedAt;
+
+        private Rec(Context app) {
+            this.app = app;
+            store = app.getSharedPreferences("range_graph", Context.MODE_PRIVATE);
+            day = store.getString("day", "");
+            series[0].load(store.getString("trip", ""));
+            lastTripKm = Double.longBitsToDouble(store.getLong("tripKm", Double.doubleToLongBits(-1)));
+            series[1].load(store.getString("today", ""));
+            series[2].load(store.getString("charge", ""));
+            totalKm = Double.longBitsToDouble(store.getLong("total", 0));
+            chargeBaseKm = Double.longBitsToDouble(store.getLong("chargeBase", 0));
         }
-        plot.invalidate();
+
+        /** NEDC (the car's range), WLTP (× 420/480) and My range (80 % your last 10 km, 20 % WLTP); NaN when unknown. */
+        static double[] ranges(Context c, CarData.State s) {
+            double left = !Double.isNaN(s.battLeftKwh) ? s.battLeftKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 * (Double.isNaN(s.healthPct) ? 1 : s.healthPct / 100.0) : Double.NaN;
+            TripEnergy te = TripEnergy.get(c);
+            double mine = te.myAvg10();   // last 10 km (user, 2026-11-21: was 50)
+            if (Double.isNaN(mine)) mine = te.myAvg50();
+            if (Double.isNaN(mine)) mine = s.last50;
+            double own = !Double.isNaN(left) && !Double.isNaN(mine) && mine > 3 ? left / mine * 100 : Double.NaN;
+            double nedc = s.rangeKm >= 0 ? s.rangeKm : Double.NaN;
+            double wltp = !Double.isNaN(nedc) ? nedc * 420.0 / 480.0 : Double.NaN;
+            double my = !Double.isNaN(own) && !Double.isNaN(wltp) ? 0.8 * own + 0.2 * wltp : own;
+            return new double[]{nedc, wltp, my};
+        }
+
+        @Override public synchronized void onCar(CarData.State s) {
+            TripEnergy te = TripEnergy.get(app);
+            double[] r = ranges(app, s);
+            double nedc = r[0], wltp = r[1], my = r[2];
+            String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
+            if (!today.equals(day)) { day = today; series[1].pts.clear(); lastTodayKm = -1; }
+            // total distance driven, for "since charge": what today's distance added since the last reading
+            double tk = te.todayKm();
+            if (lastTodayKm >= 0) totalKm += tk >= lastTodayKm ? tk - lastTodayKm : tk;
+            lastTodayKm = tk;
+            // charged: battery % went up while standing still -> "Charge to charge" starts again
+            boolean still = Double.isNaN(s.speedKmh) || s.speedKmh < 1;
+            if (!Double.isNaN(s.socPct)) {
+                if (!Double.isNaN(lastSoc) && still && s.socPct >= lastSoc + 1) { series[2].pts.clear(); chargeBaseKm = totalKm; }
+                if (Double.isNaN(lastSoc) || !still || s.socPct < lastSoc || s.socPct >= lastSoc + 1) lastSoc = s.socPct;
+            }
+            // a new trip starts the "Trip" line again
+            if (te.km < lastTripKm - 0.05) series[0].pts.clear();
+            lastTripKm = te.km;
+            if (Double.isNaN(nedc) && Double.isNaN(wltp) && Double.isNaN(my)) return;
+            series[0].add(new double[]{te.km, nedc, wltp, my});
+            series[1].add(new double[]{tk, nedc, wltp, my});
+            series[2].add(new double[]{totalKm - chargeBaseKm, nedc, wltp, my});
+            if (s.at - savedAt > 30_000) {
+                savedAt = s.at;
+                store.edit().putString("day", day).putString("trip", series[0].save()).putLong("tripKm", Double.doubleToLongBits(lastTripKm))
+                        .putString("today", series[1].save()).putString("charge", series[2].save())
+                        .putLong("total", Double.doubleToLongBits(totalKm)).putLong("chargeBase", Double.doubleToLongBits(chargeBaseKm)).apply();
+            }
+        }
+
+        synchronized List<double[]> copy(int mode) { return new ArrayList<>(series[mode].pts); }
     }
 
     /** The drawing: grid, three lines, a dot and the current value at each line's end. */
@@ -190,7 +237,7 @@ final class RangeGraph extends LinearLayout {
         }
 
         @Override protected void onDraw(Canvas cv) {
-            List<double[]> pts = series[mode].pts;
+            List<double[]> pts = rec.copy(mode);
             float w = getWidth(), h = getHeight();
             // the values sit in their own column right of the lines, so they never cover them (user, 2026-11-21)
             text.setTextSize(13.5f * d);
@@ -198,8 +245,8 @@ final class RangeGraph extends LinearLayout {
             float labW = text.measureText("888 km");
             float left = 32 * d, right = w - labW - 10 * d, top = 6 * d, bottom = h - 14 * d;
             // across: from this series' start, at least 10 km (user, 2026-11-21: was 20)
-            double x0 = pts.isEmpty() ? 0 : pts.get(0)[0];
-            double xEnd = pts.isEmpty() ? 0 : pts.get(pts.size() - 1)[0] - x0;
+            double x0 = 0;   // always from 0 km: the start of the trip, the day or the charge (user, 2026-11-21)
+            double xEnd = pts.isEmpty() ? 0 : pts.get(pts.size() - 1)[0];
             double xSpan = Math.max(10, xEnd);
             // up: every value fits; at least 200 km tall, centred on the lines
             double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;

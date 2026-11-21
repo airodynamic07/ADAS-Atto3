@@ -43,6 +43,7 @@ public final class TripEnergy implements CarData.Listener {
             instance.fastKm = Math.max(1, Math.min(100, new Prefs(c).fastKm()));
             CarData.get(c).addListener(instance);
             instance.startGps(c.getApplicationContext());
+            RangeGraph.Rec.get(c);   // the range graph records all the time too, after this counter (user, 2026-11-21)
         }
         return instance;
     }
