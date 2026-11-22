@@ -184,7 +184,7 @@ public final class SettingsDialog {
         aw.addView(Ui.chip(c, "Find car controls ›", false, th, v -> findControls(c)), weight(c));
         boolean permOk = AiChat.micAllowed(c) && AiChat.overlayAllowed(c);
         aw.addView(Ui.chip(c, permOk ? "Permissions: OK" : "Fix permissions ›", false, th, v -> fixPerms(c)), weight(c));
-        aw.addView(Ui.chip(c, "Wheel mic button: " + (chosenKey >= 0 ? "key " + chosenKey : "usual voice keys") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
+        aw.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
         root.addView(aw);
 
         section(c, root, th, "Tyre pressure unit");
@@ -503,7 +503,7 @@ public final class SettingsDialog {
                     String list = cur.isEmpty() || "null".equals(cur) ? me : cur + ":" + me;
                     Updater.adbShell(c, "settings put secure enabled_accessibility_services " + list + "; settings put secure accessibility_enabled 1");
                 }
-            } catch (Exception e) { err = "Couldn't switch the button watcher on: " + e.getMessage(); }
+            } catch (Exception e) { err = "Couldn't switch the button watcher on (car's ADB: " + e.getClass().getSimpleName() + "). Turn it on by hand: Android Settings → Accessibility → NATEE wheel mic button"; }
             final String e2 = err;
             ui.post(() -> showKeys(c, e2));
         }).start();

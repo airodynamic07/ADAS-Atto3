@@ -69,7 +69,8 @@ public final class AiChat extends Service {
         prefs = new Prefs(this);
         control = new CarControl(this);
         alive = true;
-        new Thread(() -> { if (!micAllowed(this) || !overlayAllowed(this)) fixPermissions(this); KeyWatch.ensureOn(this); }).start();
+        new Thread(() -> { if (!micAllowed(this) || !overlayAllowed(this)) fixPermissions(this); }).start();
+        main.post(watchCheck);
         startWake();
     }
 
@@ -145,6 +146,15 @@ public final class AiChat extends Service {
         return g.endsWith("?") || g.endsWith("ไหม") || g.endsWith("มั้ย") || g.endsWith("ไหมคะ") || g.endsWith("มั้ยคะ")
                 || g.endsWith("หรือเปล่าคะ") || g.endsWith("หรือไม่คะ") || g.endsWith("ใช่ไหมคะ") || g.endsWith("คะ?");
     }
+
+    /** The wheel button watcher: switched on again whenever an update turned it off (checked every minute). */
+    private final Runnable watchCheck = new Runnable() {
+        @Override public void run() {
+            if (!alive) return;
+            if (!KeyWatch.isOn(AiChat.this)) new Thread(() -> KeyWatch.ensureOn(AiChat.this)).start();
+            main.postDelayed(this, 60_000);
+        }
+    };
 
     @Override public void onDestroy() {
         alive = false;

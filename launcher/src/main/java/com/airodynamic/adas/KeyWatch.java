@@ -60,6 +60,13 @@ public final class KeyWatch extends AccessibilityService {
         performGlobalAction(GLOBAL_ACTION_BACK);
     }
 
+    /** Is the wheel button watcher switched on (Android's accessibility list)? */
+    static boolean isOn(Context c) {
+        String me = c.getPackageName() + "/" + KeyWatch.class.getName();
+        String cur = android.provider.Settings.Secure.getString(c.getContentResolver(), android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        return cur != null && cur.contains(me);
+    }
+
     /** The key watcher is switched off by some updates: switch it on again through the car's ADB. */
     static void ensureOn(Context c) {
         try {
