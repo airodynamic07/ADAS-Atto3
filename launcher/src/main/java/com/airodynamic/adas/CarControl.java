@@ -228,12 +228,17 @@ final class CarControl {
 
     private JSONObject openApp(String name) throws Exception {
         String want = norm(name).replace("ingbox", "").replace("gbox", "");
+        if (want.isEmpty() && norm(name).contains("gbox")) {   // "open GBox" (Air 2026-11-22)
+            if (!Apps.installed(c, "com.gbox.android")) return res(false, "GBox isn't installed");
+            main.post(() -> Apps.open(c, "com.gbox.android", CarData.get(c).last()));
+            return res(true, "opening GBox");
+        }
         if (want.isEmpty()) return res(false, "which app?");
         // (Air 2026-11-22) maps apps: the car's own Google Maps (outside GBox) wins; other apps: the GBox copy wins
         boolean mapsApp = want.contains("map") || want.contains("waze") || want.contains("นำทาง");
         Apps.App best = null; int bestScore = 0;
         for (Apps.App a : Apps.all(c)) {
-            if (a.pkg.equals("com.gbox.android")) continue;   // GBox itself never stands in for another app
+            if (a.pkg.equals("com.gbox.android") && !want.isEmpty() && !norm(name).contains("gbox")) continue;   // GBox itself only when asked for
             String l = norm(a.label).replace("gbox", "");
             if (l.length() < 2) continue;
             int sc = l.equals(want) ? 3 : l.startsWith(want) || want.startsWith(l) ? 2 : l.contains(want) || want.contains(l) ? 1 : 0;
@@ -292,28 +297,23 @@ final class CarControl {
 
     private JSONObject music(String action, String query) throws Exception {
         String a = action.toLowerCase(Locale.US);
-        // "play Radiohead" (Air 2026-11-22): ask YouTube Music itself (GBox copy first) to search and play, which also
-        // opens it when nothing is playing yet
-        if (!query.trim().isEmpty() && !a.equals("pause") && !a.equals("next") && !a.equals("previous")) {
-            for (String y : MusicCard.YTM) {
-                if (!Apps.installed(c, y)) continue;
-                final android.content.Intent i = new android.content.Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
-                        .setPackage(y).putExtra(android.app.SearchManager.QUERY, query)
-                        .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                if (c.getPackageManager().resolveActivity(i, 0) == null) continue;
-                main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
-                return res(true, "asked YouTube Music to play " + query);
+        // "play Radiohead" (Air 2026-11-22): inside GBox, YouTube Music's player is registered under GBox's own name, so
+        // ask whichever music player is there (not the car's own Media). None yet: open YouTube Music, then ask it.
+        if (!query.trim().isEmpty() && !a.equals("pause") && !a.equals("next") && !a.equals("previous")) {   // "play" + a name = search too
+            android.media.session.MediaController p = searchablePlayer();
+            if (p != null) {
+                p.getTransportControls().playFromSearch(query, new android.os.Bundle());
+                return res(true, "asked " + Apps.label(c, p.getPackageName()) + " to play " + query);
             }
-            // this YouTube Music doesn't take "search and play": open its search page for it (one tap to play)
             for (String y : MusicCard.YTM) {
                 if (!Apps.installed(c, y)) continue;
-                final android.content.Intent v = new android.content.Intent(android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("https://music.youtube.com/search?q=" + android.net.Uri.encode(query)))
-                        .setPackage(y).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                if (c.getPackageManager().resolveActivity(v, 0) == null) continue;
-                main.post(() -> { try { c.startActivity(v); } catch (Throwable ignored) { } });
-                return res(true, "opened YouTube Music's search for " + query + " (tap a song to play)");
+                final String q = query;
+                main.post(() -> Apps.open(c, y, CarData.get(c).last()));
+                main.postDelayed(() -> {   // give it a few seconds to start, then ask
+                    android.media.session.MediaController p2 = searchablePlayer();
+                    if (p2 != null) p2.getTransportControls().playFromSearch(q, new android.os.Bundle());
+                }, 5000);
+                return res(true, "opening YouTube Music and asking it to play " + query);
             }
         }
         android.media.session.MediaController mc = musicSession();
@@ -334,10 +334,25 @@ final class CarControl {
                 if (query.isEmpty()) return res(false, "what should I play?");
                 boolean ytm = false;
                 for (String y : MusicCard.YTM) ytm |= y.equals(mc.getPackageName());
+                ytm |= mc.getPackageName().contains("gbox");
                 if (!ytm) return res(false, "YouTube Music couldn't be asked to play it; open YouTube Music and ask again");
                 t.playFromSearch(query, new android.os.Bundle());
                 return res(true, "asked " + Apps.label(c, mc.getPackageName()) + " to play " + query + " (some apps don't support this)");
         }
+    }
+
+    /** A music player to ask "play …": YouTube Music or anything inside GBox first, never the car's own Media / radio. */
+    private android.media.session.MediaController searchablePlayer() {
+        try {
+            android.media.session.MediaSessionManager m = (android.media.session.MediaSessionManager) c.getSystemService(Context.MEDIA_SESSION_SERVICE);
+            android.media.session.MediaController other = null;
+            for (android.media.session.MediaController mc : m.getActiveSessions(NowPlaying.component(c))) {
+                String p = mc.getPackageName();
+                if (p.contains("gbox") || p.contains("youtube.music") || p.contains("spotify")) return mc;
+                if (!p.startsWith("com.byd") && other == null) other = mc;
+            }
+            return other;
+        } catch (Throwable e) { return null; }
     }
 
     private android.media.session.MediaController musicSession() {
