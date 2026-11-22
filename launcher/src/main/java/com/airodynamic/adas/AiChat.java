@@ -367,6 +367,12 @@ public final class AiChat extends Service {
         });
     }
 
+    /** Google Search for current things: weather, news, places, prices (Air 2026-11-22: "she should answer everything").
+     *  Only on the first try of each model; if Google refuses it, the next try works without it. */
+    private static JSONArray withSearch(JSONArray tools) throws Exception {
+        return tools.put(new JSONObject().put("googleSearch", new JSONObject()));
+    }
+
     /** Adds "close_chat": when the driver asks to close / stop / end the chat in any words, Gemini closes it. */
     private static JSONArray withClose(JSONArray tools) throws Exception {
         tools.getJSONObject(0).getJSONArray("functionDeclarations").put(new JSONObject().put("name", "close_chat")
@@ -383,7 +389,7 @@ public final class AiChat extends Service {
             JSONObject gen = new JSONObject().put("responseModalities", new JSONArray().put("AUDIO"))
                     .put("speechConfig", new JSONObject().put("voiceConfig", voice));
             JSONObject sys = new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text",
-                    "You are Natee, a friendly voice assistant in the driver's BYD Atto 3 electric car in Thailand. The driver is"
+                    "You are Quinn, a friendly voice assistant in the driver's BYD Atto 3 electric car in Thailand. The driver is"
                             + " driving: keep answers short and easy to listen to (one to three sentences), no lists or links."
                             + " You cannot see the road. You can read the car's information with get_car_info (use it whenever the"
                             + " driver asks about the car: range, battery, tyres, air, temperatures, trip, doors) and change comfort"
@@ -392,6 +398,8 @@ public final class AiChat extends Service {
                             + " reports something not working or has an idea for a new function. Never anything about driving."
                             + " Understand casual requests (\"too hot\" = temperature down 1-2 degrees or fan up). After a change,"
                             + " say in a few words what you did (\"Fan 4.\"); if the result says it failed, say so plainly."
+                            + " For anything current (weather, news, traffic, opening hours, prices, places, facts you aren't sure of) use Google"
+                            + " Search; for \"here\" or \"near me\" use the car's location from get_car_info (lat, lng). Answer everything you can."
                             + " Never refuse music, apps or videos yourself because the car might be moving: always call the tool, it knows the"
                             + " car's state and the driver's settings, and tells you if something can't open."
                             + " If what you hear is only noise, music, silence or no clear words, do not answer at all: stay silent."
@@ -399,7 +407,7 @@ public final class AiChat extends Service {
                             + " Before opening or closing the sunshade or the sunroof, ask the driver to confirm, and only call it after a yes. The sunshade is the cloth under the glass; the sunroof is the glass itself: never mix them up. " + li)));
             JSONObject setup = new JSONObject().put("model", model).put("generationConfig", gen).put("systemInstruction", sys)
                     .put("inputAudioTranscription", new JSONObject()).put("outputAudioTranscription", new JSONObject())
-                    .put("tools", withClose(CarControl.tools()));
+                    .put("tools", quickEnd ? withSearch(withClose(CarControl.tools())) : withClose(CarControl.tools()));
             // walkie-talkie (Air 2026-11-22): Google doesn't guess when you've finished; the app tells it (second mic press)
             if (quickEnd) setup.put("realtimeInputConfig", new JSONObject().put("automaticActivityDetection", new JSONObject().put("disabled", true)));
             return new JSONObject().put("setup", setup).toString();

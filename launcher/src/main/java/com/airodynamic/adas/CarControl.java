@@ -114,6 +114,9 @@ final class CarControl {
         put(o, "battery_left_kwh", s.battLeftKwh);
         put(o, "battery_health_percent", TripEnergy.get(c).health());   // calibrated daily from your driving
         put(o, "speed_kmh", s.speedKmh);
+        double la = s.lat, ln = s.lng;   // where the car is: for "weather here", "near me"
+        if (Double.isNaN(la)) { android.location.Location l = Places.last(c); if (l != null) { la = l.getLatitude(); ln = l.getLongitude(); } }
+        put(o, "lat", la); put(o, "lng", ln);
         o.put("gear", s.gear == 2 ? "R" : s.gear == 3 ? "N" : s.gear == 4 ? "D" : s.gear >= 0 ? "P" : "unknown");
         JSONObject ty = new JSONObject();
         String[] n = {"front_left", "front_right", "rear_left", "rear_right"};
@@ -387,7 +390,9 @@ final class CarControl {
         try { return new JSONObject().put("ok", ok).put("result", msg); } catch (Exception e) { return new JSONObject(); }
     }
 
-    private static void put(JSONObject o, String k, double v) throws Exception { if (!Double.isNaN(v)) o.put(k, round(v, 1)); }
+    private static void put(JSONObject o, String k, double v) throws Exception {
+        if (!Double.isNaN(v)) o.put(k, k.equals("lat") || k.equals("lng") ? round(v, 4) : round(v, 1));
+    }
     private static double round(double v, int d) { double f = Math.pow(10, d); return Math.round(v * f) / f; }
 
     private static final Object MISSING = new Object(), FAILED = new Object();
