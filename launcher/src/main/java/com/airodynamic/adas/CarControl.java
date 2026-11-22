@@ -49,6 +49,8 @@ final class CarControl {
                 .put("required", new JSONArray().put("kind").put("description"));
         f.put(fn("report_problem", "Save a note for the developer (Claude): a problem when something isn't working ('report a problem: the map"
                 + " is stuck'), or an idea for a new function ('idea: show the charging time on the dashboard').", rp));
+        f.put(fn("navigate", "Start Google Maps navigation to a place: an address, a place name, or 'home' / 'work' (the driver's saved places).",
+                props("destination", "string", "where to go, e.g. home, Central World, a full address")));
         f.put(fn("music", "Control the music: play, pause, next or previous song, or play something by name.", mp));
         return new JSONArray().put(new JSONObject().put("functionDeclarations", f));
     }
@@ -82,6 +84,7 @@ final class CarControl {
                     ProblemLog.add(c, (idea ? "💡 IDEA: " : "⚠ PROBLEM: ") + d, chatSoFar);
                     return res(true, "saved; the driver can find it in Settings → Problems → Voice reports & ideas and send a photo to Claude");
                 }
+                case "navigate": return navigate(a.optString("destination", ""));
                 case "open_app": return openApp(a.optString("name", ""));
                 case "music": return music(a.optString("action", ""), a.optString("query", ""));
                 default: return res(false, "unknown tool " + name);
@@ -204,15 +207,19 @@ final class CarControl {
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
 
     private JSONObject openApp(String name) throws Exception {
-        String want = norm(name).replace("gbox", "").replace("ingbox", "");
+        String want = norm(name).replace("ingbox", "").replace("gbox", "");
         if (want.isEmpty()) return res(false, "which app?");
+        // (Air 2026-11-22) maps apps: the car's own Google Maps (outside GBox) wins; other apps: the GBox copy wins
+        boolean mapsApp = want.contains("map") || want.contains("waze") || want.contains("นำทาง");
         Apps.App best = null; int bestScore = 0;
         for (Apps.App a : Apps.all(c)) {
+            if (a.pkg.equals("com.gbox.android")) continue;   // GBox itself never stands in for another app
             String l = norm(a.label).replace("gbox", "");
+            if (l.length() < 2) continue;
             int sc = l.equals(want) ? 3 : l.startsWith(want) || want.startsWith(l) ? 2 : l.contains(want) || want.contains(l) ? 1 : 0;
             if (sc == 0) continue;
-            // the GBox copy wins over the car's own copy of the same app (those lack Google services, user 2026-11-21)
-            sc = sc * 2 + (a.pkg.startsWith("com.gbox.") ? 1 : 0);
+            boolean gbox = a.pkg.startsWith("com.gbox.");
+            sc = sc * 2 + (mapsApp ? (gbox ? 0 : 1) : (gbox ? 1 : 0));
             if (sc > bestScore) { bestScore = sc; best = a; }
         }
         if (best == null) return res(false, "no app called " + name + " on this car");
@@ -220,6 +227,24 @@ final class CarControl {
         main.post(() -> Apps.open(c, app.pkg, CarData.get(c).last()));   // video apps still only in P
         boolean video = Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked();
         return res(!video, video ? app.label + " is a video app: it opens only in P" : "opening " + app.label);
+    }
+
+    /** Google Maps (outside GBox first) turn-by-turn to the place; "home" / "work" are Maps' own saved places. */
+    private JSONObject navigate(String dest) throws Exception {
+        String d = dest.trim();
+        if (d.isEmpty()) return res(false, "where to?");
+        String q = d.equalsIgnoreCase("home") || d.equals("บ้าน") ? "Home" : d.equalsIgnoreCase("work") || d.equals("ที่ทำงาน") ? "Work" : d;
+        String[] pkgs = {"com.google.android.apps.maps", "com.gbox.com.google.android.apps.maps"};
+        for (String p : pkgs) {
+            if (!Apps.installed(c, p)) continue;
+            final android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("google.navigation:q=" + android.net.Uri.encode(q))).setPackage(p)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (c.getPackageManager().resolveActivity(i, 0) == null) continue;
+            main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
+            return res(true, "navigating to " + q + " in " + Apps.label(c, p) + (q.equals("Home") || q.equals("Work") ? " (uses the Home/Work saved in Google Maps)" : ""));
+        }
+        return res(false, "Google Maps isn't installed");
     }
 
     private static String norm(String s) { return s == null ? "" : s.toLowerCase(Locale.US).replaceAll("[^a-z0-9ก-๙]", ""); }

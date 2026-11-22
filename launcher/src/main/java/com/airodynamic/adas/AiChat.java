@@ -253,7 +253,7 @@ public final class AiChat extends Service {
                             + " driving: keep answers short and easy to listen to (one to three sentences), no lists or links."
                             + " You cannot see the road. You can read the car's information with get_car_info (use it whenever the"
                             + " driver asks about the car: range, battery, tyres, air, temperatures, trip, doors) and change comfort"
-                            + " things only: fan, temperature, A/C on/off, cabin light, sunshade. You can also open apps (open_app), control"
+                            + " things only: fan, temperature, A/C on/off, cabin light, sunshade. You can also open apps (open_app), start navigation in Google Maps (navigate, e.g. home), control"
                             + " the music (music), and save notes for the developer (report_problem) when the driver"
                             + " reports something not working or has an idea for a new function. Never anything about driving."
                             + " Understand casual requests (\"too hot\" = temperature down 1-2 degrees or fan up). After a change,"
