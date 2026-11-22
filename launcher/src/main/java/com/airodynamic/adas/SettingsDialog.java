@@ -411,6 +411,17 @@ public final class SettingsDialog {
                     ms.add(m.getName() + "(" + m.getParameterTypes().length + ")");
                 }
                 if (!ms.isEmpty()) names.append(d.replaceAll(".*\\.BYDAuto|Device", "")).append(": ").append(android.text.TextUtils.join(", ", ms)).append("\n\n");
+                // (2026-11-22, reading light) the light part's named feature numbers, for its general set(number, value)
+                if (d.startsWith("light.")) {
+                    java.util.TreeSet<String> fs = new java.util.TreeSet<>();
+                    java.util.regex.Pattern lamp = java.util.regex.Pattern.compile("(?i).*(read|dome|roof|ceiling|interior|inner|cabin|map_?lamp|top_?lamp|front_?lamp|rear_?lamp|atmos|ambient).*");
+                    for (java.lang.reflect.Field f : dev.getClass().getFields()) {
+                        if (!java.lang.reflect.Modifier.isStatic(f.getModifiers()) || f.getType() != int.class) continue;
+                        if (!lamp.matcher(f.getName()).matches()) continue;
+                        try { fs.add(f.getName() + "=" + f.getInt(null)); } catch (Throwable ignored) { }
+                    }
+                    names.append("Light feature numbers: ").append(fs.isEmpty() ? "none with a matching name" : android.text.TextUtils.join(", ", fs)).append("\n\n");
+                }
             }
             final java.util.Map<String, Integer> before = CarData.get(c).snapshot(devs);
             final String list = names.length() == 0 ? "no matching commands found\n\n" : names.toString();
