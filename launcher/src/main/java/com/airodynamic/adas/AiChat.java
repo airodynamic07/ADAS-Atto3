@@ -249,6 +249,13 @@ public final class AiChat extends Service {
         });
     }
 
+    /** Adds "close_chat": when the driver asks to close / stop / end the chat in any words, Gemini closes it. */
+    private static JSONArray withClose(JSONArray tools) throws Exception {
+        tools.getJSONObject(0).getJSONArray("functionDeclarations").put(new JSONObject().put("name", "close_chat")
+                .put("description", "Close this chat when the driver asks to close, stop or end it (e.g. 'close Natee chat', 'ปิดแชท'). Say a short goodbye first."));
+        return tools;
+    }
+
     private String setupJson(String model, boolean quickEnd) {
         try {
             String lang = prefs.aiLang();
@@ -270,11 +277,11 @@ public final class AiChat extends Service {
                             + " Before opening or closing the sunshade, ask the driver to confirm, and only call it after a yes. " + li)));
             JSONObject setup = new JSONObject().put("model", model).put("generationConfig", gen).put("systemInstruction", sys)
                     .put("inputAudioTranscription", new JSONObject()).put("outputAudioTranscription", new JSONObject())
-                    .put("tools", CarControl.tools());
-            // (Air 2026-11-22: "keeps listening too long before it answers") the answer starts after about 0.5 s of quiet,
+                    .put("tools", withClose(CarControl.tools()));
+            // (Air 2026-11-22: "keeps listening too long", then "wait for 2 seconds") the answer starts after 2 s of quiet,
             // and the end of speech is noticed sooner over the car's fan and road noise
             if (quickEnd) setup.put("realtimeInputConfig", new JSONObject().put("automaticActivityDetection", new JSONObject()
-                    .put("endOfSpeechSensitivity", "END_SENSITIVITY_HIGH").put("silenceDurationMs", 500).put("prefixPaddingMs", 200)));
+                    .put("endOfSpeechSensitivity", "END_SENSITIVITY_HIGH").put("silenceDurationMs", 2000).put("prefixPaddingMs", 200)));
             return new JSONObject().put("setup", setup).toString();
         } catch (Exception e) { return "{}"; }
     }
@@ -295,8 +302,10 @@ public final class AiChat extends Service {
                     if (newTurn) { you.setLength(0); gem.setLength(0); lastAction = ""; newTurn = false; }
                     you.append(t); lastActive = System.currentTimeMillis(); showText();
                     String all = you.toString().toLowerCase(java.util.Locale.US);
-                    if (all.contains("close natee") || all.contains("close natty") || all.contains("close nate") || all.contains("close the chat")
-                            || all.contains("bye natee") || all.contains("ปิดนที") || all.contains("ปิดแชท") || all.contains("ปิด นที")) main.postDelayed(this::endChat, 1500);
+                    // "close <any spelling of Natee> chat" / "ปิด…แชท" (the name is written differently each time)
+                    boolean close = all.matches("(?s).*\\bclose\\b.{0,20}\\bchat\\b.*") || all.matches("(?s).*ปิด.{0,20}แชท.*")
+                            || all.contains("bye natee") || all.contains("ปิดนที") || all.contains("ปิด นที");
+                    if (close) main.postDelayed(this::endChat, 1500);
                 });
             }
             JSONObject ot = sc.optJSONObject("outputTranscription");
@@ -327,7 +336,9 @@ public final class AiChat extends Service {
                 String name = fc.optString("name");
                 JSONObject args = fc.optJSONObject("args");
                 control.chatSoFar = (you.length() > 0 ? "you: " + you.toString().trim() : "") + (lastAction.length() > 0 ? " · last: " + lastAction : "");
-                JSONObject r = control.run(name, args == null ? new JSONObject() : args);
+                JSONObject r;
+                if ("close_chat".equals(name)) { r = new JSONObject().put("ok", true).put("result", "closing"); main.postDelayed(this::endChat, 2500); }
+                else r = control.run(name, args == null ? new JSONObject() : args);
                 if (!"get_car_info".equals(name)) main.post(() -> { lastAction = name.replace('_', ' ') + ": " + r.optString("result"); showText(); });
                 out.put(new JSONObject().put("id", fc.optString("id")).put("name", name).put("response", r));
             }
