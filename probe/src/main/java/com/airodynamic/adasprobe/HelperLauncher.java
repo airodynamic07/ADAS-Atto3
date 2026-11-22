@@ -107,6 +107,11 @@ public final class HelperLauncher {
             r.info("Android says: " + out);
             boolean ok = out.contains("Success");
             if (ok) r.ok("install", "done");
+            // NATEE Launcher: an update switches its wheel-button watcher off; switch it on again, with the mic and
+            // floating-window permissions, in the same ADB session (2026-11-22)
+            if (ok && apk.getName().contains("launcher")) {
+                try { dadb.shell("X=com.airodynamic.adas/com.airodynamic.adas.KeyWatch; c=$(settings get secure enabled_accessibility_services); case \"$c\" in *KeyWatch*) ;; null|\"\") settings put secure enabled_accessibility_services $X ;; *) settings put secure enabled_accessibility_services \"$c:$X\" ;; esac; settings put secure accessibility_enabled 1; pm grant com.airodynamic.adas android.permission.RECORD_AUDIO; appops set com.airodynamic.adas SYSTEM_ALERT_WINDOW allow"); r.ok("wheel mic button", "switched on again"); } catch (Throwable ignored) { }
+            }
             else r.fail("install", explain(out));
             return ok;
         } catch (Throwable t) {
