@@ -55,6 +55,9 @@ final class CarControl {
                 props("destination", "string", "where to go, e.g. home, Central World, a full address")));
         f.put(fn("youtube_video", "Search and open a YouTube video. Always call it when asked; the app itself decides if it may open.",
                 props("query", "string", "what to search for, e.g. Radiohead Creep live")));
+        f.put(fn("navigate_ghost_race", "Open Ghost Race (the driver's own navigation and race app in this launcher) with a destination: use"
+                + " it when the driver says Ghost Race, else use navigate (Google Maps).",
+                props("destination", "string", "the place name or address")));
         f.put(fn("music", "Control the music: play, pause, next or previous song, or play something by name.", mp));
         return new JSONArray().put(new JSONObject().put("functionDeclarations", f));
     }
@@ -90,6 +93,16 @@ final class CarControl {
                     return res(true, "saved; the driver can find it in Settings → Problems → Voice reports & ideas and send a photo to Claude");
                 }
                 case "navigate": return navigate(a.optString("destination", ""));
+                case "navigate_ghost_race": {
+                    // the same way as "Share → NATEE Launcher" from Google Maps: Ghost Race opens its destination search on it
+                    String d = a.optString("destination", "").trim();
+                    if (d.isEmpty()) return res(false, "where to?");
+                    final android.content.Intent gi = new android.content.Intent(c, LauncherActivity.class)
+                            .putExtra(ShareActivity.TEXT, d).putExtra(ShareActivity.TITLE, d)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    main.post(() -> { try { c.startActivity(gi); } catch (Throwable ignored) { } });
+                    return res(true, "Ghost Race is searching for " + d + ": tap the right result to start");
+                }
                 case "youtube_video": return youtube(a.optString("query", ""));
                 case "open_app": return openApp(a.optString("name", ""));
                 case "music": return music(a.optString("action", ""), a.optString("query", ""));
