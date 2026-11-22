@@ -88,7 +88,14 @@ public final class AiChat extends Service {
     private volatile boolean talking, activityOpen, heard, manual, autoEnd, pendingTalk;
     private volatile long lastVoiceAt;
     private static final int C_LISTEN = 0xFF3AA0FF, C_HEAR = 0xFF2EE59D, C_ANSWER = 0xFF7C4DFF, C_REPEAT = 0xFFFF8A1F;
-    private final Runnable hideLater = this::endChat;
+    private final Runnable hideLater = () -> closeWhenQuiet();
+    private volatile long lastSoundAt;   // the last moment the microphone heard a voice (talking turn or not)
+
+    /** Never close while someone is still talking (Air 2026-11-22: "I'm still talking and it closes"). */
+    private void closeWhenQuiet() {
+        if (System.currentTimeMillis() - lastSoundAt < 3000) { main.postDelayed(this::closeWhenQuiet, 1000); return; }
+        endChat();
+    }
     private boolean silentStart;   // listening again after an answer: no beep
 
     private void pressMic() {
@@ -175,7 +182,7 @@ public final class AiChat extends Service {
         main.postDelayed(noAnswer, askedQuestion() ? 20_000 : 10_000);
     }
 
-    private final Runnable noAnswer = () -> { if (talking && !activityOpen) endChat(); };
+    private final Runnable noAnswer = () -> { if (talking && !activityOpen) closeWhenQuiet(); };
 
     /** Gemini asked something ("Open the sunroof?"): it waits 20 s for the answer instead of 10. */
     private boolean askedQuestion() {
@@ -515,8 +522,9 @@ public final class AiChat extends Service {
                     String msg = "{\"realtimeInput\":{\"audio\":{\"mimeType\":\"audio/pcm;rate=16000\",\"data\":\""
                             + Base64.encodeToString(out, Base64.NO_WRAP) + "\"}}}";
                     WebSocket s = ws;
-                    if (!talking || muted || s == null) { pre.clear(); continue; }
                     boolean someVoice = lv > Math.max(5, floor * 1.6 + 4);   // loose: for "you've stopped talking"
+                    if (someVoice && !speaking) lastSoundAt = System.currentTimeMillis();   // not Gemini's own voice
+                    if (!talking || muted || s == null) { pre.clear(); continue; }
                     if (!activityOpen) {
                         pre.addLast(msg);
                         if (pre.size() > 3) pre.removeFirst();
