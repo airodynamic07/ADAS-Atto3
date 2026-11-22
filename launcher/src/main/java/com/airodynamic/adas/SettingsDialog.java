@@ -179,6 +179,7 @@ public final class SettingsDialog {
         // the steering wheel's mic button (user, 2026-11-22): switch the key watcher on, then see what the button sends
         LinearLayout aw = row(c);
         int chosenKey = KeyWatch.store(c).getInt("chosen", -1);
+        aw.addView(Ui.chip(c, "Wake word check ›", false, th, v -> wakeCheck(c)), weight(c));
         aw.addView(Ui.chip(c, "Wheel mic button: " + (chosenKey >= 0 ? "key " + chosenKey : "usual voice keys") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
         root.addView(aw);
 
@@ -379,6 +380,30 @@ public final class SettingsDialog {
                         .setPositiveButton("Close", null).show();
             });
         }).start();
+    }
+
+    /** Live: is the wake-word listener running, how loud is the microphone, what did it hear (send a photo to Claude). */
+    private static void wakeCheck(Context c) {
+        TextView t = Ui.text(c, "", 15, 0xFFFFFFFF, false);
+        t.setPadding(40, 24, 40, 24);
+        android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+        Runnable tick = new Runnable() {
+            @Override public void run() {
+                int lv = AiChat.micLevel;
+                StringBuilder bar = new StringBuilder();
+                for (int i = 0; i < 20; i++) bar.append(lv >= 0 && i < lv / 5 ? "█" : "·");
+                t.setText("Wake word: " + AiChat.wakeState
+                        + "\nMicrophone: " + (lv < 0 ? "–" : lv + "  " + bar)
+                        + "\nLast heard: " + (AiChat.lastHeard.isEmpty() ? "–" : "\"" + AiChat.lastHeard + "\"")
+                        + "\n\nSay \"Hey Natee chat\" and watch the microphone bar. If it stays at 0 while you talk, another app"
+                        + " (the car's own voice assistant) is holding the microphone.");
+                if (t.isAttachedToWindow() || t.getWindowToken() == null) ui.postDelayed(this, 300);
+            }
+        };
+        new AlertDialog.Builder(c).setTitle("Wake word check (send a photo to Claude)").setView(t)
+                .setOnDismissListener(d -> ui.removeCallbacksAndMessages(null))
+                .setPositiveButton("Close", null).show();
+        ui.post(tick);
     }
 
     /** Switches the key watcher on (through the car's own ADB), then lists the keys it saw: press the wheel's mic button and tap it. */

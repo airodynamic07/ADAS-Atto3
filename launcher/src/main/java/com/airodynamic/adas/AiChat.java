@@ -84,6 +84,7 @@ public final class AiChat extends Service {
 
     @Override public void onDestroy() {
         alive = false;
+        wakeState = "off"; micLevel = -1;
         endChat();
         if (wakeThread != null) wakeThread.interrupt();
         super.onDestroy();
@@ -91,13 +92,15 @@ public final class AiChat extends Service {
 
     // ---------------- wake word ----------------
     private void startWake() {
+        wakeState = "loading the wake word engine (first time ~30 s)";
         wakeThread = new Thread(() -> {
             try {
                 if (model == null) {
                     org.vosk.LibVosk.setLogLevel(org.vosk.LogLevel.WARNINGS);
                     model = new org.vosk.Model(org.vosk.android.StorageService.sync(this, "vosk-model", "model"));
                 }
-            } catch (Throwable e) { status("Hey Natee chat: wake word engine couldn't start (" + e.getClass().getSimpleName() + ")"); return; }
+            } catch (Throwable e) { wakeState = "engine couldn't start: " + e.getClass().getSimpleName() + " " + e.getMessage(); status("Hey Natee chat: wake word engine couldn't start (" + e.getClass().getSimpleName() + ")"); return; }
+            wakeState = "ready";
             // only these phrases are listened for ("natee" isn't an English word: the nearest sounds stand in for it)
             String grammar = "[\"hey natty chat\", \"hey nate chat\", \"hey nature chat\", \"hey naughty chat\", \"hey [unk] chat\", \"[unk]\"]";
             while (alive) {
@@ -106,14 +109,18 @@ public final class AiChat extends Service {
                 try (org.vosk.Recognizer r = new org.vosk.Recognizer(model, IN_RATE, grammar)) {
                     int buf = Math.max(AudioRecord.getMinBufferSize(IN_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), 6400);
                     rec = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, IN_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, buf);
-                    if (rec.getState() != AudioRecord.STATE_INITIALIZED) { rec.release(); rec = null; sleep(10_000); continue; }   // microphone busy: try again later
+                    if (rec.getState() != AudioRecord.STATE_INITIALIZED) { wakeState = "microphone busy (another app has it)"; rec.release(); rec = null; sleep(10_000); continue; }   // microphone busy: try again later
+                    wakeState = "listening";
                     rec.startRecording();
                     short[] b = new short[1600];   // 0.1 s
                     while (alive && !chatting) {
                         int n = rec.read(b, 0, b.length);
                         if (n <= 0) { sleep(200); continue; }
+                        long sum = 0; for (int k = 0; k < n; k++) sum += Math.abs(b[k]);
+                        micLevel = (int) Math.min(100, sum / n * 100 / 3000);   // 0 = silence; talking normally ≈ 20–80
                         boolean fin = r.acceptWaveForm(b, n);
                         String txt = fin ? r.getResult() : r.getPartialResult();
+                        if (fin) { String h = heard(txt); if (!h.isEmpty()) lastHeard = h; }
                         if (isWake(txt)) { r.reset(); main.post(this::startChat); break; }
                     }
                 } catch (Throwable e) {
@@ -124,6 +131,14 @@ public final class AiChat extends Service {
             }
         }, "hey-natee");
         wakeThread.start();
+    }
+
+    /** For Settings → AI chat → Wake word check (2026-11-22: "Hey Natee chat, nothing happens"). */
+    static volatile String wakeState = "not started (AI chat off?)", lastHeard = "";
+    static volatile int micLevel = -1;
+
+    private static String heard(String json) {
+        try { return new JSONObject(json).optString("text", "").trim(); } catch (Exception e) { return ""; }
     }
 
     private static boolean isWake(String json) {

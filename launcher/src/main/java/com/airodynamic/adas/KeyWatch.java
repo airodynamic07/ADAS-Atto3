@@ -36,7 +36,8 @@ public final class KeyWatch extends AccessibilityService {
     static boolean isChatKey(Context c, int code) {
         int chosen = store(c).getInt("chosen", -1);
         if (chosen >= 0) return code == chosen;
-        return code == KeyEvent.KEYCODE_VOICE_ASSIST || code == KeyEvent.KEYCODE_ASSIST || code == KeyEvent.KEYCODE_SEARCH;
+        // 304 = AUTO_MEDIA_VOICE: the Atto 3's steering-wheel mic button (seen in the button test, 2026-11-22)
+        return code == 304 || code == KeyEvent.KEYCODE_VOICE_ASSIST || code == KeyEvent.KEYCODE_ASSIST || code == KeyEvent.KEYCODE_SEARCH;
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
