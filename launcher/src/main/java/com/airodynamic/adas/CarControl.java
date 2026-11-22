@@ -250,8 +250,22 @@ final class CarControl {
     private static String norm(String s) { return s == null ? "" : s.toLowerCase(Locale.US).replaceAll("[^a-z0-9ก-๙]", ""); }
 
     private JSONObject music(String action, String query) throws Exception {
-        android.media.session.MediaController mc = musicSession();
         String a = action.toLowerCase(Locale.US);
+        // "play Radiohead" (Air 2026-11-22): ask YouTube Music itself (GBox copy first) to search and play, which also
+        // opens it when nothing is playing yet
+        if (!query.trim().isEmpty() && !a.equals("pause") && !a.equals("next") && !a.equals("previous")) {
+            for (String y : MusicCard.YTM) {
+                if (!Apps.installed(c, y)) continue;
+                final android.content.Intent i = new android.content.Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+                        .setPackage(y).putExtra(android.app.SearchManager.QUERY, query)
+                        .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (c.getPackageManager().resolveActivity(i, 0) == null) continue;
+                main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
+                return res(true, "asked YouTube Music to play " + query);
+            }
+        }
+        android.media.session.MediaController mc = musicSession();
         if (mc == null) {
             for (String y : MusicCard.YTM) if (Apps.installed(c, y)) {
                 main.post(() -> Apps.open(c, y, CarData.get(c).last()));
