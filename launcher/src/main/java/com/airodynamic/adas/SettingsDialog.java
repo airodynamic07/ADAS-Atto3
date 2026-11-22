@@ -153,7 +153,7 @@ public final class SettingsDialog {
 
         // "Hey Natee chat": voice chat with Gemini (user, 2026-11-21). Reads the car; changes comfort things only (CarControl).
         String key = prefs.aiKey();
-        section(c, root, th, "AI chat (Gemini) · say \"Hey Natee chat\": " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
+        section(c, root, th, "AI chat (Gemini) · say \"Quinn\" or press the wheel mic: " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
         LinearLayout ai = row(c);
         ai.addView(Ui.chip(c, "On", prefs.aiChat(), th, v -> { prefs.setAiChat(true); AiChat.sync(c); redo.run(); }), weight(c));
         ai.addView(Ui.chip(c, "Off", !prefs.aiChat(), th, v -> { prefs.setAiChat(false); AiChat.sync(c); redo.run(); }), weight(c));
@@ -243,7 +243,7 @@ public final class SettingsDialog {
         }).start()), weight(c));
         String[] reports = ProblemLog.all(c);
         pb.addView(Ui.chip(c, "Voice reports & ideas (" + reports.length + ")", false, th, v -> {
-            TextView t = Ui.text(c, reports.length == 0 ? "Nothing yet. Say \"Hey Natee chat\", then \"report a problem: …\" or \"idea: …\"" : android.text.TextUtils.join("\n\n", reports), 12, th.text, false);
+            TextView t = Ui.text(c, reports.length == 0 ? "Nothing yet. Say \"Quinn\" (or press the wheel mic), then \"report a problem: …\" or \"idea: …\"" : android.text.TextUtils.join("\n\n", reports), 12, th.text, false);
             t.setTextIsSelectable(true);
             t.setPadding(24, 16, 24, 16);
             ScrollView sv3 = new ScrollView(c);
@@ -491,7 +491,7 @@ public final class SettingsDialog {
                         + "\nWake word: " + AiChat.wakeState
                         + "\nMicrophone: " + (lv < 0 ? "–" : lv + "  " + bar)
                         + "\nLast heard: " + (AiChat.lastHeard.isEmpty() ? "–" : "\"" + AiChat.lastHeard + "\"")
-                        + "\n\nSay \"Hey Natee chat\" and watch the microphone bar. If it stays at 0 while you talk, another app"
+                        + "\n\nSay \"Quinn\" and watch the microphone bar. If it stays at 0 while you talk, another app"
                         + " (the car's own voice assistant) is holding the microphone.");
                 if (t.isAttachedToWindow() || t.getWindowToken() == null) ui.postDelayed(this, 300);
             }

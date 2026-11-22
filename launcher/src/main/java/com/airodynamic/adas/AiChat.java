@@ -34,7 +34,7 @@ import okio.ByteString;
 
 /**
  * "Hey Natee chat" (user, 2026-11-21): a voice chat with Google's Gemini (Live API), straight from the launcher, no
- * Gemini app needed. An offline wake-word listener (Vosk, nothing leaves the car) waits for "hey natee chat"; then a
+ * Gemini app needed. An offline wake-word listener (Vosk, nothing leaves the car) waits for "Quinn" (was "hey natee chat"); then a
  * bubble opens over the screen and the voice goes to Gemini, which answers by voice and text. It can read the car's
  * information and change comfort things only (fan, temperature, A/C, cabin light, sunshade: see CarControl), never
  * anything about driving (user's OK for comfort controls, 2026-11-21).
@@ -217,10 +217,11 @@ public final class AiChat extends Service {
                     org.vosk.LibVosk.setLogLevel(org.vosk.LogLevel.WARNINGS);
                     model = new org.vosk.Model(org.vosk.android.StorageService.sync(this, "vosk-model", "model"));
                 }
-            } catch (Throwable e) { wakeState = "engine couldn't start: " + e.getClass().getSimpleName() + " " + e.getMessage(); status("Hey Natee chat: wake word engine couldn't start (" + e.getClass().getSimpleName() + ")"); return; }
+            } catch (Throwable e) { wakeState = "engine couldn't start: " + e.getClass().getSimpleName() + " " + e.getMessage(); status("Quinn: wake word engine couldn't start (" + e.getClass().getSimpleName() + ")"); return; }
             wakeState = "ready";
             // only these phrases are listened for ("natee" isn't an English word: the nearest sounds stand in for it)
-            String grammar = "[\"hey natty chat\", \"hey nate chat\", \"hey nature chat\", \"hey naughty chat\", \"hey [unk] chat\", \"[unk]\"]";
+            // wake word "Quinn" (Air 2026-11-22, was "hey Natee chat"); the car's English model may hear it as "queen"
+            String grammar = "[\"quinn\", \"hi quinn\", \"hey quinn\", \"queen\", \"hi queen\", \"hey queen\", \"[unk]\"]";
             while (alive) {
                 if (chatting) { sleep(300); continue; }
                 Mic mic = null;
@@ -286,9 +287,8 @@ public final class AiChat extends Service {
 
     private static boolean isWake(String json) {
         if (json == null) return false;
-        String t = json.toLowerCase(java.util.Locale.US);
-        int h = t.indexOf("hey "), c = t.indexOf(" chat");
-        return h >= 0 && c > h;
+        String t = " " + json.toLowerCase(java.util.Locale.US).replaceAll("[^a-z]+", " ") + " ";
+        return t.contains(" quinn ") || t.contains(" queen ");
     }
 
     // ---------------- chat ----------------
@@ -307,7 +307,7 @@ public final class AiChat extends Service {
     private void startChat() {
         if (chatting || !alive) return;
         String key = prefs.aiKey();
-        if (key.isEmpty()) { status("Hey Natee chat: add your Gemini API key in Settings → AI chat"); return; }
+        if (key.isEmpty()) { status("Natee chat: add your Gemini API key in Settings → AI chat"); return; }
         chatting = true; muted = false; ready = false; retries = 0;
         talking = false; activityOpen = false; pendingTalk = true;
         lastActive = System.currentTimeMillis();
