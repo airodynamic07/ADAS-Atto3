@@ -44,9 +44,7 @@ public final class Prefs {
     public void setAiVoice(String v) { p.edit().putString("aiVoice", v).apply(); }
     public String aiLang() { return p.getString("aiLang", "auto"); }
     public void setAiLang(String l) { p.edit().putString("aiLang", l).apply(); }
-    /** Natee chat listens again by itself after every answer (off: only after a question; Air 2026-11-22, echo) */
-    public boolean aiKeepListening() { return p.getBoolean("aiKeepListening", false); }
-    public void setAiKeepListening(boolean on) { p.edit().putBoolean("aiKeepListening", on).apply(); }
+
     public void setSpeedVoice(boolean on) { p.edit().putBoolean("speedVoice", on).apply(); }
 
     /** Graph moving average in metres for the speed / power line: 0 = real time, 100…500; default 200 (user, 2026-11-12). */

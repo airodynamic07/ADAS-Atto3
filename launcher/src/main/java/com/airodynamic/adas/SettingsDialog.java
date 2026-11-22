@@ -177,10 +177,6 @@ public final class SettingsDialog {
             av.addView(Ui.chip(c, vo[1], prefs.aiVoice().equals(vo[0]), th, v -> { prefs.setAiVoice(vo[0]); redo.run(); }), weight(c));
         }
         root.addView(av);
-        LinearLayout ak = row(c);
-        ak.addView(Ui.chip(c, "After an answer: wait for the mic", !prefs.aiKeepListening(), th, v -> { prefs.setAiKeepListening(false); redo.run(); }), weight(c));
-        ak.addView(Ui.chip(c, "Keep listening after answers", prefs.aiKeepListening(), th, v -> { prefs.setAiKeepListening(true); redo.run(); }), weight(c));
-        root.addView(ak);
         // the steering wheel's mic button (user, 2026-11-22): switch the key watcher on, then see what the button sends
         LinearLayout aw = row(c);
         int chosenKey = KeyWatch.store(c).getInt("chosen", -1);
