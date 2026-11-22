@@ -38,7 +38,7 @@ import okio.ByteString;
  * bubble opens over the screen and the voice goes to Gemini, which answers by voice and text. It can read the car's
  * information and change comfort things only (fan, temperature, A/C, cabin light, sunshade: see CarControl), never
  * anything about driving (user's OK for comfort controls, 2026-11-21).
- * Ends with ✕, "bye natee", or 20 s of quiet.
+ * Stays open and listening until the wheel mic button is pressed again, ✕, or "close Natee chat" (Air 2026-11-22).
  */
 public final class AiChat extends Service {
     private static final int IN_RATE = 16000, OUT_RATE = 24000;
@@ -191,7 +191,7 @@ public final class AiChat extends Service {
         if (chatting || !alive) return;
         String key = prefs.aiKey();
         if (key.isEmpty()) { status("Hey Natee chat: add your Gemini API key in Settings → AI chat"); return; }
-        chatting = true; muted = false; ready = false;
+        chatting = true; muted = false; ready = false; retries = 0;
         lastActive = System.currentTimeMillis();
         you.setLength(0); gem.setLength(0); newTurn = true; lastAction = "";
         showBubble();
@@ -208,7 +208,7 @@ public final class AiChat extends Service {
     private final Runnable quietCheck = new Runnable() {
         @Override public void run() {
             if (!chatting) return;
-            if (!speaking && System.currentTimeMillis() - lastActive > QUIET_END_MS) { endChat(); return; }
+            // (Air 2026-11-22) no closing on quiet: it keeps listening until closed by the driver
             main.postDelayed(this, 1000);
         }
     };
@@ -233,6 +233,14 @@ public final class AiChat extends Service {
             if (!ready && idx == modelIdx && modelIdx + 1 < MODELS.length && code != 1006 && code != -1) {   // this model refused: try the next
                 modelIdx++;
                 connect();
+                return;
+            }
+            // Gemini ends a voice session after some minutes, or the network drops: connect again and keep listening
+            if (idx == modelIdx && retries < 3) {
+                retries++;
+                ready = false;
+                setState("reconnecting…");
+                main.postDelayed(() -> { if (chatting) connect(); }, 1500);
                 return;
             }
             setState("couldn't reach Gemini (" + code + (reason == null || reason.isEmpty() ? "" : " " + reason) + ")");
@@ -282,7 +290,8 @@ public final class AiChat extends Service {
                     if (newTurn) { you.setLength(0); gem.setLength(0); lastAction = ""; newTurn = false; }
                     you.append(t); lastActive = System.currentTimeMillis(); showText();
                     String all = you.toString().toLowerCase(java.util.Locale.US);
-                    if (all.contains("bye natee") || all.contains("bye natty") || all.contains("bye nate") || all.contains("บาย")) main.postDelayed(this::endChat, 1500);
+                    if (all.contains("close natee") || all.contains("close natty") || all.contains("close nate") || all.contains("close the chat")
+                            || all.contains("bye natee") || all.contains("ปิดนที") || all.contains("ปิดแชท") || all.contains("ปิด นที")) main.postDelayed(this::endChat, 1500);
                 });
             }
             JSONObject ot = sc.optJSONObject("outputTranscription");
@@ -325,9 +334,13 @@ public final class AiChat extends Service {
     private CarControl control;
     private String lastAction = "";
 
+    private int retries;
+
     private void onReady() {
         if (!chatting) return;
         ready = true;
+        retries = 0;
+        if (micThread != null && micThread.isAlive()) { setState("listening…"); return; }   // reconnected: the mic and speaker keep going
         setState("listening…");
         lastActive = System.currentTimeMillis();
         int ob = Math.max(AudioTrack.getMinBufferSize(OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT), OUT_RATE);
@@ -377,6 +390,7 @@ public final class AiChat extends Service {
         if (ws != null) { try { ws.close(1000, "bye"); } catch (Throwable ignored) { } ws = null; }
         playQ.clear();
         if (track != null) { try { track.stop(); } catch (Throwable ignored) { } track.release(); track = null; }
+        micThread = null; playThread = null;
         try { ((AudioManager) getSystemService(AUDIO_SERVICE)).abandonAudioFocus(focus); } catch (Throwable ignored) { }
         hideBubble();
     }
@@ -422,7 +436,7 @@ public final class AiChat extends Service {
         gemV.setPadding(0, Ui.dp(this, 6), 0, 0);
         gemV.setMaxLines(6);
         box.addView(gemV);
-        TextView hint = Ui.text(this, "talk any time · closes by itself after 20 s of quiet · or say \"bye Natee\"", 12, 0xFF9FB0D0, false);
+        TextView hint = Ui.text(this, "keeps listening · to close: press the wheel mic button, tap ✕, or say \"close Natee chat\"", 12, 0xFF9FB0D0, false);
         hint.setPadding(0, Ui.dp(this, 8), 0, 0);
         box.addView(hint);
         try {
