@@ -148,6 +148,22 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
      * middle = Engine Sound (side camera covers it while signalling), right = Info,
      * and the trip graph along the bottom.
      */
+    /** NATEE Settings on top (Air 2026-11-22: the Ghost Race map covered it): Ghost Race steps back while it's open. */
+    private boolean settingsOpen;
+    private void openSettings() {
+        if (engineHost != null && engineHost.ghostOpen()) {
+            settingsOpen = true;
+            sendBroadcast(new Intent(GhostActivity.ACTION_HIDE).setPackage(getPackageName()));
+        }
+        SettingsDialog.show(this, theme, prefs, this);
+    }
+
+    @Override public void settingsClosed() {
+        if (!settingsOpen) return;
+        settingsOpen = false;
+        if (engineHost != null) engineHost.reshowGhost();
+    }
+
     @Override public void rebuild() {
         for (Panel p : panels) if (p != null) p.setActive(false);
         theme = effectiveTheme();
@@ -274,7 +290,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             hit.setOnClickListener(v -> { prefs.setTheme(t); rebuild(); });
             box.addView(hit, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1f));   // share the width
         }
-        android.widget.Button settings = Ui.chip(this, "⚙", false, th, v -> SettingsDialog.show(this, theme, prefs, this));
+        android.widget.Button settings = Ui.chip(this, "⚙", false, th, v -> openSettings());
         settings.setContentDescription("Settings");
         box.addView(settings, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40)));
         return box;
@@ -283,7 +299,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     @Override protected void onResume() {
         super.onResume();
         // Ghost Race keeps running in its own window (it only ends with its ■ Stop): show it again on top
-        if (engineHost != null) { engineHost.setForeground(true); getWindow().getDecorView().post(engineHost::reshowGhost); }
+        if (engineHost != null) { engineHost.setForeground(true); if (!settingsOpen) getWindow().getDecorView().post(engineHost::reshowGhost); }
         resumed = true;
         CarData.get(this).addListener(this);
         turnCam.setAllowed(true);

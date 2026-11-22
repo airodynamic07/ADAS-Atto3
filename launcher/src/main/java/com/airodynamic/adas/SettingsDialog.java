@@ -12,7 +12,7 @@ import android.widget.TextView;
 public final class SettingsDialog {
     private SettingsDialog() {}
 
-    public interface Host { void rebuild(); void log(String s); }
+    public interface Host { void rebuild(); void log(String s); default void settingsClosed() { } }
 
     public static void show(Context c, Theme th, Prefs prefs, Host host) {
         LinearLayout root = new LinearLayout(c);
@@ -23,7 +23,8 @@ public final class SettingsDialog {
         ScrollView sv = new ScrollView(c);
         sv.addView(root);
         final AlertDialog[] dlg = new AlertDialog[1];
-        Runnable redo = () -> { dlg[0].dismiss(); host.rebuild(); show(c, prefs.theme(), prefs, host); };
+        final boolean[] redoing = {false};
+        Runnable redo = () -> { redoing[0] = true; dlg[0].dismiss(); host.rebuild(); show(c, prefs.theme(), prefs, host); };
 
         section(c, root, th, "Theme");
         LinearLayout themes = row(c);
@@ -266,7 +267,8 @@ public final class SettingsDialog {
         }), weight(c));
         root.addView(up);
 
-        dlg[0] = new AlertDialog.Builder(c).setTitle("Settings").setView(sv).setPositiveButton("Close", null).show();
+        dlg[0] = new AlertDialog.Builder(c).setTitle("Settings").setView(sv).setPositiveButton("Close", null)
+                .setOnDismissListener(d -> { if (!redoing[0]) host.settingsClosed(); }).show();
     }
 
     /** BYD's own ambient colour bar (sampled from the car's settings screen, 2026-11-11), left to right. */

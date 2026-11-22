@@ -20,6 +20,11 @@ public class GhostActivity extends Activity {
     static final String X = "x", Y = "y", W = "w", H = "h", THEME = "theme";
     /** Sent by the launcher when its colour changes (theme dots or Auto Sport). */
     static final String ACTION_THEME = "com.airodynamic.adas.GHOST_THEME";
+    /** NATEE Settings opened: step behind the launcher so Settings isn't covered by the map (Air 2026-11-22) */
+    static final String ACTION_HIDE = "com.airodynamic.adas.GHOST_HIDE";
+    private final android.content.BroadcastReceiver hideRx = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context c, Intent i) { moveTaskToBack(true); }
+    };
     private String baseUrl;
     private FrameLayout frame;
     /** Window frame in the launcher's colour: blue, red, or black for the white theme (user, 2026-11-12). */
@@ -188,6 +193,7 @@ public class GhostActivity extends Activity {
             baseUrl = EngineHost.GHOST_URL + "?natee=1&natee-theme=" + (t == null ? "blue" : t);
             gecko = new GeckoGhost(this, baseUrl, density);
             registerReceiver(themeRx, new android.content.IntentFilter(ACTION_THEME));
+            registerReceiver(hideRx, new android.content.IntentFilter(ACTION_HIDE));
             root.addView(gecko.view(), new FrameLayout.LayoutParams(-1, -1));
         } catch (Throwable t) {
             TextView err = Ui.text(this, "Firefox engine didn't start (" + t.getClass().getSimpleName() + ")\n"
@@ -274,6 +280,7 @@ public class GhostActivity extends Activity {
 
     @Override protected void onDestroy() {
         try { unregisterReceiver(themeRx); } catch (Exception ignored) { }
+        try { unregisterReceiver(hideRx); } catch (Exception ignored) { }
         if (netCb != null) try { ((android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE)).unregisterNetworkCallback(netCb); } catch (Exception ignored) { }
         if (gecko != null) gecko.close();
         super.onDestroy();
