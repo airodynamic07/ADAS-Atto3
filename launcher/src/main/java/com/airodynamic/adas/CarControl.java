@@ -51,6 +51,8 @@ final class CarControl {
                 + " is stuck'), or an idea for a new function ('idea: show the charging time on the dashboard').", rp));
         f.put(fn("navigate", "Start Google Maps navigation to a place: an address, a place name, or 'home' / 'work' (the driver's saved places).",
                 props("destination", "string", "where to go, e.g. home, Central World, a full address")));
+        f.put(fn("youtube_video", "Search and open a YouTube video (only when the car is parked in P; while driving say it opens only in P).",
+                props("query", "string", "what to search for, e.g. Radiohead Creep live")));
         f.put(fn("music", "Control the music: play, pause, next or previous song, or play something by name.", mp));
         return new JSONArray().put(new JSONObject().put("functionDeclarations", f));
     }
@@ -85,6 +87,7 @@ final class CarControl {
                     return res(true, "saved; the driver can find it in Settings → Problems → Voice reports & ideas and send a photo to Claude");
                 }
                 case "navigate": return navigate(a.optString("destination", ""));
+                case "youtube_video": return youtube(a.optString("query", ""));
                 case "open_app": return openApp(a.optString("name", ""));
                 case "music": return music(a.optString("action", ""), a.optString("query", ""));
                 default: return res(false, "unknown tool " + name);
@@ -245,6 +248,27 @@ final class CarControl {
             return res(true, "navigating to " + q + " in " + Apps.label(c, p) + (q.equals("Home") || q.equals("Work") ? " (uses the Home/Work saved in Google Maps)" : ""));
         }
         return res(false, "Google Maps isn't installed");
+    }
+
+    /** YouTube search, opened full screen: only in P (the project's rule: video only when parked). */
+    private JSONObject youtube(String query) throws Exception {
+        if (query.trim().isEmpty()) return res(false, "which video?");
+        if (!CarData.get(c).last().parked()) return res(false, "videos open only in P; ask again when parked");
+        android.net.Uri u = android.net.Uri.parse("https://www.youtube.com/results?search_query=" + android.net.Uri.encode(query));
+        for (String p : new String[]{"com.gbox.com.google.android.youtube", "com.google.android.youtube"}) {
+            if (!Apps.installed(c, p)) continue;
+            final android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, u).setPackage(p)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (c.getPackageManager().resolveActivity(i, 0) == null) {
+                // this copy doesn't take links: open its search instead
+                final android.content.Intent s2 = new android.content.Intent(android.content.Intent.ACTION_SEARCH).setPackage(p)
+                        .putExtra(android.app.SearchManager.QUERY, query).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (c.getPackageManager().resolveActivity(s2, 0) == null) continue;
+                main.post(() -> { try { c.startActivity(s2); } catch (Throwable ignored) { } });
+            } else main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
+            return res(true, "opening YouTube: " + query);
+        }
+        return res(false, "YouTube isn't installed");
     }
 
     private static String norm(String s) { return s == null ? "" : s.toLowerCase(Locale.US).replaceAll("[^a-z0-9ก-๙]", ""); }
