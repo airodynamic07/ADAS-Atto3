@@ -292,6 +292,16 @@ final class CarControl {
                 main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
                 return res(true, "asked YouTube Music to play " + query);
             }
+            // this YouTube Music doesn't take "search and play": open its search page for it (one tap to play)
+            for (String y : MusicCard.YTM) {
+                if (!Apps.installed(c, y)) continue;
+                final android.content.Intent v = new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://music.youtube.com/search?q=" + android.net.Uri.encode(query)))
+                        .setPackage(y).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (c.getPackageManager().resolveActivity(v, 0) == null) continue;
+                main.post(() -> { try { c.startActivity(v); } catch (Throwable ignored) { } });
+                return res(true, "opened YouTube Music's search for " + query + " (tap a song to play)");
+            }
         }
         android.media.session.MediaController mc = musicSession();
         if (mc == null) {
@@ -309,6 +319,9 @@ final class CarControl {
             case "previous": case "back": t.skipToPrevious(); return res(true, "previous song");
             default:
                 if (query.isEmpty()) return res(false, "what should I play?");
+                boolean ytm = false;
+                for (String y : MusicCard.YTM) ytm |= y.equals(mc.getPackageName());
+                if (!ytm) return res(false, "YouTube Music couldn't be asked to play it; open YouTube Music and ask again");
                 t.playFromSearch(query, new android.os.Bundle());
                 return res(true, "asked " + Apps.label(c, mc.getPackageName()) + " to play " + query + " (some apps don't support this)");
         }
