@@ -398,6 +398,7 @@ public final class AiChat extends Service {
     // ---------------- bubble over the screen ----------------
     private View bubble;
     private TextView stateV, youV, gemV;
+    private android.widget.ScrollView talkScroll;
 
     private void showBubble() {
         if (bubble != null) return;
@@ -429,23 +430,31 @@ public final class AiChat extends Service {
         cl.leftMargin = Ui.dp(this, 6);
         head.addView(close, cl);
         box.addView(head);
-        youV = Ui.text(this, "", 15, 0xFFFFFFFF, false);
-        youV.setPadding(0, Ui.dp(this, 8), 0, 0);
-        box.addView(youV);
-        gemV = Ui.text(this, "Say something…", 15, 0xFFFFFFFF, false);
-        gemV.setPadding(0, Ui.dp(this, 6), 0, 0);
-        gemV.setMaxLines(6);
-        box.addView(gemV);
+        // the chat text fills the box and scrolls (the box is as big as the Engine Sound window)
+        LinearLayout talk = new LinearLayout(this);
+        talk.setOrientation(LinearLayout.VERTICAL);
+        youV = Ui.text(this, "", 18, 0xFFFFFFFF, false);
+        youV.setPadding(0, Ui.dp(this, 10), 0, 0);
+        talk.addView(youV);
+        gemV = Ui.text(this, "Say something…", 18, 0xFFFFFFFF, false);
+        gemV.setPadding(0, Ui.dp(this, 8), 0, 0);
+        talk.addView(gemV);
+        talkScroll = new android.widget.ScrollView(this);
+        talkScroll.addView(talk);
+        box.addView(talkScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
         TextView hint = Ui.text(this, "keeps listening · to close: press the wheel mic button, tap ✕, or say \"close Natee chat\"", 12, 0xFF9FB0D0, false);
         hint.setPadding(0, Ui.dp(this, 8), 0, 0);
         box.addView(hint);
         try {
             WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
             @SuppressWarnings("deprecation") int type = WindowManager.LayoutParams.TYPE_PHONE;
-            WindowManager.LayoutParams lp = new WindowManager.LayoutParams(Ui.dp(this, 520), -2, type,
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT);
-            lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-            lp.y = Ui.dp(this, 90);
+            // same size and place as the launcher's Engine Sound window (Air 2026-11-22); before it's known: centred
+            android.content.SharedPreferences r = getSharedPreferences("chat_box", MODE_PRIVATE);
+            int w = r.getInt("w", Ui.dp(this, 520)), h = r.getInt("h", Ui.dp(this, 360));
+            WindowManager.LayoutParams lp = new WindowManager.LayoutParams(w, h, type,
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT);
+            if (r.contains("x")) { lp.gravity = Gravity.TOP | Gravity.START; lp.x = r.getInt("x", 0); lp.y = r.getInt("y", 0); }
+            else { lp.gravity = Gravity.CENTER; }
             wm.addView(box, lp);
             bubble = box;
         } catch (Throwable e) {
@@ -476,6 +485,7 @@ public final class AiChat extends Service {
         }
         if (lastAction.length() > 0) b.append(b.length() > 0 ? "\n" : "").append("✓ " + lastAction, new android.text.style.ForegroundColorSpan(0xFF2EE59D), 0);
         gemV.setText(b);
+        if (talkScroll != null) talkScroll.post(() -> talkScroll.fullScroll(View.FOCUS_DOWN));
     }
 
     private void status(String s) { main.post(() -> android.widget.Toast.makeText(this, s, android.widget.Toast.LENGTH_LONG).show()); }

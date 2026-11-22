@@ -197,6 +197,14 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             first = false;
             row.addView(frames[i], lp);
         }
+        // remember where the Engine Sound window is: the Natee chat box opens there, the same size (Air 2026-11-22)
+        if (!wide) frames[1].addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            if (v.getWidth() <= 0) return;
+            int[] loc = new int[2];
+            v.getLocationOnScreen(loc);
+            getSharedPreferences("chat_box", MODE_PRIVATE).edit().putInt("x", loc[0]).putInt("y", loc[1])
+                    .putInt("w", v.getWidth()).putInt("h", v.getHeight()).apply();
+        });
         engineHost().addGhostClose(th);
         if (routeOpen && !wide) showRoute();   // stays open across a theme change
         if (historyOpen) showHistory();
