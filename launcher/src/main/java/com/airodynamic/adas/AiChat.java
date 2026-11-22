@@ -497,7 +497,22 @@ public final class AiChat extends Service {
     }
 
     // ---------------- bubble over the screen ----------------
-    private View bubble;
+    private View bubble, levelBar;
+    private float shownLevel;
+
+    private final Runnable levelTick = new Runnable() {
+        @Override public void run() {
+            if (levelBar == null || bubble == null) return;
+            float want = talking && !muted ? Math.min(1f, Math.max(0, micLevel) / 60f) : 0f;
+            shownLevel += (want - shownLevel) * 0.5f;   // quick but not jumpy
+            View parent = (View) levelBar.getParent();
+            int w = parent == null ? 0 : (int) (parent.getWidth() * shownLevel);
+            android.view.ViewGroup.LayoutParams lp = levelBar.getLayoutParams();
+            if (lp.width != w) { lp.width = w; levelBar.setLayoutParams(lp); }
+            levelBar.setBackground(Ui.round(activityOpen ? C_HEAR : C_LISTEN, 0, 4, AiChat.this));
+            main.postDelayed(this, 80);
+        }
+    };
     private android.graphics.drawable.GradientDrawable bubbleBg;
 
     /** Border + state colour: blue listening, green I hear you, purple answering, orange say it again. */
@@ -539,6 +554,16 @@ public final class AiChat extends Service {
         cl.leftMargin = Ui.dp(this, 6);
         head.addView(close, cl);
         box.addView(head);
+        // live sound bar (Air 2026-11-22): moves with your voice the moment the microphone hears it
+        android.widget.FrameLayout barBox = new android.widget.FrameLayout(this);
+        barBox.setBackground(Ui.round(0x33FFFFFF, 0, 4, this));
+        levelBar = new View(this);
+        levelBar.setBackground(Ui.round(C_HEAR, 0, 4, this));
+        barBox.addView(levelBar, new android.widget.FrameLayout.LayoutParams(0, -1));
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 8));
+        bl.topMargin = Ui.dp(this, 8);
+        box.addView(barBox, bl);
+        main.post(levelTick);
         // the chat text fills the box and scrolls (the box is as big as the Engine Sound window)
         LinearLayout talk = new LinearLayout(this);
         talk.setOrientation(LinearLayout.VERTICAL);
@@ -575,6 +600,8 @@ public final class AiChat extends Service {
         if (bubble == null) return;
         try { ((WindowManager) getSystemService(WINDOW_SERVICE)).removeView(bubble); } catch (Throwable ignored) { }
         bubble = null;
+        levelBar = null;
+        main.removeCallbacks(levelTick);
     }
 
     private void setState(String s) { if (stateV != null) stateV.setText("  · " + s); }
