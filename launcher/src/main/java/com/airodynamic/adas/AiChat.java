@@ -92,9 +92,11 @@ public final class AiChat extends Service {
     private boolean silentStart;   // listening again after an answer: no beep
 
     private void pressMic() {
-        if (!chatting) { startChat(); return; }   // opens, and starts listening as soon as Gemini is connected
-        if (talking) { pressedFinish = true; finishTalk(); pressedFinish = false; } else startTalk();
+        if (!chatting) { byPress = true; startChat(); return; }   // opens, and starts listening as soon as Gemini is connected
+        if (talking) { pressedFinish = true; finishTalk(); pressedFinish = false; } else { byPress = true; startTalk(); }
     }
+    /** this turn was started with the mic button: everything is sent, no voice check (Air 2026-11-22: it closed while talking) */
+    private volatile boolean byPress;
     private volatile boolean wordsThisTurn, dropReply, pressedFinish;
     private volatile String lastAnswer = "";
 
@@ -166,6 +168,7 @@ public final class AiChat extends Service {
             return;
         }
         silentStart = true;
+        byPress = false;
         startTalk();
         look(C_LISTEN, askedQuestion() ? "listening for your answer…" : "listening… (closes in 10 s if you say nothing)");
         main.removeCallbacks(noAnswer);
@@ -228,7 +231,7 @@ public final class AiChat extends Service {
                         boolean fin = r.acceptWaveForm(b, n);
                         String txt = fin ? r.getResult() : r.getPartialResult();
                         if (fin) { String h = heard(txt); if (!h.isEmpty()) lastHeard = h; }
-                        if (isWake(txt)) { r.reset(); main.post(() -> { autoEnd = true; if (chatting) startTalk(); else startChat(); }); break; }
+                        if (isWake(txt)) { r.reset(); main.post(() -> { autoEnd = true; byPress = false; if (chatting) startTalk(); else startChat(); }); break; }
                     }
                 } catch (Throwable e) {
                     wakeState = "error: " + e.getClass().getSimpleName();
@@ -513,23 +516,27 @@ public final class AiChat extends Service {
                             + Base64.encodeToString(out, Base64.NO_WRAP) + "\"}}}";
                     WebSocket s = ws;
                     if (!talking || muted || s == null) { pre.clear(); continue; }
+                    boolean someVoice = lv > Math.max(5, floor * 1.6 + 4);   // loose: for "you've stopped talking"
                     if (!activityOpen) {
                         pre.addLast(msg);
                         if (pre.size() > 3) pre.removeFirst();
-                        if (!voice) continue;
+                        if (!voice && !byPress) continue;   // pressed: you said you're talking, everything is sent
                         wordsThisTurn = false;
                         // your voice: tell Gemini you started, with the moment just before
                         activityOpen = true; heard = true;
                         if (manual) s.send("{\"realtimeInput\":{\"activityStart\":{}}}");
                         while (!pre.isEmpty()) s.send(pre.removeFirst());
-                        lastVoiceAt = System.currentTimeMillis();
-                        main.post(() -> { if (talking) look(C_HEAR, "I hear you · press the mic when you've finished"); });
+                        lastVoiceAt = voice || someVoice ? System.currentTimeMillis() : 0;
+                        if (voice || someVoice) main.post(() -> { if (talking) look(C_HEAR, "I hear you · press the mic when you've finished"); });
                         continue;
                     }
                     s.send(msg);
-                    if (loud) lastVoiceAt = System.currentTimeMillis();
-                    // started with "hey Natee chat": a short pause ends it by itself
-                    else if (System.currentTimeMillis() - lastVoiceAt > 2000) main.post(this::finishTalk);   // 2 s quiet = finished (or press the mic)
+                    if (byPress ? someVoice : loud) {
+                        if (lastVoiceAt == 0) main.post(() -> { if (talking) look(C_HEAR, "I hear you · press the mic when you've finished"); });
+                        lastVoiceAt = System.currentTimeMillis();
+                    }
+                    // 2 s quiet after your voice = finished (or press the mic); never before any voice was heard
+                    else if (lastVoiceAt > 0 && System.currentTimeMillis() - lastVoiceAt > 2000) main.post(this::finishTalk);
                 }
             } catch (Throwable ignored) {
             } finally { if (mic != null) mic.close(); }
