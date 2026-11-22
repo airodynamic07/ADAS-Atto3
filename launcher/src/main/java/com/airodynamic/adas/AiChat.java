@@ -93,8 +93,9 @@ public final class AiChat extends Service {
 
     private void pressMic() {
         if (!chatting) { startChat(); return; }   // opens, and starts listening as soon as Gemini is connected
-        if (talking) finishTalk(); else startTalk();
+        if (talking) { pressedFinish = true; finishTalk(); pressedFinish = false; } else startTalk();
     }
+    private volatile boolean wordsThisTurn, dropReply, pressedFinish;
 
     private void startTalk() {
         main.removeCallbacks(hideLater);
@@ -117,6 +118,13 @@ public final class AiChat extends Service {
             activityOpen = false;
             WebSocket s = ws;
             if (s != null && manual) s.send("{\"realtimeInput\":{\"activityEnd\":{}}}");
+            if (!wordsThisTurn && !pressedFinish) {
+                // only noise (no words came back): whatever Gemini says to it is dropped, and it keeps waiting quietly
+                dropReply = true;
+                talking = true; heard = false;
+                look(C_LISTEN, "listening… (closes in 10 s if you say nothing)");
+                return;
+            }
             look(C_ANSWER, "answering…");
         } else {
             look(C_REPEAT, "didn't hear you: say it again (or press the mic)");
@@ -131,6 +139,11 @@ public final class AiChat extends Service {
      *  press the mic when you've finished, or a 2 s pause finishes it. Nothing said within 10 s: it closes. */
     private void answerDone() {
         if (talking || !chatting) return;
+        main.postDelayed(this::listenAgain, 800);   // a moment after Gemini's voice, so it doesn't hear itself
+    }
+
+    private void listenAgain() {
+        if (talking || !chatting || speaking || !playQ.isEmpty()) return;
         silentStart = true;
         startTalk();
         look(C_LISTEN, askedQuestion() ? "listening for your answer…" : "listening… (closes in 10 s if you say nothing)");
@@ -348,6 +361,8 @@ public final class AiChat extends Service {
                             + " reports something not working or has an idea for a new function. Never anything about driving."
                             + " Understand casual requests (\"too hot\" = temperature down 1-2 degrees or fan up). After a change,"
                             + " say in a few words what you did (\"Fan 4.\"); if the result says it failed, say so plainly."
+                            + " If what you hear is only noise, music, silence or no clear words, do not answer at all: stay silent."
+                            + " Don't ask \"anything else?\" after every answer."
                             + " Before opening or closing the sunshade or the sunroof, ask the driver to confirm, and only call it after a yes. The sunshade is the cloth under the glass; the sunroof is the glass itself: never mix them up. " + li)));
             JSONObject setup = new JSONObject().put("model", model).put("generationConfig", gen).put("systemInstruction", sys)
                     .put("inputAudioTranscription", new JSONObject()).put("outputAudioTranscription", new JSONObject())
@@ -373,6 +388,7 @@ public final class AiChat extends Service {
                 main.post(() -> {
                     if (newTurn) { you.setLength(0); gem.setLength(0); lastAction = ""; newTurn = false; }
                     you.append(t); lastActive = System.currentTimeMillis(); showText();
+                    if (t.trim().length() > 0 && !t.trim().startsWith("<")) wordsThisTurn = true;   // "<noise>" isn't words
                     if (talking) look(C_HEAR, "I hear you · press the mic when you've finished");
                     String all = you.toString().toLowerCase(java.util.Locale.US);
                     // "close <any spelling of Natee> chat" / "ปิด…แชท" (the name is written differently each time)
@@ -384,17 +400,18 @@ public final class AiChat extends Service {
             JSONObject ot = sc.optJSONObject("outputTranscription");
             if (ot != null && ot.optString("text").length() > 0) {
                 final String t = ot.optString("text");
-                main.post(() -> { if (newTurn) { you.setLength(0); gem.setLength(0); newTurn = false; } gem.append(t); showText(); });
+                if (!dropReply) main.post(() -> { if (newTurn) { you.setLength(0); gem.setLength(0); newTurn = false; } gem.append(t); showText(); });
             }
             JSONObject mt = sc.optJSONObject("modelTurn");
             if (mt != null) {
                 JSONArray parts = mt.optJSONArray("parts");
                 for (int i = 0; parts != null && i < parts.length(); i++) {
                     JSONObject d = parts.getJSONObject(i).optJSONObject("inlineData");
-                    if (d != null && d.optString("mimeType").startsWith("audio")) playQ.offer(Base64.decode(d.getString("data"), Base64.DEFAULT));
+                    if (d != null && d.optString("mimeType").startsWith("audio") && !dropReply) playQ.offer(Base64.decode(d.getString("data"), Base64.DEFAULT));
                 }
             }
             if (sc.optBoolean("interrupted")) playQ.clear();
+            if (sc.optBoolean("turnComplete") && dropReply) { dropReply = false; return; }
             if (sc.optBoolean("turnComplete")) main.post(() -> { newTurn = true; lastActive = System.currentTimeMillis(); if (playQ.isEmpty() && !speaking) answerDone(); });
         } catch (Exception ignored) { }
     }
@@ -456,6 +473,7 @@ public final class AiChat extends Service {
                 short[] b = new short[1600];   // 0.1 s at 16 kHz
                 java.util.ArrayDeque<String> pre = new java.util.ArrayDeque<>();   // the 0.3 s before your voice starts
                 double floor = 4;                                                    // the car's own noise (fan, road)
+                int voiced = 0;
                 while (chatting) {
                     int n = mic.read16k(b);
                     if (n <= 0) continue;
@@ -463,7 +481,9 @@ public final class AiChat extends Service {
                     int lv = (int) Math.min(100, sum / n * 100 / 3000);
                     micLevel = lv;
                     if (!activityOpen) floor = floor * 0.97 + Math.min(lv, floor + 8) * 0.03;
-                    boolean voice = lv > Math.max(5, floor * 1.6 + 4);
+                    boolean loud = lv > Math.max(8, floor * 2 + 6);
+                    voiced = loud ? voiced + 1 : 0;
+                    boolean voice = voiced >= 3;   // 0.3 s of clear voice, not a bump of road noise
                     byte[] out = new byte[n * 2];
                     for (int k = 0; k < n; k++) { out[2 * k] = (byte) b[k]; out[2 * k + 1] = (byte) (b[k] >> 8); }   // 16-bit little-endian
                     String msg = "{\"realtimeInput\":{\"audio\":{\"mimeType\":\"audio/pcm;rate=16000\",\"data\":\""
@@ -474,6 +494,7 @@ public final class AiChat extends Service {
                         pre.addLast(msg);
                         if (pre.size() > 3) pre.removeFirst();
                         if (!voice) continue;
+                        wordsThisTurn = false;
                         // your voice: tell Gemini you started, with the moment just before
                         activityOpen = true; heard = true;
                         if (manual) s.send("{\"realtimeInput\":{\"activityStart\":{}}}");
@@ -483,7 +504,7 @@ public final class AiChat extends Service {
                         continue;
                     }
                     s.send(msg);
-                    if (voice) lastVoiceAt = System.currentTimeMillis();
+                    if (loud) lastVoiceAt = System.currentTimeMillis();
                     // started with "hey Natee chat": a short pause ends it by itself
                     else if (System.currentTimeMillis() - lastVoiceAt > 2000) main.post(this::finishTalk);   // 2 s quiet = finished (or press the mic)
                 }
