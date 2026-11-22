@@ -96,6 +96,19 @@ public final class AiChat extends Service {
         if (talking) { pressedFinish = true; finishTalk(); pressedFinish = false; } else startTalk();
     }
     private volatile boolean wordsThisTurn, dropReply, pressedFinish;
+    private volatile String lastAnswer = "";
+
+    /** Gemini's own voice coming back through the microphone (Air 2026-11-22: "you: ok ค่ะ" five times): a lone
+     *  short filler word, or words Gemini itself just said. Only for turns that ended by themselves, never a press. */
+    private boolean isEcho() {
+        String y = you.toString().trim().toLowerCase(java.util.Locale.US).replaceAll("[\\s.,!?]+", " ").trim();
+        if (y.isEmpty()) return true;
+        String bare = y.replace(" ", "");
+        String[] fillers = {"ok", "okay", "ค่ะ", "คะ", "ครับ", "นะคะ", "okค่ะ", "okayค่ะ", "โอเค", "โอเคค่ะ", "ใช่", "อืม", "yes", "yeah", "mm"};
+        for (String f : fillers) if (bare.equals(f)) return true;
+        String g = (lastAnswer + gem).toLowerCase(java.util.Locale.US).replace(" ", "");
+        return bare.length() >= 2 && g.contains(bare);
+    }
 
     private void startTalk() {
         main.removeCallbacks(hideLater);
@@ -118,7 +131,7 @@ public final class AiChat extends Service {
             activityOpen = false;
             WebSocket s = ws;
             if (s != null && manual) s.send("{\"realtimeInput\":{\"activityEnd\":{}}}");
-            if (!wordsThisTurn && !pressedFinish) {
+            if ((!wordsThisTurn || isEcho()) && !pressedFinish) {
                 // only noise (no words came back): whatever Gemini says to it is dropped, and it keeps waiting quietly
                 dropReply = true;
                 talking = true; heard = false;
@@ -139,7 +152,7 @@ public final class AiChat extends Service {
      *  press the mic when you've finished, or a 2 s pause finishes it. Nothing said within 10 s: it closes. */
     private void answerDone() {
         if (talking || !chatting) return;
-        main.postDelayed(this::listenAgain, 800);   // a moment after Gemini's voice, so it doesn't hear itself
+        main.postDelayed(this::listenAgain, 1500);   // after Gemini's voice has really left the speakers (it heard itself at 0.8 s)
     }
 
     private void listenAgain() {
@@ -412,7 +425,7 @@ public final class AiChat extends Service {
             }
             if (sc.optBoolean("interrupted")) playQ.clear();
             if (sc.optBoolean("turnComplete") && dropReply) { dropReply = false; return; }
-            if (sc.optBoolean("turnComplete")) main.post(() -> { newTurn = true; lastActive = System.currentTimeMillis(); if (playQ.isEmpty() && !speaking) answerDone(); });
+            if (sc.optBoolean("turnComplete")) main.post(() -> { lastAnswer = gem.toString(); newTurn = true; lastActive = System.currentTimeMillis(); if (playQ.isEmpty() && !speaking) answerDone(); });
         } catch (Exception ignored) { }
     }
 
