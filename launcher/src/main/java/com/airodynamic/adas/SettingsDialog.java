@@ -180,6 +180,8 @@ public final class SettingsDialog {
         LinearLayout aw = row(c);
         int chosenKey = KeyWatch.store(c).getInt("chosen", -1);
         aw.addView(Ui.chip(c, "Wake word check ›", false, th, v -> wakeCheck(c)), weight(c));
+        boolean permOk = AiChat.micAllowed(c) && AiChat.overlayAllowed(c);
+        aw.addView(Ui.chip(c, permOk ? "Permissions: OK" : "Fix permissions ›", false, th, v -> fixPerms(c)), weight(c));
         aw.addView(Ui.chip(c, "Wheel mic button: " + (chosenKey >= 0 ? "key " + chosenKey : "usual voice keys") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
         root.addView(aw);
 
@@ -382,6 +384,34 @@ public final class SettingsDialog {
         }).start();
     }
 
+    /** Microphone + floating windows for Natee chat and the side camera: through the car's ADB, else Android's own pages. */
+    private static void fixPerms(Context c) {
+        android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+        android.widget.Toast.makeText(c, "Giving NATEE the microphone and floating windows… if the car asks 'Allow USB debugging?', tick Always allow + OK", android.widget.Toast.LENGTH_LONG).show();
+        new Thread(() -> {
+            String err = AiChat.fixPermissions(c);
+            ui.postDelayed(() -> {
+                boolean mic = AiChat.micAllowed(c), ov = AiChat.overlayAllowed(c);
+                if (mic && ov) {
+                    android.widget.Toast.makeText(c, "Done: microphone and floating windows allowed", android.widget.Toast.LENGTH_LONG).show();
+                    AiChat.sync(c);
+                    return;
+                }
+                // ADB didn't work: open Android's own pages so the switch can be turned on by hand
+                try {
+                    if (!ov) c.startActivity(new android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            android.net.Uri.parse("package:" + c.getPackageName())).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+                    else c.startActivity(new android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.parse("package:" + c.getPackageName())).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+                    android.widget.Toast.makeText(c, (ov ? "Turn on Microphone under Permissions" : "Turn on 'Display over other apps'")
+                            + (err.isEmpty() ? "" : " (" + err + ")"), android.widget.Toast.LENGTH_LONG).show();
+                } catch (Throwable t) {
+                    android.widget.Toast.makeText(c, "Couldn't open the permission page (" + err + ")", android.widget.Toast.LENGTH_LONG).show();
+                }
+            }, 800);
+        }).start();
+    }
+
     /** Live: is the wake-word listener running, how loud is the microphone, what did it hear (send a photo to Claude). */
     private static void wakeCheck(Context c) {
         TextView t = Ui.text(c, "", 15, 0xFFFFFFFF, false);
@@ -392,7 +422,8 @@ public final class SettingsDialog {
                 int lv = AiChat.micLevel;
                 StringBuilder bar = new StringBuilder();
                 for (int i = 0; i < 20; i++) bar.append(lv >= 0 && i < lv / 5 ? "█" : "·");
-                t.setText("Wake word: " + AiChat.wakeState
+                t.setText("Microphone permission: " + (AiChat.micAllowed(c) ? "yes" : "NO") + " · floating window permission: " + (AiChat.overlayAllowed(c) ? "yes" : "NO")
+                        + "\nWake word: " + AiChat.wakeState
                         + "\nMicrophone: " + (lv < 0 ? "–" : lv + "  " + bar)
                         + "\nLast heard: " + (AiChat.lastHeard.isEmpty() ? "–" : "\"" + AiChat.lastHeard + "\"")
                         + "\n\nSay \"Hey Natee chat\" and watch the microphone bar. If it stays at 0 while you talk, another app"

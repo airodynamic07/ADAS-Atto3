@@ -69,6 +69,7 @@ public final class AiChat extends Service {
         prefs = new Prefs(this);
         control = new CarControl(this);
         alive = true;
+        if (!micAllowed(this) || !overlayAllowed(this)) new Thread(() -> fixPermissions(this)).start();
         startWake();
     }
 
@@ -105,17 +106,16 @@ public final class AiChat extends Service {
             String grammar = "[\"hey natty chat\", \"hey nate chat\", \"hey nature chat\", \"hey naughty chat\", \"hey [unk] chat\", \"[unk]\"]";
             while (alive) {
                 if (chatting) { sleep(300); continue; }
-                AudioRecord rec = null;
+                Mic mic = null;
                 try (org.vosk.Recognizer r = new org.vosk.Recognizer(model, IN_RATE, grammar)) {
-                    int buf = Math.max(AudioRecord.getMinBufferSize(IN_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), 6400);
-                    rec = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, IN_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, buf);
-                    if (rec.getState() != AudioRecord.STATE_INITIALIZED) { wakeState = "microphone busy (another app has it)"; rec.release(); rec = null; sleep(10_000); continue; }   // microphone busy: try again later
-                    wakeState = "listening";
-                    rec.startRecording();
-                    short[] b = new short[1600];   // 0.1 s
+                    if (!micAllowed(this)) { wakeState = "no microphone permission: Settings → AI chat → Fix permissions"; sleep(10_000); continue; }
+                    mic = Mic.open(false);
+                    if (mic == null) { wakeState = "microphone busy or refused (" + Mic.lastError + ")"; sleep(10_000); continue; }   // try again later
+                    wakeState = "listening · " + mic.desc;
+                    short[] b = new short[1600];   // 0.1 s at 16 kHz
                     while (alive && !chatting) {
-                        int n = rec.read(b, 0, b.length);
-                        if (n <= 0) { sleep(200); continue; }
+                        int n = mic.read16k(b);
+                        if (n <= 0) { sleep(50); continue; }
                         long sum = 0; for (int k = 0; k < n; k++) sum += Math.abs(b[k]);
                         micLevel = (int) Math.min(100, sum / n * 100 / 3000);   // 0 = silence; talking normally ≈ 20–80
                         boolean fin = r.acceptWaveForm(b, n);
@@ -124,9 +124,10 @@ public final class AiChat extends Service {
                         if (isWake(txt)) { r.reset(); main.post(this::startChat); break; }
                     }
                 } catch (Throwable e) {
+                    wakeState = "error: " + e.getClass().getSimpleName();
                     sleep(5000);
                 } finally {
-                    if (rec != null) { try { rec.stop(); } catch (Throwable ignored) { } rec.release(); }
+                    if (mic != null) mic.close();
                 }
             }
         }, "hey-natee");
@@ -136,6 +137,31 @@ public final class AiChat extends Service {
     /** For Settings → AI chat → Wake word check (2026-11-22: "Hey Natee chat, nothing happens"). */
     static volatile String wakeState = "not started (AI chat off?)", lastHeard = "";
     static volatile int micLevel = -1;
+
+    static boolean micAllowed(Context c) {
+        return c.checkCallingOrSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                && appOpAllowed(c, "android:record_audio");
+    }
+
+    static boolean overlayAllowed(Context c) {
+        try { return android.provider.Settings.canDrawOverlays(c); } catch (Throwable e) { return true; }
+    }
+
+    private static boolean appOpAllowed(Context c, String op) {
+        try {
+            android.app.AppOpsManager ao = (android.app.AppOpsManager) c.getSystemService(Context.APP_OPS_SERVICE);
+            return ao.checkOpNoThrow(op, android.os.Process.myUid(), c.getPackageName()) == android.app.AppOpsManager.MODE_ALLOWED;
+        } catch (Throwable e) { return true; }
+    }
+
+    /** Gives NATEE the microphone and the floating windows through the car's own ADB. Returns what happened. */
+    static String fixPermissions(Context c) {
+        String p = c.getPackageName();
+        try {
+            Updater.adbShell(c, "pm grant " + p + " android.permission.RECORD_AUDIO; appops set " + p + " RECORD_AUDIO allow; appops set " + p + " SYSTEM_ALERT_WINDOW allow");
+        } catch (Exception e) { return "adb: " + e.getClass().getSimpleName(); }
+        return "";
+    }
 
     private static String heard(String json) {
         try { return new JSONObject(json).optString("text", "").trim(); } catch (Exception e) { return ""; }
@@ -320,26 +346,26 @@ public final class AiChat extends Service {
         }, "natee-play");
         playThread.start();
         micThread = new Thread(() -> {
-            AudioRecord rec = null;
+            Mic mic = null;
             try {
-                int buf = Math.max(AudioRecord.getMinBufferSize(IN_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), 6400);
-                rec = new AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, IN_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, buf);
-                if (rec.getState() != AudioRecord.STATE_INITIALIZED) { main.post(() -> setState("microphone busy")); return; }
-                try { if (android.media.audiofx.AcousticEchoCanceler.isAvailable()) android.media.audiofx.AcousticEchoCanceler.create(rec.getAudioSessionId()).setEnabled(true); } catch (Throwable ignored) { }
-                rec.startRecording();
-                byte[] b = new byte[3200];   // 0.1 s
+                mic = Mic.open(true);
+                if (mic == null) { main.post(() -> setState("microphone busy (" + Mic.lastError + ")")); return; }
+                try { if (android.media.audiofx.AcousticEchoCanceler.isAvailable()) android.media.audiofx.AcousticEchoCanceler.create(mic.rec.getAudioSessionId()).setEnabled(true); } catch (Throwable ignored) { }
+                short[] b = new short[1600];   // 0.1 s at 16 kHz
+                byte[] out = new byte[3200];
                 byte[] quiet = new byte[3200];
                 while (chatting) {
-                    int n = rec.read(b, 0, b.length);
+                    int n = mic.read16k(b);
                     if (n <= 0) continue;
+                    for (int k = 0; k < n; k++) { out[2 * k] = (byte) b[k]; out[2 * k + 1] = (byte) (b[k] >> 8); }   // 16-bit little-endian
                     // while Gemini talks (and when muted) silence is sent, so it doesn't hear itself through the speakers
-                    byte[] send = muted || speaking ? quiet : b;
+                    byte[] send = muted || speaking ? quiet : out;
                     WebSocket s = ws;
                     if (s != null) s.send("{\"realtimeInput\":{\"audio\":{\"mimeType\":\"audio/pcm;rate=16000\",\"data\":\""
-                            + Base64.encodeToString(send, 0, n, Base64.NO_WRAP) + "\"}}}");
+                            + Base64.encodeToString(send, 0, n * 2, Base64.NO_WRAP) + "\"}}}");
                 }
             } catch (Throwable ignored) {
-            } finally { if (rec != null) { try { rec.stop(); } catch (Throwable ignored) { } rec.release(); } }
+            } finally { if (mic != null) mic.close(); }
         }, "natee-mic");
         micThread.start();
     }
