@@ -112,7 +112,7 @@ final class CarControl {
         if (!Double.isNaN(r[1])) put(o, "range_epa_estimate_km", r[1] * RangeGraph.EPA_OF_WLTP);
         put(o, "my_range_km_from_own_driving", r[2]);
         put(o, "battery_left_kwh", s.battLeftKwh);
-        put(o, "battery_health_percent", s.healthPct);
+        put(o, "battery_health_percent", TripEnergy.get(c).health());   // calibrated daily from your driving
         put(o, "speed_kmh", s.speedKmh);
         o.put("gear", s.gear == 2 ? "R" : s.gear == 3 ? "N" : s.gear == 4 ? "D" : s.gear >= 0 ? "P" : "unknown");
         JSONObject ty = new JSONObject();

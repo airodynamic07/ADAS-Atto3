@@ -88,7 +88,7 @@ public final class AiChat extends Service {
     private volatile long lastVoiceAt;
     private static final int C_LISTEN = 0xFF3AA0FF, C_HEAR = 0xFF2EE59D, C_ANSWER = 0xFF7C4DFF, C_REPEAT = 0xFFFF8A1F;
     private final Runnable hideLater = this::endChat;
-    private boolean newTurnAsked;
+    private boolean silentStart;   // listening again after an answer: no beep
 
     private void pressMic() {
         if (!chatting) { startChat(); return; }   // opens, and starts listening as soon as Gemini is connected
@@ -103,7 +103,8 @@ public final class AiChat extends Service {
         heard = false; activityOpen = false; lastVoiceAt = 0;
         talking = true;
         look(C_LISTEN, "listening… speak now");
-        beep();
+        if (!silentStart) beep();
+        silentStart = false;
     }
 
     /** Finished talking: Gemini answers straight away. Nothing heard: say so, nothing is sent. */
@@ -117,37 +118,32 @@ public final class AiChat extends Service {
             if (s != null && manual) s.send("{\"realtimeInput\":{\"activityEnd\":{}}}");
             look(C_ANSWER, "answering…");
         } else {
-            look(C_REPEAT, "didn't hear you: press the mic and say it again");
-            main.postDelayed(hideLater, 10_000);
+            look(C_REPEAT, "didn't hear you: say it again (or press the mic)");
+            talking = true;                         // keep listening
+            main.removeCallbacks(noAnswer);
+            main.postDelayed(noAnswer, 10_000);
         }
     }
 
-    /** Gemini asked something ("Open the sunroof?"): it listens for the answer by itself for 20 s (Air 2026-11-22). */
+
+    /** After an answer (Air 2026-11-22): it listens again by itself, so a conversation needs no presses to start;
+     *  press the mic when you've finished, or a 2 s pause finishes it. Nothing said within 10 s: it closes. */
+    private void answerDone() {
+        if (talking || !chatting) return;
+        silentStart = true;
+        startTalk();
+        look(C_LISTEN, askedQuestion() ? "listening for your answer…" : "listening… (closes in 10 s if you say nothing)");
+        main.removeCallbacks(noAnswer);
+        main.postDelayed(noAnswer, askedQuestion() ? 20_000 : 10_000);
+    }
+
+    private final Runnable noAnswer = () -> { if (talking && !activityOpen) endChat(); };
+
+    /** Gemini asked something ("Open the sunroof?"): it waits 20 s for the answer instead of 10. */
     private boolean askedQuestion() {
         String g = gem.toString().trim().toLowerCase(java.util.Locale.US);
         return g.endsWith("?") || g.endsWith("ไหม") || g.endsWith("มั้ย") || g.endsWith("ไหมคะ") || g.endsWith("มั้ยคะ")
                 || g.endsWith("หรือเปล่าคะ") || g.endsWith("หรือไม่คะ") || g.endsWith("ใช่ไหมคะ") || g.endsWith("คะ?");
-    }
-
-    private final Runnable noAnswer = () -> {
-        if (talking && !activityOpen) { talking = false; autoEnd = false; answerDone(); }
-    };
-
-    /** After an answer: gone in 10 s, unless the mic is pressed again or "hey Natee chat" is said. */
-    private void answerDone() {
-        if (talking || !chatting) return;
-        if (askedQuestion() && !newTurnAsked) {
-            newTurnAsked = true;                         // once per question
-            autoEnd = true;
-            startTalk();
-            look(C_LISTEN, "listening for your answer (20 s)…");
-            main.removeCallbacks(noAnswer);
-            main.postDelayed(noAnswer, 20_000);
-            return;
-        }
-        look(C_ANSWER, "done · closes in 10 s · press the mic to talk again");
-        main.removeCallbacks(hideLater);
-        main.postDelayed(hideLater, 10_000);
     }
 
     @Override public void onDestroy() {
@@ -378,7 +374,7 @@ public final class AiChat extends Service {
             JSONObject ot = sc.optJSONObject("outputTranscription");
             if (ot != null && ot.optString("text").length() > 0) {
                 final String t = ot.optString("text");
-                main.post(() -> { if (newTurn) { you.setLength(0); gem.setLength(0); newTurn = false; } newTurnAsked = false; gem.append(t); showText(); });
+                main.post(() -> { if (newTurn) { you.setLength(0); gem.setLength(0); newTurn = false; } gem.append(t); showText(); });
             }
             JSONObject mt = sc.optJSONObject("modelTurn");
             if (mt != null) {
@@ -479,7 +475,7 @@ public final class AiChat extends Service {
                     s.send(msg);
                     if (voice) lastVoiceAt = System.currentTimeMillis();
                     // started with "hey Natee chat": a short pause ends it by itself
-                    else if (autoEnd && System.currentTimeMillis() - lastVoiceAt > 1500) main.post(this::finishTalk);
+                    else if (System.currentTimeMillis() - lastVoiceAt > 2000) main.post(this::finishTalk);   // 2 s quiet = finished (or press the mic)
                 }
             } catch (Throwable ignored) {
             } finally { if (mic != null) mic.close(); }
@@ -555,7 +551,7 @@ public final class AiChat extends Service {
         talkScroll = new android.widget.ScrollView(this);
         talkScroll.addView(talk);
         box.addView(talkScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
-        TextView hint = Ui.text(this, "press the wheel mic to talk · press it again when you've finished · ✕ closes", 12, 0xFF9FB0D0, false);
+        TextView hint = Ui.text(this, "talk any time · press the wheel mic (or pause 2 s) when you've finished · ✕ closes", 12, 0xFF9FB0D0, false);
         hint.setPadding(0, Ui.dp(this, 8), 0, 0);
         box.addView(hint);
         try {

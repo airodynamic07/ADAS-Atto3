@@ -231,7 +231,7 @@ final class RangeGraph extends LinearLayout {
         @Override public synchronized void onCar(CarData.State s) {
             TripEnergy te = TripEnergy.get(app);
             double own = ownRange(app, s);
-            double health = Double.isNaN(s.healthPct) ? 100 : s.healthPct;   // the car's own battery health
+            double health = te.health();   // the battery health calibrated every day from your driving (Air 2026-11-22)
             String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
             if (!today.equals(day)) { day = today; series[1].clear(); lastTodayKm = -1; }
             double tk = te.todayKm();

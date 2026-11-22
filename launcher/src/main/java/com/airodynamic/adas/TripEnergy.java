@@ -101,6 +101,7 @@ public final class TripEnergy implements CarData.Listener {
         daySec = Double.longBitsToDouble(store.getLong("sec", 0));
         dayDrv = Math.max(daySec, Double.longBitsToDouble(store.getLong("drv", 0)));
         daySocUsed = store.getFloat("socUsed", 0);
+        dayCalKwh = store.getFloat("calKwh", 0);
         if (dayKwh < 0) dayKwh = 0;   // charging counted by an older version
         // not saved by a version before this one: then all of today so far was counted without correction
         rawDayKm = store.contains("rawKm") ? store.getFloat("rawKm", 0) : dayKm;
@@ -130,20 +131,29 @@ public final class TripEnergy implements CarData.Listener {
     // ---- daily battery health check (Air 2026-11-22): kWh used today ÷ battery % used today = a full battery's kWh;
     // ÷ 60.48 = health. Shown next to the car's own figure only, never fed back into the numbers: "Used" already comes
     // from the car's Battery left × the car's health, so feeding it back would make it creep up every day.
-    private double daySocUsed;
+    private double daySocUsed, dayCalKwh;
     private static final double MIN_PCT = 20;   // below 20 % used the 1 % steps make it too rough
 
     /** {health %, battery % it is based on, 1 = today / 0 = an earlier day}, or null before any day had 20 % used. */
     public double[] healthCheck() {
         rollDay();
-        if (daySocUsed >= MIN_PCT && dayKwh > 0) return new double[]{dayKwh / (daySocUsed / 100) / 60.48 * 100, daySocUsed, 1};
+        if (daySocUsed >= MIN_PCT && dayCalKwh > 0) return new double[]{dayCalKwh / (daySocUsed / 100) / 60.48 * 100, daySocUsed, 1};
         if (store == null || !store.contains("healthEst")) return null;
         return new double[]{store.getFloat("healthEst", 0), store.getFloat("healthEstPct", 0), 0};
     }
 
+    /** The ONE battery health shown and used (Air 2026-11-22: "just use the one you calibrate every day, no 89 % any
+     *  more"): today's check once 20 % is used, else the last day's, starting at 95 % (the 22 Nov drive). Kept within
+     *  70–100 %. (Used kWh still comes from the car's Battery left × the car's own index, so this figure can't creep.) */
+    public double health() {
+        double[] h = healthCheck();
+        double v = h == null ? 95 : h[0];
+        return Math.max(70, Math.min(100, v));
+    }
+
     private void keepHealthCheck() {
-        if (store == null || daySocUsed < MIN_PCT || dayKwh <= 0) return;
-        store.edit().putFloat("healthEst", (float) (dayKwh / (daySocUsed / 100) / 60.48 * 100)).putFloat("healthEstPct", (float) daySocUsed)
+        if (store == null || daySocUsed < MIN_PCT || dayCalKwh <= 0) return;
+        store.edit().putFloat("healthEst", (float) (dayCalKwh / (daySocUsed / 100) / 60.48 * 100)).putFloat("healthEstPct", (float) daySocUsed)
                 .putString("healthEstDay", day).apply();
     }
 
@@ -152,7 +162,7 @@ public final class TripEnergy implements CarData.Listener {
         if (d.equals(day)) return;
         saveHistory();   // the day that just ended keeps its numbers in the history
         keepHealthCheck();
-        day = d; dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0; daySocUsed = 0;
+        day = d; dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0; daySocUsed = 0; dayCalKwh = 0;
     }
 
     /** (user, 2026-11-14: "yes") the days saved before the energy check worked read about 1.6x high: once the check has
@@ -204,7 +214,7 @@ public final class TripEnergy implements CarData.Listener {
         if (store == null || now - savedAt < 20_000) return;
         savedAt = now;
         store.edit().putString("day", day).putLong("km", Double.doubleToLongBits(dayKm)).putLong("kwh", Double.doubleToLongBits(dayKwh)).putLong("sec", Double.doubleToLongBits(daySec)).putLong("drv", Double.doubleToLongBits(dayDrv))
-                .putFloat("rawKm", (float) rawDayKm).putFloat("rawKwh", (float) rawDayKwh).putFloat("socUsed", (float) daySocUsed).apply();
+                .putFloat("rawKm", (float) rawDayKm).putFloat("rawKwh", (float) rawDayKwh).putFloat("socUsed", (float) daySocUsed).putFloat("calKwh", (float) dayCalKwh).apply();
         saveHistory();
     }
 
@@ -511,6 +521,7 @@ public final class TripEnergy implements CarData.Listener {
             rollDay();
             dayKm += dKm;
             dayKwh += dKwh;
+            if (!Double.isNaN(lastSocSeen)) dayCalKwh += dKwh;   // kWh counted over the same stretch as the battery % drops
             l50Add(dKm, dKwh);
             // (user, 2026-11-14, "option 1") what was counted before the correction was ready is corrected once, when it is
             double fk = kmFactor(), fe = kwhFactor();
