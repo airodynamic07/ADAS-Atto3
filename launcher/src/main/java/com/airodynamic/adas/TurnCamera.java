@@ -14,10 +14,11 @@ import android.widget.TextView;
 
 /**
  * While the turn signal is on, the side camera covers the middle window (like Kinex);
- * it goes away a set time after the signal stops. Never in R: the car's own reverse view
+ * it goes away a set time after the signal stops. (user, 2026-11-22) With another app in front (Ghost Race, YouTube Music)
+ * it floats on top of it in the same place, as its own small window. Never in R: the car's own reverse view
  * must always get the cameras. Picture only (no AI).
  */
-public final class TurnCamera {
+public final class TurnCamera implements CarData.Listener {
     private final Context c;
     private final CameraFeed feed;
     private final Prefs prefs;
@@ -29,6 +30,11 @@ public final class TurnCamera {
     private int side;              // 0 none, 1 left, 2 right
     private int lastTurn;
     private boolean allowed;       // launcher on screen
+    private int[] rect;            // where the middle window is on the screen (for the floating window)
+    private FrameLayout floatBox;
+    private ImageView floatImg;
+    private TextView floatLabel;
+    private boolean floating;
 
     public TurnCamera(Context c, CameraFeed feed, Prefs prefs) {
         this.c = c;
@@ -36,7 +42,11 @@ public final class TurnCamera {
         this.prefs = prefs;
         guide.setStrokeWidth(3);
         applySideCrop(feed, prefs.sideCloseUp(), prefs.sideCamUp());
+        CarData.get(c).addListener(this);   // also while the launcher is behind another app
     }
+
+    /** The launcher is closing for good. */
+    public void release() { CarData.get(c).removeListener(this); hide(); }
 
     /** Close-up of the side looking back, cut from the full-resolution picture. */
     public static void applySideCrop(CameraFeed feed, boolean closeUp, int up) {
@@ -69,17 +79,25 @@ public final class TurnCamera {
         box.setOnClickListener(v -> hide());   // tap to close early
         parent.addView(box, new FrameLayout.LayoutParams(-1, -1));
         box.setVisibility(View.GONE);
+        // remember where the middle window is, for the floating window over other apps
+        parent.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            int[] loc = new int[2];
+            v.getLocationOnScreen(loc);
+            if (v.getWidth() > 0) rect = new int[]{loc[0], loc[1], v.getWidth(), v.getHeight()};
+        });
         if (side != 0) show(side);
     }
 
     public void setAllowed(boolean a) {
+        if (allowed == a) return;
         allowed = a;
-        if (!a) hide();
+        // switch between inside the launcher and floating: the next reading shows it again in the right place
+        if (side != 0) hide();
     }
 
     public void onCar(CarData.State s) {
         if (s.gear == 2) { if (side != 0) hide(); lastTurn = s.turn; return; }   // R: leave the cameras to the car
-        if (allowed && prefs.turnCamera()) {
+        if (prefs.turnCamera()) {
             if (s.turn == 1 && side != 1) show(1);
             else if (s.turn == 2 && side != 2) show(2);
             else if ((s.turn == 0 || s.turn == 3) && lastTurn != s.turn && side != 0) {
@@ -93,18 +111,26 @@ public final class TurnCamera {
     private void show(int which) {
         main.removeCallbacksAndMessages(null);
         side = which;
-        if (box == null) return;
+        final ImageView im;
+        final TextView lb;
+        if (allowed) {
+            if (box == null) return;
+            box.setVisibility(View.VISIBLE);
+            im = img; lb = label;
+        } else {
+            if (!showFloat()) { side = 0; return; }
+            im = floatImg; lb = floatLabel;
+        }
         final int slice = which == 1 ? CameraFeed.LEFT : CameraFeed.RIGHT;
         feed.setSlice(slice);
-        label.setText(which == 1 ? "◀ Left signal · side camera" : "Right signal ▶ · side camera");
-        box.setVisibility(View.VISIBLE);
+        lb.setText(which == 1 ? "◀ Left signal · side camera" : "Right signal ▶ · side camera");
         feed.start(new CameraFeed.Listener() {
             @Override public void onFrame(Bitmap b) {
                 if (side == 0) return;
                 // distance lines removed (user, 2026-11-11): plain camera picture
-                img.setImageBitmap(b);
+                im.setImageBitmap(b);
             }
-            @Override public void onError(String msg) { label.setText("Camera: " + msg); }
+            @Override public void onError(String msg) { main.post(() -> lb.setText("Camera: " + msg)); }
         });
     }
 
@@ -113,6 +139,49 @@ public final class TurnCamera {
         side = 0;
         feed.stop();
         if (box != null) { box.setVisibility(View.GONE); img.setImageBitmap(null); }
+        hideFloat();
+    }
+
+    /** Its own small window over whatever app is in front, where the launcher's middle window is. */
+    private boolean showFloat() {
+        if (floating) return true;
+        int[] r = rect;
+        android.util.DisplayMetrics dm = c.getResources().getDisplayMetrics();
+        if (r == null) r = new int[]{dm.widthPixels / 3, 0, dm.widthPixels / 3, dm.heightPixels * 2 / 3};
+        floatBox = new FrameLayout(c);
+        floatBox.setBackgroundColor(0xFF000000);
+        floatImg = new ImageView(c);
+        floatImg.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        floatBox.addView(floatImg, new FrameLayout.LayoutParams(-1, -1));
+        floatLabel = Ui.text(c, "", 14, 0xFF000000, true);
+        floatLabel.setBackground(Ui.round(Theme.CAUTION, 0, 8, c));
+        floatLabel.setPadding(Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+        lp.setMargins(Ui.dp(c, 8), Ui.dp(c, 8), 0, 0);
+        floatBox.addView(floatLabel, lp);
+        floatBox.setOnClickListener(v -> hide());   // tap to close early
+        try {
+            @SuppressWarnings("deprecation") int type = android.view.WindowManager.LayoutParams.TYPE_PHONE;
+            android.view.WindowManager.LayoutParams wl = new android.view.WindowManager.LayoutParams(r[2], r[3], type,
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                            | android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    android.graphics.PixelFormat.OPAQUE);
+            wl.gravity = Gravity.TOP | Gravity.START;
+            wl.x = r[0]; wl.y = r[1];
+            ((android.view.WindowManager) c.getSystemService(Context.WINDOW_SERVICE)).addView(floatBox, wl);
+            floating = true;
+            return true;
+        } catch (Throwable e) {
+            floatBox = null;
+            return false;
+        }
+    }
+
+    private void hideFloat() {
+        if (!floating) return;
+        floating = false;
+        try { ((android.view.WindowManager) c.getSystemService(Context.WINDOW_SERVICE)).removeView(floatBox); } catch (Throwable ignored) { }
+        floatBox = null; floatImg = null; floatLabel = null;
     }
 
     /** Distance lines (rough, not calibrated): 3 m red, 6 m amber, 10 m green, in whole-picture terms. */

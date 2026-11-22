@@ -129,6 +129,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     @Override protected void onDestroy() {
         try { unregisterReceiver(themeRequest); } catch (Exception ignored) {}
         try { unregisterReceiver(ghostStopped); } catch (Exception ignored) {}
+        if (turnCam != null) turnCam.release();
         super.onDestroy();
     }
 
@@ -309,7 +310,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             boolean want = sportOn ? s.speedKmh > prefs.autoSportKmh() - 10 : s.speedKmh > prefs.autoSportKmh();
             if (want != sportOn) { sportOn = want; rebuild(); return; }
         } else if (sportOn) { sportOn = false; rebuild(); return; }
-        turnCam.onCar(s);
+        // (turn camera listens to the car itself, also while other apps are in front)
         for (Panel p : panels) if (p != null) p.onCar(s);
     }
 
