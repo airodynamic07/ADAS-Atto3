@@ -217,7 +217,8 @@ public final class AiChat extends Service {
         String url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + prefs.aiKey();
         final int idx = modelIdx;
         ws = http.newWebSocket(new Request.Builder().url(url).build(), new WebSocketListener() {
-            @Override public void onOpen(WebSocket s, Response r) { s.send(setupJson(MODELS[idx])); }
+            // each model is tried first with the quick end-of-speech setting, then without it (in case Google refuses it)
+            @Override public void onOpen(WebSocket s, Response r) { s.send(setupJson(MODELS[idx / 2], idx % 2 == 0)); }
             @Override public void onMessage(WebSocket s, String text) { handle(text); }
             @Override public void onMessage(WebSocket s, ByteString bytes) { handle(bytes.utf8()); }
             @Override public void onClosed(WebSocket s, int code, String reason) { closed(idx, code, reason); }
@@ -230,7 +231,7 @@ public final class AiChat extends Service {
     private void closed(int idx, int code, String reason) {
         main.post(() -> {
             if (!chatting) return;
-            if (!ready && idx == modelIdx && modelIdx + 1 < MODELS.length && code != 1006 && code != -1) {   // this model refused: try the next
+            if (!ready && idx == modelIdx && modelIdx + 1 < MODELS.length * 2 && code != 1006 && code != -1) {   // this model refused: try the next
                 modelIdx++;
                 connect();
                 return;
@@ -248,7 +249,7 @@ public final class AiChat extends Service {
         });
     }
 
-    private String setupJson(String model) {
+    private String setupJson(String model, boolean quickEnd) {
         try {
             String lang = prefs.aiLang();
             String li = "en".equals(lang) ? "Always answer in English." : "th".equals(lang) ? "Always answer in Thai." :
@@ -270,6 +271,10 @@ public final class AiChat extends Service {
             JSONObject setup = new JSONObject().put("model", model).put("generationConfig", gen).put("systemInstruction", sys)
                     .put("inputAudioTranscription", new JSONObject()).put("outputAudioTranscription", new JSONObject())
                     .put("tools", CarControl.tools());
+            // (Air 2026-11-22: "keeps listening too long before it answers") the answer starts after about 0.5 s of quiet,
+            // and the end of speech is noticed sooner over the car's fan and road noise
+            if (quickEnd) setup.put("realtimeInputConfig", new JSONObject().put("automaticActivityDetection", new JSONObject()
+                    .put("endOfSpeechSensitivity", "END_SENSITIVITY_HIGH").put("silenceDurationMs", 500).put("prefixPaddingMs", 200)));
             return new JSONObject().put("setup", setup).toString();
         } catch (Exception e) { return "{}"; }
     }
