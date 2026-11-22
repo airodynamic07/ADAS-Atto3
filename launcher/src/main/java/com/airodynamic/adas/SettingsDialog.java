@@ -176,6 +176,11 @@ public final class SettingsDialog {
             av.addView(Ui.chip(c, vo[1], prefs.aiVoice().equals(vo[0]), th, v -> { prefs.setAiVoice(vo[0]); redo.run(); }), weight(c));
         }
         root.addView(av);
+        // the steering wheel's mic button (user, 2026-11-22): switch the key watcher on, then see what the button sends
+        LinearLayout aw = row(c);
+        int chosenKey = KeyWatch.store(c).getInt("chosen", -1);
+        aw.addView(Ui.chip(c, "Wheel mic button: " + (chosenKey >= 0 ? "key " + chosenKey : "usual voice keys") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
+        root.addView(aw);
 
         section(c, root, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
@@ -374,6 +379,42 @@ public final class SettingsDialog {
                         .setPositiveButton("Close", null).show();
             });
         }).start();
+    }
+
+    /** Switches the key watcher on (through the car's own ADB), then lists the keys it saw: press the wheel's mic button and tap it. */
+    private static void wheelTest(Context c) {
+        android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+        new Thread(() -> {
+            String err = null;
+            try {
+                String me = c.getPackageName() + "/" + KeyWatch.class.getName();
+                String cur = Updater.adbShell(c, "settings get secure enabled_accessibility_services").trim();
+                if (!cur.contains(me)) {
+                    String list = cur.isEmpty() || "null".equals(cur) ? me : cur + ":" + me;
+                    Updater.adbShell(c, "settings put secure enabled_accessibility_services " + list + "; settings put secure accessibility_enabled 1");
+                }
+            } catch (Exception e) { err = "Couldn't switch the button watcher on: " + e.getMessage(); }
+            final String e2 = err;
+            ui.post(() -> showKeys(c, e2));
+        }).start();
+    }
+
+    private static void showKeys(Context c, String err) {
+        String seen = KeyWatch.store(c).getString("seen", "");
+        final String[] lines = seen.isEmpty() ? new String[0] : seen.split("\n");
+        AlertDialog.Builder b = new AlertDialog.Builder(c)
+                .setTitle((err != null ? err + "\n" : "") + "Press the wheel's mic button, then tap Refresh. Tap the key it sent to use it:");
+        if (lines.length == 0) b.setMessage("No button press seen yet.");
+        else b.setItems(lines, (d, i) -> {
+            try {
+                int code = Integer.parseInt(lines[i].split(" ")[0]);
+                KeyWatch.store(c).edit().putInt("chosen", code).apply();
+                android.widget.Toast.makeText(c, "Wheel button set: key " + code, android.widget.Toast.LENGTH_LONG).show();
+            } catch (Exception ignored) { }
+        });
+        b.setNeutralButton("Refresh", (d, i) -> showKeys(c, null))
+                .setNegativeButton("Usual voice keys", (d, i) -> KeyWatch.store(c).edit().remove("chosen").apply())
+                .setPositiveButton("Close", null).show();
     }
 
     private static void section(Context c, LinearLayout root, Theme th, String s) {

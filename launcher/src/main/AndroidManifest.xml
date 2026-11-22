@@ -206,6 +206,30 @@
             android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
         <!-- "Hey Natee chat": offline wake word + Gemini voice chat (talk only) -->
         <service android:name=".AiChat" android:exported="false" />
+        <!-- the steering wheel's mic button opens Hey Natee chat: key presses only -->
+        <service
+            android:name=".KeyWatch"
+            android:exported="true"
+            android:label="NATEE wheel mic button"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/key_watch" />
+        </service>
+        <activity
+            android:name=".VoiceEntry"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <action android:name="android.intent.action.ASSIST" />
+                <action android:name="android.speech.action.VOICE_SEARCH_HANDS_FREE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <!-- "Now playing" card: needs Notification access, switched on once by the user -->
         <service
             android:name=".NowPlaying"

@@ -72,7 +72,15 @@ public final class AiChat extends Service {
         startWake();
     }
 
-    @Override public int onStartCommand(Intent i, int f, int id) { return START_STICKY; }
+    /** Open the chat now (wheel mic button, see KeyWatch / VoiceEntry). */
+    static void startNow(Context c) {
+        try { c.startService(new Intent(c, AiChat.class).setAction("chat")); } catch (Throwable ignored) { }
+    }
+
+    @Override public int onStartCommand(Intent i, int f, int id) {
+        if (i != null && "chat".equals(i.getAction())) main.post(() -> { if (chatting) endChat(); else startChat(); });   // press again = close
+        return START_STICKY;
+    }
 
     @Override public void onDestroy() {
         alive = false;
