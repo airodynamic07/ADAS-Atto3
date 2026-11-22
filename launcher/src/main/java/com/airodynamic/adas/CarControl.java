@@ -34,8 +34,8 @@ final class CarControl {
         f.put(fn("set_fan", "Set the A/C fan speed.", props("level", "integer", "fan level 1 (lowest) to 7 (highest)")));
         f.put(fn("set_temperature", "Set the A/C temperature.", props("celsius", "number", "target temperature, 17 to 33 °C")));
         f.put(fn("set_ac", "Switch the air conditioning on or off.", props("on", "boolean", "true = on, false = off")));
-        f.put(fn("set_cabin_light", "Switch the cabin / reading light on or off.", props("on", "boolean", "true = on, false = off")));
-        f.put(fn("sunshade", "Stop the sunroof / sunshade moving. Opening or closing the sunshade is not possible yet: say so.",
+        f.put(fn("set_cabin_light", "Cabin / reading light: this car has no command for it, so say it can't be done from here.", props("on", "boolean", "true = on, false = off")));
+        f.put(fn("sunshade", "Open, close or stop the SUNSHADE (the cloth under the glass roof). Ask the driver to confirm open/close first.",
                 props("action", "string", "open, close or stop")));
         f.put(fn("open_app", "Open an app on the car screen by its name, including the apps inside GBox (e.g. Google Maps, YouTube Music, Spotify, Waze).",
                 props("name", "string", "the app's name as the driver said it")));
@@ -190,20 +190,24 @@ final class CarControl {
                 } catch (Throwable ignored) { }
             }
         }
-        return res(false, "this car has no cabin light control the launcher can use yet");
+        return res(false, "this car has no reading/cabin light command the launcher can use (checked 2026-11-22)");
     }
 
     private JSONObject shade(String action) {
         String a = action.toLowerCase(Locale.US);
-        // (Air 2026-11-22) voiceCtlMoonRoof opened the GLASS SUNROOF, not the sunshade: never used for open/close again.
-        // Only stop stays (it stops the roof and the sunshade). Open/close come back once the sunshade's own command is
-        // found (Settings → AI chat → Find car controls).
-        if (a.startsWith("stop")) {
-            Object r = call(BODY, "setMoonRoofAndSunshadeStop");
-            if (r == MISSING) r = call(BODY, "voiceCtlMoonRoof", 4);
-            return answer(r, "sunroof and sunshade stopped");
-        }
-        return res(false, "the sunshade can't be opened or closed from here yet (the command for it isn't known on this car); only stop works");
+        // (Air 2026-11-22) the sunshade's OWN commands, found with Settings → Find car controls: voiceCtlSunshadePanel
+        // (voice codes, like the roof's: 1 open, 2 close, 4 stop). voiceCtlMoonRoof moved the GLASS roof: never used.
+        int code = a.startsWith("open") ? 1 : a.startsWith("close") ? 2 : a.startsWith("stop") ? 4 : -1;
+        if (code < 0) return res(false, "say open, close or stop");
+        Object before = call(BODY, "getSunroofWindowblindPosition");
+        Object r = call(BODY, "voiceCtlSunshadePanel", code);
+        if (code == 4 && r == MISSING) r = call(BODY, "setMoonRoofAndSunshadeStop");
+        JSONObject o = answer(r, "sunshade " + (code == 1 ? "opening" : code == 2 ? "closing" : "stopped"));
+        try {
+            if (before instanceof Number) o.put("position_before", ((Number) before).intValue());
+            o.put("note", "first test of this command: if anything other than the sunshade moves, the driver says stop and tells Claude");
+        } catch (Exception ignored) { }
+        return o;
     }
 
     // ------------------------------------------------------------ apps and music (user, 2026-11-21)
