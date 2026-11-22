@@ -38,8 +38,12 @@ final class RangeGraph extends LinearLayout {
         void add(double[] p) {
             // the distance can be corrected a little downwards: never go backwards, the line just carries on
             if (!pts.isEmpty() && p[0] < pts.get(pts.size() - 1)[0]) p[0] = pts.get(pts.size() - 1)[0];
-            if (pts.isEmpty() || p[0] - pts.get(pts.size() - 1)[0] >= STEP_KM) pts.add(p);
-            else pts.set(pts.size() - 1, p);   // the newest point always shows the current values
+            // the last point is the live one (moves with every reading); a new point is kept every 0.1 km, measured from
+            // the last KEPT point (2026-11-22: it was measured from the live point itself, so nothing was ever kept and
+            // the graph showed only a dot)
+            int n = pts.size();
+            if (n < 2 || p[0] - pts.get(n - 2)[0] >= STEP_KM) pts.add(p);
+            else pts.set(n - 1, p);
             if (pts.size() > MAX_POINTS) {     // keep it small: drop every other point
                 List<double[]> half = new ArrayList<>();
                 for (int i = 0; i < pts.size(); i++) if (i % 2 == 0 || i == pts.size() - 1) half.add(pts.get(i));
@@ -201,7 +205,7 @@ final class RangeGraph extends LinearLayout {
             if (lastTodayKm >= 0) totalKm += tk >= lastTodayKm ? tk - lastTodayKm : tk;
             lastTodayKm = tk;
             // charged: battery % went up while standing still -> "Charge to charge" starts again
-            boolean still = Double.isNaN(s.speedKmh) || s.speedKmh < 1;
+            boolean still = (Double.isNaN(s.speedKmh) || s.speedKmh < 1) && s.gear >= 0 && s.gear < 2;   // parked in P (charging)
             if (!Double.isNaN(s.socPct)) {
                 if (!Double.isNaN(lastSoc) && still && s.socPct >= lastSoc + 1) { series[2].pts.clear(); chargeBaseKm = totalKm; }
                 if (Double.isNaN(lastSoc) || !still || s.socPct < lastSoc || s.socPct >= lastSoc + 1) lastSoc = s.socPct;
