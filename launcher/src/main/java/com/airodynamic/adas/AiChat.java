@@ -157,6 +157,14 @@ public final class AiChat extends Service {
 
     private void listenAgain() {
         if (talking || !chatting || speaking || !playQ.isEmpty()) return;
+        // (Air 2026-11-22: "ค่ะ ค่ะ ค่ะ" — its own voice came back through the microphone) after a plain answer it only
+        // listens again when Settings says so; after a question it does (to hear the answer)
+        if (!askedQuestion() && !prefs.aiKeepListening()) {
+            look(C_ANSWER, "done · press the mic to talk again · closes in 10 s");
+            main.removeCallbacks(hideLater);
+            main.postDelayed(hideLater, 10_000);
+            return;
+        }
         silentStart = true;
         startTalk();
         look(C_LISTEN, askedQuestion() ? "listening for your answer…" : "listening… (closes in 10 s if you say nothing)");
