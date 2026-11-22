@@ -27,7 +27,7 @@ final class RangeGraph extends LinearLayout {
 
     /** line k of a point: 0 NEDC, 1 WLTP, 2 EPA (from WLTP), 3 My range */
     private static double val(double[] p, int k) { return k == 2 ? p[2] * EPA_OF_WLTP : k == 3 ? p[3] : p[k + 1]; }
-    private static final String[] MODES = {"Trip", "Today", "Charge to charge"};
+    private static final String[] MODES = {"Trip", "Today", "C to C"};   // short on the button (it didn't fit); the menu keeps the full names
     private static final String[] MENU = {"This trip", "Today", "Charge to charge"};
     private static final double STEP_KM = 0.1;
     private static final int MAX_POINTS = 600;
