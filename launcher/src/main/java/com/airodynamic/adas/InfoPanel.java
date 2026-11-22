@@ -324,7 +324,10 @@ public final class InfoPanel implements Panel {
         tripSub.setVisibility(View.VISIBLE);
         tripSub.setText(new java.text.SimpleDateFormat("EEEE", Locale.US).format(now));
         health.setText(Double.isNaN(s.healthPct) ? "–" : String.format(Locale.US, "%.0f%%", s.healthPct));
-        healthSub.setText(Double.isNaN(s.healthPct) ? (s.known ? "car not reporting" : "from the car") : "from the car");
+        // + the daily check from your own driving (kWh used ÷ battery % used), shown only (Air 2026-11-22)
+        double[] hc = TripEnergy.get(c).healthCheck();
+        String mine = hc == null ? "" : String.format(Locale.US, " · %s %.0f%%", hc[2] == 1 ? "today" : "last day", hc[0]);
+        healthSub.setText((Double.isNaN(s.healthPct) ? (s.known ? "car not reporting" : "from the car") : "from the car") + mine);
         odo.setText(Double.isNaN(s.odometerKm) ? "–" : String.format(Locale.US, "%,d", Math.round(s.odometerKm)));
         int due = prefs.serviceAtKm();
         if (due > 0 && !Double.isNaN(s.odometerKm)) {

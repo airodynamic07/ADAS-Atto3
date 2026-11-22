@@ -100,6 +100,7 @@ public final class TripEnergy implements CarData.Listener {
         dayKwh = Double.longBitsToDouble(store.getLong("kwh", 0));
         daySec = Double.longBitsToDouble(store.getLong("sec", 0));
         dayDrv = Math.max(daySec, Double.longBitsToDouble(store.getLong("drv", 0)));
+        daySocUsed = store.getFloat("socUsed", 0);
         if (dayKwh < 0) dayKwh = 0;   // charging counted by an older version
         // not saved by a version before this one: then all of today so far was counted without correction
         rawDayKm = store.contains("rawKm") ? store.getFloat("rawKm", 0) : dayKm;
@@ -126,11 +127,32 @@ public final class TripEnergy implements CarData.Listener {
     private boolean wipeTrip, newTripPending;
     private long parkedSince;
     private int lastPower = -1;
+    // ---- daily battery health check (Air 2026-11-22): kWh used today ÷ battery % used today = a full battery's kWh;
+    // ÷ 60.48 = health. Shown next to the car's own figure only, never fed back into the numbers: "Used" already comes
+    // from the car's Battery left × the car's health, so feeding it back would make it creep up every day.
+    private double daySocUsed;
+    private static final double MIN_PCT = 20;   // below 20 % used the 1 % steps make it too rough
+
+    /** {health %, battery % it is based on, 1 = today / 0 = an earlier day}, or null before any day had 20 % used. */
+    public double[] healthCheck() {
+        rollDay();
+        if (daySocUsed >= MIN_PCT && dayKwh > 0) return new double[]{dayKwh / (daySocUsed / 100) / 60.48 * 100, daySocUsed, 1};
+        if (store == null || !store.contains("healthEst")) return null;
+        return new double[]{store.getFloat("healthEst", 0), store.getFloat("healthEstPct", 0), 0};
+    }
+
+    private void keepHealthCheck() {
+        if (store == null || daySocUsed < MIN_PCT || dayKwh <= 0) return;
+        store.edit().putFloat("healthEst", (float) (dayKwh / (daySocUsed / 100) / 60.48 * 100)).putFloat("healthEstPct", (float) daySocUsed)
+                .putString("healthEstDay", day).apply();
+    }
+
     private void rollDay() {
         String d = dayNow();
         if (d.equals(day)) return;
         saveHistory();   // the day that just ended keeps its numbers in the history
-        day = d; dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0;
+        keepHealthCheck();
+        day = d; dayKm = dayKwh = daySec = dayDrv = 0; rawDayKm = rawDayKwh = 0; daySocUsed = 0;
     }
 
     /** (user, 2026-11-14: "yes") the days saved before the energy check worked read about 1.6x high: once the check has
@@ -182,7 +204,7 @@ public final class TripEnergy implements CarData.Listener {
         if (store == null || now - savedAt < 20_000) return;
         savedAt = now;
         store.edit().putString("day", day).putLong("km", Double.doubleToLongBits(dayKm)).putLong("kwh", Double.doubleToLongBits(dayKwh)).putLong("sec", Double.doubleToLongBits(daySec)).putLong("drv", Double.doubleToLongBits(dayDrv))
-                .putFloat("rawKm", (float) rawDayKm).putFloat("rawKwh", (float) rawDayKwh).apply();
+                .putFloat("rawKm", (float) rawDayKm).putFloat("rawKwh", (float) rawDayKwh).putFloat("socUsed", (float) daySocUsed).apply();
         saveHistory();
     }
 
@@ -418,7 +440,7 @@ public final class TripEnergy implements CarData.Listener {
                 startRemain = Double.NaN; points.clear(); lastAt = 0; clearStats(); lastLeft = Double.NaN; socUsedPct = 0; lastSocSeen = Double.NaN;
             }
             if (!Double.isNaN(s.socPct)) {
-                if (!Double.isNaN(lastSocSeen) && s.socPct < lastSocSeen) socUsedPct += lastSocSeen - s.socPct;
+                if (!Double.isNaN(lastSocSeen) && s.socPct < lastSocSeen) { socUsedPct += lastSocSeen - s.socPct; rollDay(); daySocUsed += lastSocSeen - s.socPct; }
                 lastSocSeen = s.socPct;
             }
             double dt = lastAt == 0 ? 0 : Math.min(2.0, (s.at - lastAt) / 1000.0);   // seconds; gaps don't count
