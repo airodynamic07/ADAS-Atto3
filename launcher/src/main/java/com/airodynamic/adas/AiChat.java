@@ -69,7 +69,7 @@ public final class AiChat extends Service {
         prefs = new Prefs(this);
         control = new CarControl(this);
         alive = true;
-        if (!micAllowed(this) || !overlayAllowed(this)) new Thread(() -> fixPermissions(this)).start();
+        new Thread(() -> { if (!micAllowed(this) || !overlayAllowed(this)) fixPermissions(this); KeyWatch.ensureOn(this); }).start();
         startWake();
     }
 
@@ -79,8 +79,75 @@ public final class AiChat extends Service {
     }
 
     @Override public int onStartCommand(Intent i, int f, int id) {
-        if (i != null && "chat".equals(i.getAction())) main.post(() -> { if (chatting) endChat(); else startChat(); });   // press again = close
+        if (i != null && "chat".equals(i.getAction())) main.post(this::pressMic);
         return START_STICKY;
+    }
+
+    // ---------------- walkie-talkie (Air 2026-11-22): press = talk, press again = finished → answer at once ----------------
+    private volatile boolean talking, activityOpen, heard, manual, autoEnd, pendingTalk;
+    private volatile long lastVoiceAt;
+    private static final int C_LISTEN = 0xFF3AA0FF, C_HEAR = 0xFF2EE59D, C_ANSWER = 0xFF7C4DFF, C_REPEAT = 0xFFFF8A1F;
+    private final Runnable hideLater = this::endChat;
+    private boolean newTurnAsked;
+
+    private void pressMic() {
+        if (!chatting) { startChat(); return; }   // opens, and starts listening as soon as Gemini is connected
+        if (talking) finishTalk(); else startTalk();
+    }
+
+    private void startTalk() {
+        main.removeCallbacks(hideLater);
+        main.removeCallbacks(noAnswer);
+        if (!ready) { pendingTalk = true; return; }
+        playQ.clear();                     // talking over Gemini stops its answer
+        heard = false; activityOpen = false; lastVoiceAt = 0;
+        talking = true;
+        look(C_LISTEN, "listening… speak now");
+        beep();
+    }
+
+    /** Finished talking: Gemini answers straight away. Nothing heard: say so, nothing is sent. */
+    private void finishTalk() {
+        if (!talking) return;
+        talking = false;
+        autoEnd = false;
+        if (activityOpen) {
+            activityOpen = false;
+            WebSocket s = ws;
+            if (s != null && manual) s.send("{\"realtimeInput\":{\"activityEnd\":{}}}");
+            look(C_ANSWER, "answering…");
+        } else {
+            look(C_REPEAT, "didn't hear you: press the mic and say it again");
+            main.postDelayed(hideLater, 10_000);
+        }
+    }
+
+    /** Gemini asked something ("Open the sunroof?"): it listens for the answer by itself for 20 s (Air 2026-11-22). */
+    private boolean askedQuestion() {
+        String g = gem.toString().trim().toLowerCase(java.util.Locale.US);
+        return g.endsWith("?") || g.endsWith("ไหม") || g.endsWith("มั้ย") || g.endsWith("ไหมคะ") || g.endsWith("มั้ยคะ")
+                || g.endsWith("หรือเปล่าคะ") || g.endsWith("หรือไม่คะ") || g.endsWith("ใช่ไหมคะ") || g.endsWith("คะ?");
+    }
+
+    private final Runnable noAnswer = () -> {
+        if (talking && !activityOpen) { talking = false; autoEnd = false; answerDone(); }
+    };
+
+    /** After an answer: gone in 10 s, unless the mic is pressed again or "hey Natee chat" is said. */
+    private void answerDone() {
+        if (talking || !chatting) return;
+        if (askedQuestion() && !newTurnAsked) {
+            newTurnAsked = true;                         // once per question
+            autoEnd = true;
+            startTalk();
+            look(C_LISTEN, "listening for your answer (20 s)…");
+            main.removeCallbacks(noAnswer);
+            main.postDelayed(noAnswer, 20_000);
+            return;
+        }
+        look(C_ANSWER, "done · closes in 10 s · press the mic to talk again");
+        main.removeCallbacks(hideLater);
+        main.postDelayed(hideLater, 10_000);
     }
 
     @Override public void onDestroy() {
@@ -121,7 +188,7 @@ public final class AiChat extends Service {
                         boolean fin = r.acceptWaveForm(b, n);
                         String txt = fin ? r.getResult() : r.getPartialResult();
                         if (fin) { String h = heard(txt); if (!h.isEmpty()) lastHeard = h; }
-                        if (isWake(txt)) { r.reset(); main.post(this::startChat); break; }
+                        if (isWake(txt)) { r.reset(); main.post(() -> { autoEnd = true; if (chatting) startTalk(); else startChat(); }); break; }
                     }
                 } catch (Throwable e) {
                     wakeState = "error: " + e.getClass().getSimpleName();
@@ -192,6 +259,7 @@ public final class AiChat extends Service {
         String key = prefs.aiKey();
         if (key.isEmpty()) { status("Hey Natee chat: add your Gemini API key in Settings → AI chat"); return; }
         chatting = true; muted = false; ready = false; retries = 0;
+        talking = false; activityOpen = false; pendingTalk = true;
         lastActive = System.currentTimeMillis();
         you.setLength(0); gem.setLength(0); newTurn = true; lastAction = "";
         showBubble();
@@ -202,7 +270,6 @@ public final class AiChat extends Service {
         modelIdx = 0;
         http = new OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).pingInterval(20, TimeUnit.SECONDS).build();
         connect();
-        main.postDelayed(quietCheck, 1000);
     }
 
     private final Runnable quietCheck = new Runnable() {
@@ -218,7 +285,8 @@ public final class AiChat extends Service {
         final int idx = modelIdx;
         ws = http.newWebSocket(new Request.Builder().url(url).build(), new WebSocketListener() {
             // each model is tried first with the quick end-of-speech setting, then without it (in case Google refuses it)
-            @Override public void onOpen(WebSocket s, Response r) { s.send(setupJson(MODELS[idx / 2], idx % 2 == 0)); }
+            // each model is tried first in walkie-talkie mode (the app says when you start and stop), then without it
+            @Override public void onOpen(WebSocket s, Response r) { manual = idx % 2 == 0; s.send(setupJson(MODELS[idx / 2], manual)); }
             @Override public void onMessage(WebSocket s, String text) { handle(text); }
             @Override public void onMessage(WebSocket s, ByteString bytes) { handle(bytes.utf8()); }
             @Override public void onClosed(WebSocket s, int code, String reason) { closed(idx, code, reason); }
@@ -269,19 +337,17 @@ public final class AiChat extends Service {
                             + " driving: keep answers short and easy to listen to (one to three sentences), no lists or links."
                             + " You cannot see the road. You can read the car's information with get_car_info (use it whenever the"
                             + " driver asks about the car: range, battery, tyres, air, temperatures, trip, doors) and change comfort"
-                            + " things only: fan, temperature, A/C on/off, cabin light, sunshade. You can also open apps (open_app), start navigation in Google Maps (navigate, e.g. home), open YouTube videos when parked (youtube_video), control"
+                            + " things only: fan, temperature, A/C on/off, sunshade, sunroof. You can also open apps (open_app), start navigation in Google Maps (navigate, e.g. home), open YouTube videos when parked (youtube_video), control"
                             + " the music (music), and save notes for the developer (report_problem) when the driver"
                             + " reports something not working or has an idea for a new function. Never anything about driving."
                             + " Understand casual requests (\"too hot\" = temperature down 1-2 degrees or fan up). After a change,"
                             + " say in a few words what you did (\"Fan 4.\"); if the result says it failed, say so plainly."
-                            + " Before opening or closing the sunshade, ask the driver to confirm, and only call it after a yes. " + li)));
+                            + " Before opening or closing the sunshade or the sunroof, ask the driver to confirm, and only call it after a yes. The sunshade is the cloth under the glass; the sunroof is the glass itself: never mix them up. " + li)));
             JSONObject setup = new JSONObject().put("model", model).put("generationConfig", gen).put("systemInstruction", sys)
                     .put("inputAudioTranscription", new JSONObject()).put("outputAudioTranscription", new JSONObject())
                     .put("tools", withClose(CarControl.tools()));
-            // (Air 2026-11-22: "keeps listening too long", then "wait for 2 seconds") the answer starts after 2 s of quiet,
-            // and the end of speech is noticed sooner over the car's fan and road noise
-            if (quickEnd) setup.put("realtimeInputConfig", new JSONObject().put("automaticActivityDetection", new JSONObject()
-                    .put("endOfSpeechSensitivity", "END_SENSITIVITY_HIGH").put("silenceDurationMs", 2000).put("prefixPaddingMs", 200)));
+            // walkie-talkie (Air 2026-11-22): Google doesn't guess when you've finished; the app tells it (second mic press)
+            if (quickEnd) setup.put("realtimeInputConfig", new JSONObject().put("automaticActivityDetection", new JSONObject().put("disabled", true)));
             return new JSONObject().put("setup", setup).toString();
         } catch (Exception e) { return "{}"; }
     }
@@ -301,6 +367,7 @@ public final class AiChat extends Service {
                 main.post(() -> {
                     if (newTurn) { you.setLength(0); gem.setLength(0); lastAction = ""; newTurn = false; }
                     you.append(t); lastActive = System.currentTimeMillis(); showText();
+                    if (talking) look(C_HEAR, "I hear you · press the mic when you've finished");
                     String all = you.toString().toLowerCase(java.util.Locale.US);
                     // "close <any spelling of Natee> chat" / "ปิด…แชท" (the name is written differently each time)
                     boolean close = all.matches("(?s).*\\bclose\\b.{0,20}\\bchat\\b.*") || all.matches("(?s).*ปิด.{0,20}แชท.*")
@@ -311,7 +378,7 @@ public final class AiChat extends Service {
             JSONObject ot = sc.optJSONObject("outputTranscription");
             if (ot != null && ot.optString("text").length() > 0) {
                 final String t = ot.optString("text");
-                main.post(() -> { if (newTurn) { you.setLength(0); gem.setLength(0); newTurn = false; } gem.append(t); showText(); });
+                main.post(() -> { if (newTurn) { you.setLength(0); gem.setLength(0); newTurn = false; } newTurnAsked = false; gem.append(t); showText(); });
             }
             JSONObject mt = sc.optJSONObject("modelTurn");
             if (mt != null) {
@@ -322,7 +389,7 @@ public final class AiChat extends Service {
                 }
             }
             if (sc.optBoolean("interrupted")) playQ.clear();
-            if (sc.optBoolean("turnComplete")) main.post(() -> { newTurn = true; lastActive = System.currentTimeMillis(); });
+            if (sc.optBoolean("turnComplete")) main.post(() -> { newTurn = true; lastActive = System.currentTimeMillis(); if (playQ.isEmpty() && !speaking) answerDone(); });
         } catch (Exception ignored) { }
     }
 
@@ -356,8 +423,8 @@ public final class AiChat extends Service {
         if (!chatting) return;
         ready = true;
         retries = 0;
-        if (micThread != null && micThread.isAlive()) { setState("listening…"); return; }   // reconnected: the mic and speaker keep going
-        setState("listening…");
+        if (micThread != null && micThread.isAlive()) { setState("connected"); if (pendingTalk) { pendingTalk = false; startTalk(); } return; }   // reconnected
+        setState("connected");
         lastActive = System.currentTimeMillis();
         int ob = Math.max(AudioTrack.getMinBufferSize(OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT), OUT_RATE);
         track = new AudioTrack(AudioManager.STREAM_MUSIC, OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, ob, AudioTrack.MODE_STREAM);
@@ -366,8 +433,8 @@ public final class AiChat extends Service {
             while (chatting) {
                 try {
                     byte[] a = playQ.poll(200, TimeUnit.MILLISECONDS);
-                    if (a == null) { if (speaking) { speaking = false; lastActive = System.currentTimeMillis(); main.post(() -> setState("listening…")); } continue; }
-                    if (!speaking) { speaking = true; main.post(() -> setState("speaking…")); }
+                    if (a == null) { if (speaking) { speaking = false; lastActive = System.currentTimeMillis(); main.post(this::answerDone); } continue; }
+                    if (!speaking) { speaking = true; main.post(() -> { main.removeCallbacks(hideLater); if (!talking) look(C_ANSWER, "answering…"); }); }
                     AudioTrack t = track;
                     if (t != null) t.write(a, 0, a.length);
                 } catch (InterruptedException e) { return; } catch (Throwable ignored) { }
@@ -381,28 +448,50 @@ public final class AiChat extends Service {
                 if (mic == null) { main.post(() -> setState("microphone busy (" + Mic.lastError + ")")); return; }
                 try { if (android.media.audiofx.AcousticEchoCanceler.isAvailable()) android.media.audiofx.AcousticEchoCanceler.create(mic.rec.getAudioSessionId()).setEnabled(true); } catch (Throwable ignored) { }
                 short[] b = new short[1600];   // 0.1 s at 16 kHz
-                byte[] out = new byte[3200];
-                byte[] quiet = new byte[3200];
+                java.util.ArrayDeque<String> pre = new java.util.ArrayDeque<>();   // the 0.3 s before your voice starts
+                double floor = 4;                                                    // the car's own noise (fan, road)
                 while (chatting) {
                     int n = mic.read16k(b);
                     if (n <= 0) continue;
+                    long sum = 0; for (int k = 0; k < n; k++) sum += Math.abs(b[k]);
+                    int lv = (int) Math.min(100, sum / n * 100 / 3000);
+                    micLevel = lv;
+                    if (!activityOpen) floor = floor * 0.97 + Math.min(lv, floor + 8) * 0.03;
+                    boolean voice = lv > Math.max(5, floor * 1.6 + 4);
+                    byte[] out = new byte[n * 2];
                     for (int k = 0; k < n; k++) { out[2 * k] = (byte) b[k]; out[2 * k + 1] = (byte) (b[k] >> 8); }   // 16-bit little-endian
-                    // while Gemini talks (and when muted) silence is sent, so it doesn't hear itself through the speakers
-                    byte[] send = muted || speaking ? quiet : out;
+                    String msg = "{\"realtimeInput\":{\"audio\":{\"mimeType\":\"audio/pcm;rate=16000\",\"data\":\""
+                            + Base64.encodeToString(out, Base64.NO_WRAP) + "\"}}}";
                     WebSocket s = ws;
-                    if (s != null) s.send("{\"realtimeInput\":{\"audio\":{\"mimeType\":\"audio/pcm;rate=16000\",\"data\":\""
-                            + Base64.encodeToString(send, 0, n * 2, Base64.NO_WRAP) + "\"}}}");
+                    if (!talking || muted || s == null) { pre.clear(); continue; }
+                    if (!activityOpen) {
+                        pre.addLast(msg);
+                        if (pre.size() > 3) pre.removeFirst();
+                        if (!voice) continue;
+                        // your voice: tell Gemini you started, with the moment just before
+                        activityOpen = true; heard = true;
+                        if (manual) s.send("{\"realtimeInput\":{\"activityStart\":{}}}");
+                        while (!pre.isEmpty()) s.send(pre.removeFirst());
+                        lastVoiceAt = System.currentTimeMillis();
+                        main.post(() -> { if (talking) look(C_HEAR, "I hear you · press the mic when you've finished"); });
+                        continue;
+                    }
+                    s.send(msg);
+                    if (voice) lastVoiceAt = System.currentTimeMillis();
+                    // started with "hey Natee chat": a short pause ends it by itself
+                    else if (autoEnd && System.currentTimeMillis() - lastVoiceAt > 1500) main.post(this::finishTalk);
                 }
             } catch (Throwable ignored) {
             } finally { if (mic != null) mic.close(); }
         }, "natee-mic");
         micThread.start();
+        if (pendingTalk) { pendingTalk = false; startTalk(); }
     }
 
     private void endChat() {
         if (!chatting) return;
-        chatting = false; ready = false; speaking = false;
-        main.removeCallbacks(quietCheck);
+        chatting = false; ready = false; speaking = false; talking = false; activityOpen = false; pendingTalk = false; autoEnd = false;
+        main.removeCallbacks(hideLater);
         if (ws != null) { try { ws.close(1000, "bye"); } catch (Throwable ignored) { } ws = null; }
         playQ.clear();
         if (track != null) { try { track.stop(); } catch (Throwable ignored) { } track.release(); track = null; }
@@ -413,6 +502,13 @@ public final class AiChat extends Service {
 
     // ---------------- bubble over the screen ----------------
     private View bubble;
+    private android.graphics.drawable.GradientDrawable bubbleBg;
+
+    /** Border + state colour: blue listening, green I hear you, purple answering, orange say it again. */
+    private void look(int color, String text) {
+        if (bubbleBg != null) bubbleBg.setStroke(Ui.dp(this, 4), color);
+        if (stateV != null) { stateV.setText("  · " + text); stateV.setTextColor(color); }
+    }
     private TextView stateV, youV, gemV;
     private android.widget.ScrollView talkScroll;
 
@@ -424,6 +520,7 @@ public final class AiChat extends Service {
         android.graphics.drawable.GradientDrawable g = Ui.round(0xEE101F3D, 0xFF7C4DFF, 22, this);
         g.setStroke(Ui.dp(this, 2), 0xFF7C4DFF);
         box.setBackground(g);
+        bubbleBg = g;
         int p = Ui.dp(this, 14);
         box.setPadding(p, Ui.dp(this, 10), p, p);
         LinearLayout head = new LinearLayout(this);
@@ -439,7 +536,7 @@ public final class AiChat extends Service {
         stateV = Ui.text(this, "", 14, 0xFF9FB0D0, false);
         head.addView(stateV, new LinearLayout.LayoutParams(0, -2, 1f));
         android.widget.Button mute = Ui.chip(this, "🔇 Mute", false, th, null);
-        mute.setOnClickListener(v -> { muted = !muted; mute.setText(muted ? "🎤 Unmute" : "🔇 Mute"); setState(muted ? "muted" : "listening…"); });
+        mute.setOnClickListener(v -> { muted = !muted; mute.setText(muted ? "🎤 Unmute" : "🔇 Mute"); setState(muted ? "muted" : "ready"); });
         head.addView(mute, new LinearLayout.LayoutParams(-2, Ui.dp(this, 40)));
         android.widget.Button close = Ui.chip(this, "✕", false, th, v -> endChat());
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(Ui.dp(this, 48), Ui.dp(this, 40));
@@ -458,7 +555,7 @@ public final class AiChat extends Service {
         talkScroll = new android.widget.ScrollView(this);
         talkScroll.addView(talk);
         box.addView(talkScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
-        TextView hint = Ui.text(this, "keeps listening · to close: press the wheel mic button, tap ✕, or say \"close Natee chat\"", 12, 0xFF9FB0D0, false);
+        TextView hint = Ui.text(this, "press the wheel mic to talk · press it again when you've finished · ✕ closes", 12, 0xFF9FB0D0, false);
         hint.setPadding(0, Ui.dp(this, 8), 0, 0);
         box.addView(hint);
         try {

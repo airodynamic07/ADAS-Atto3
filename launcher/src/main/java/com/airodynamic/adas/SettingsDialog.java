@@ -390,7 +390,8 @@ public final class SettingsDialog {
      * car's commands with matching names, then which readings change when the driver uses the car's own buttons.
      */
     private static void findControls(Context c) {
-        final String[] devs = {"bodywork.BYDAutoBodyworkDevice", "light.BYDAutoLightDevice", "setting.BYDAutoSettingDevice"};
+        final String[] devs = {"bodywork.BYDAutoBodyworkDevice", "light.BYDAutoLightDevice", "setting.BYDAutoSettingDevice",
+                "ac.BYDAutoAcDevice", "instrument.BYDAutoInstrumentDevice", "multimedia.BYDAutoMultimediaDevice", "sensor.BYDAutoSensorDevice"};
         android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
         new Thread(() -> {
             StringBuilder names = new StringBuilder();
@@ -400,7 +401,10 @@ public final class SettingsDialog {
                 if (dev == null) continue;
                 java.util.TreeSet<String> ms = new java.util.TreeSet<>();
                 for (java.lang.reflect.Method m : dev.getClass().getMethods()) {
-                    if (!want.matcher(m.getName()).matches()) continue;
+                    // (2026-11-22, reading light not found) every voice command, and every light setter, whatever its name
+                    boolean voiceCmd = m.getName().startsWith("voiceCtl");
+                    boolean lightSet = d.startsWith("light.") && m.getName().startsWith("set");
+                    if (!voiceCmd && !lightSet && !want.matcher(m.getName()).matches()) continue;
                     if (!(m.getName().startsWith("set") || m.getName().startsWith("get") || m.getName().startsWith("voice"))) continue;
                     ms.add(m.getName() + "(" + m.getParameterTypes().length + ")");
                 }
@@ -505,6 +509,8 @@ public final class SettingsDialog {
 
     private static void showKeys(Context c, String err) {
         String seen = KeyWatch.store(c).getString("seen", "");
+        String after = KeyWatch.store(c).getString("afterPress", "");
+        if (!after.isEmpty()) seen = "opened after the press: " + after + (seen.isEmpty() ? "" : "\n" + seen);
         final String[] lines = seen.isEmpty() ? new String[0] : seen.split("\n");
         AlertDialog.Builder b = new AlertDialog.Builder(c)
                 .setTitle((err != null ? err + "\n" : "") + "Press the wheel's mic button, then tap Refresh. Tap the key it sent to use it:");

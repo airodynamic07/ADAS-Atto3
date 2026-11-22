@@ -35,6 +35,8 @@ final class CarControl {
         f.put(fn("set_temperature", "Set the A/C temperature.", props("celsius", "number", "target temperature, 17 to 33 °C")));
         f.put(fn("set_ac", "Switch the air conditioning on or off.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("set_cabin_light", "Cabin / reading light: this car has no command for it, so say it can't be done from here.", props("on", "boolean", "true = on, false = off")));
+        f.put(fn("sunroof", "Open, close or stop the glass SUNROOF (not the sunshade). Ask the driver to confirm open/close first.",
+                props("action", "string", "open, close or stop")));
         f.put(fn("sunshade", "Open, close or stop the SUNSHADE (the cloth under the glass roof). Ask the driver to confirm open/close first.",
                 props("action", "string", "open, close or stop")));
         f.put(fn("open_app", "Open an app on the car screen by its name, including the apps inside GBox (e.g. Google Maps, YouTube Music, Spotify, Waze).",
@@ -79,6 +81,7 @@ final class CarControl {
                 case "set_ac": return ac(a.optBoolean("on", true));
                 case "set_cabin_light": return light(a.optBoolean("on", true));
                 case "sunshade": return shade(a.optString("action", ""));
+                case "sunroof": return roof(a.optString("action", ""));
                 case "report_problem": {
                     String d = a.optString("description", "").trim();
                     if (d.isEmpty()) return res(false, "what's the problem?");
@@ -191,6 +194,16 @@ final class CarControl {
             }
         }
         return res(false, "this car has no reading/cabin light command the launcher can use (checked 2026-11-22)");
+    }
+
+    /** The glass sunroof (Air 2026-11-22: the older version's command opened it): voiceCtlMoonRoof 1 open, 2 close, 4 stop. */
+    private JSONObject roof(String action) {
+        String a = action.toLowerCase(Locale.US);
+        int code = a.startsWith("open") ? 1 : a.startsWith("close") ? 2 : a.startsWith("stop") ? 4 : -1;
+        if (code < 0) return res(false, "say open, close or stop");
+        if (code == 4) call(BODY, "setMoonRoofAndSunshadeStop");
+        Object r = call(BODY, "voiceCtlMoonRoof", code);
+        return answer(r, "sunroof " + (code == 1 ? "opening" : code == 2 ? "closing" : "stopped"));
     }
 
     private JSONObject shade(String action) {

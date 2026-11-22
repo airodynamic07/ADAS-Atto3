@@ -15,55 +15,85 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Range graph in the right window (user, 2026-11-21): NEDC (the car's own range, grey), WLTP (blue) and My range
- * (orange) against the distance driven — for this trip, today, or since the last charge (tap to switch).
- * Across: starts at 0–10 km and shrinks to fit longer drives. Up: a 200 km window, taller when the lines spread
- * further apart, so every line always fits. Each line ends with a dot and its current value. Read only.
+ * Range graph in the right window (user, 2026-11-21; redesigned 2026-11-22). For this trip, today or charge to charge:
+ * NEDC (grey) = 480 km, WLTP (blue) = 420 km, EPA (purple) = WLTP − 12 %, each × battery health × the battery % at the
+ * start, then straight down 1 km per km driven (parallel; your driving never changes them). My range (orange) = 100 %
+ * your own driving: battery left ÷ your kWh/100 km over the last 10 km; it starts on the WLTP point, slides into your own
+ * range over 5 km, and is smoothed over ~2 km (no jitter). This trip shows the last 50 km, zoomed, sliding right and
+ * down; Today and Charge to charge show everything from 0, with where each line reaches 0 ahead. Read only.
  */
 final class RangeGraph extends LinearLayout {
     static final int NEDC = 0xFF9AA0A8, WLTP = 0xFF3AA0FF, EPA = 0xFFB388FF, MY = 0xFFFF8A1F;
     /** EPA (US test): no official Atto 3 figure, estimated as WLTP − 12 % (user, 2026-11-21). */
     static final double EPA_OF_WLTP = 0.88;
 
-    /** line k of a point: 0 NEDC, 1 WLTP, 2 EPA (from WLTP), 3 My range */
-    private static double val(double[] p, int k) { return k == 2 ? p[2] * EPA_OF_WLTP : k == 3 ? p[3] : p[k + 1]; }
     private static final String[] MODES = {"Trip", "Today", "C to C"};   // short on the button (it didn't fit); the menu keeps the full names
     private static final String[] MENU = {"This trip", "Today", "Charge to charge"};
     private static final double STEP_KM = 0.1;
-    private static final int MAX_POINTS = 600;
+    private static final int MAX_POINTS = 900;
+    static final double NEDC_KM = 480, WLTP_KM = 420;
 
-    /** One series: points {km, nedc, wltp, my}. */
+    /** One view (trip / today / charge): where it started, and My range points {km, my range}. */
     private static final class Series {
         final List<double[]> pts = new ArrayList<>();
-        void add(double[] p) {
-            // the distance can be corrected a little downwards: never go backwards, the line just carries on
-            if (!pts.isEmpty() && p[0] < pts.get(pts.size() - 1)[0]) p[0] = pts.get(pts.size() - 1)[0];
-            // the last point is the live one (moves with every reading); a new point is kept every 0.1 km, measured from
-            // the last KEPT point (2026-11-22: it was measured from the live point itself, so nothing was ever kept and
-            // the graph showed only a dot)
+        double soc0 = Double.NaN, health = 100, xRef;   // battery % and health at the start, and the km it was taken at
+        double sm = Double.NaN, lastX = Double.NaN;      // smoothed My range
+
+        void clear() { pts.clear(); soc0 = Double.NaN; sm = Double.NaN; lastX = Double.NaN; }
+
+        /** the three straight lines: k 0 NEDC, 1 WLTP, 2 EPA, at km x (never below 0) */
+        double ref(int k, double x) {
+            if (Double.isNaN(soc0)) return Double.NaN;
+            double f = health / 100 * soc0 / 100;
+            double start = k == 0 ? NEDC_KM * f : k == 1 ? WLTP_KM * f : WLTP_KM * f * EPA_OF_WLTP;
+            return Math.max(0, start - (x - xRef));
+        }
+
+        void add(double x, double soc, double health, double own) {
+            if (Double.isNaN(soc0) && !Double.isNaN(soc)) { soc0 = soc; this.health = health; xRef = x; }
+            if (Double.isNaN(soc0)) return;
+            if (!pts.isEmpty() && x < pts.get(pts.size() - 1)[0]) x = pts.get(pts.size() - 1)[0];   // distance never goes back
+            double w = Math.max(0, x - xRef);
+            double wl = ref(1, x);
+            // starts on the WLTP point, slides into your own range over the first 5 km
+            double target = Double.isNaN(own) ? wl : (1 - Math.min(1, w / 5)) * wl + Math.min(1, w / 5) * own;
+            if (Double.isNaN(sm)) sm = wl;
+            else if (x > lastX) sm += (target - sm) * Math.min(1, (x - lastX) / 2.0);   // smoothed over ~2 km: no jitter
+            lastX = x;
+            double[] p = {x, sm};
             int n = pts.size();
-            if (n < 2 || p[0] - pts.get(n - 2)[0] >= STEP_KM) pts.add(p);
-            else pts.set(n - 1, p);
-            if (pts.size() > MAX_POINTS) {     // keep it small: drop every other point
+            if (n < 2 || x - pts.get(n - 2)[0] >= STEP_KM) pts.add(p); else pts.set(n - 1, p);
+            if (pts.size() > MAX_POINTS) {
                 List<double[]> half = new ArrayList<>();
                 for (int i = 0; i < pts.size(); i++) if (i % 2 == 0 || i == pts.size() - 1) half.add(pts.get(i));
                 pts.clear(); pts.addAll(half);
             }
         }
+
         String save() {
-            StringBuilder b = new StringBuilder();
-            for (double[] p : pts) b.append(String.format(Locale.US, "%.2f,%.0f,%.0f,%.0f;", p[0], p[1], p[2], p[3]));
+            StringBuilder b = new StringBuilder(String.format(Locale.US, "%.2f,%.2f,%.3f,%.2f,%.3f|", soc0, health, xRef, sm, lastX));
+            for (double[] p : pts) b.append(String.format(Locale.US, "%.2f,%.1f;", p[0], p[1]));
             return b.toString();
         }
+
         void load(String s) {
-            pts.clear();
-            if (s == null) return;
-            for (String part : s.split(";")) {
-                String[] v = part.split(",");
-                if (v.length != 4) continue;
-                try { pts.add(new double[]{Double.parseDouble(v[0]), Double.parseDouble(v[1]), Double.parseDouble(v[2]), Double.parseDouble(v[3])}); }
-                catch (NumberFormatException ignored) { }
-            }
+            clear();
+            if (s == null || !s.contains("|")) return;
+            try {
+                String[] h = s.substring(0, s.indexOf('|')).split(",");
+                soc0 = Double.parseDouble(h[0]); health = Double.parseDouble(h[1]); xRef = Double.parseDouble(h[2]);
+                sm = Double.parseDouble(h[3]); lastX = Double.parseDouble(h[4]);
+                for (String part : s.substring(s.indexOf('|') + 1).split(";")) {
+                    String[] v = part.split(",");
+                    if (v.length == 2) pts.add(new double[]{Double.parseDouble(v[0]), Double.parseDouble(v[1])});
+                }
+            } catch (Exception e) { clear(); }
+        }
+
+        Series copy() {
+            Series c = new Series();
+            c.pts.addAll(pts); c.soc0 = soc0; c.health = health; c.xRef = xRef; c.sm = sm; c.lastX = lastX;
+            return c;
         }
     }
 
@@ -171,69 +201,72 @@ final class RangeGraph extends LinearLayout {
             this.app = app;
             store = app.getSharedPreferences("range_graph", Context.MODE_PRIVATE);
             day = store.getString("day", "");
-            series[0].load(store.getString("trip", ""));
+            // new format (2026-11-22): fresh start for all three views
+            series[0].load(store.getString("trip2", ""));
             lastTripKm = Double.longBitsToDouble(store.getLong("tripKm", Double.doubleToLongBits(-1)));
             tripStart = store.getLong("tripStart", 0);
-            series[1].load(store.getString("today", ""));
-            series[2].load(store.getString("charge", ""));
+            series[1].load(store.getString("today2", ""));
+            series[2].load(store.getString("charge2", ""));
             totalKm = Double.longBitsToDouble(store.getLong("total", 0));
             chargeBaseKm = Double.longBitsToDouble(store.getLong("chargeBase", 0));
         }
 
-        /** NEDC (the car's range), WLTP (× 420/480) and My range (80 % your last 10 km, 20 % WLTP); NaN when unknown. */
+        /** {NEDC (the car's display), WLTP (× 420/480), My range (100 % your own driving)}; NaN when unknown. */
         static double[] ranges(Context c, CarData.State s) {
+            double nedc = s.rangeKm >= 0 ? s.rangeKm : Double.NaN;
+            double wltp = !Double.isNaN(nedc) ? nedc * WLTP_KM / NEDC_KM : Double.NaN;
+            return new double[]{nedc, wltp, ownRange(c, s)};
+        }
+
+        /** battery left ÷ your kWh/100 km over the last 10 km (else 50 km, else the car's own figure) × 100 */
+        static double ownRange(Context c, CarData.State s) {
             double left = !Double.isNaN(s.battLeftKwh) ? s.battLeftKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 * (Double.isNaN(s.healthPct) ? 1 : s.healthPct / 100.0) : Double.NaN;
             TripEnergy te = TripEnergy.get(c);
-            double mine = te.myAvg10();   // last 10 km (user, 2026-11-21: was 50)
+            double mine = te.myAvg10();
             if (Double.isNaN(mine)) mine = te.myAvg50();
             if (Double.isNaN(mine)) mine = s.last50;
-            double own = !Double.isNaN(left) && !Double.isNaN(mine) && mine > 3 ? left / mine * 100 : Double.NaN;
-            double nedc = s.rangeKm >= 0 ? s.rangeKm : Double.NaN;
-            double wltp = !Double.isNaN(nedc) ? nedc * 420.0 / 480.0 : Double.NaN;
-            double my = !Double.isNaN(own) && !Double.isNaN(wltp) ? 0.8 * own + 0.2 * wltp : own;
-            return new double[]{nedc, wltp, my};
+            return !Double.isNaN(left) && !Double.isNaN(mine) && mine > 3 ? left / mine * 100 : Double.NaN;
         }
 
         @Override public synchronized void onCar(CarData.State s) {
             TripEnergy te = TripEnergy.get(app);
-            double[] r = ranges(app, s);
-            double nedc = r[0], wltp = r[1], my = r[2];
+            double own = ownRange(app, s);
+            double health = Double.isNaN(s.healthPct) ? 100 : s.healthPct;   // the car's own battery health
             String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
-            if (!today.equals(day)) { day = today; series[1].pts.clear(); lastTodayKm = -1; }
-            // total distance driven, for "since charge": what today's distance added since the last reading
+            if (!today.equals(day)) { day = today; series[1].clear(); lastTodayKm = -1; }
             double tk = te.todayKm();
             if (lastTodayKm >= 0) totalKm += tk >= lastTodayKm ? tk - lastTodayKm : tk;
             lastTodayKm = tk;
-            // charged: battery % went up while standing still -> "Charge to charge" starts again
-            boolean still = (Double.isNaN(s.speedKmh) || s.speedKmh < 1) && s.gear >= 0 && s.gear < 2;   // parked in P (charging)
+            // charged: battery % went up while parked in P -> "Charge to charge" starts again (from the % after charging)
+            boolean still = (Double.isNaN(s.speedKmh) || s.speedKmh < 1) && s.gear >= 0 && s.gear < 2;
             if (!Double.isNaN(s.socPct)) {
-                if (!Double.isNaN(lastSoc) && still && s.socPct >= lastSoc + 1) { series[2].pts.clear(); chargeBaseKm = totalKm; }
+                if (!Double.isNaN(lastSoc) && still && s.socPct >= lastSoc + 1) { series[2].clear(); chargeBaseKm = totalKm; }
                 if (Double.isNaN(lastSoc) || !still || s.socPct < lastSoc || s.socPct >= lastSoc + 1) lastSoc = s.socPct;
             }
-            // a new trip starts the "Trip" line again (2026-11-21: only a real new trip; the trip distance is sometimes
-            // corrected a little downwards, and that used to wipe the line, leaving just a dot)
-            if (te.startedAt != tripStart) { if (tripStart != 0 || te.km < lastTripKm - 1) series[0].pts.clear(); tripStart = te.startedAt; }
+            // a real new trip (car turned off, or Reset) starts the trip view again
+            if (te.startedAt != tripStart) { if (tripStart != 0 || te.km < lastTripKm - 1) series[0].clear(); tripStart = te.startedAt; }
             lastTripKm = te.km;
-            if (Double.isNaN(nedc) && Double.isNaN(wltp) && Double.isNaN(my)) return;
-            series[0].add(new double[]{te.km, nedc, wltp, my});
-            series[1].add(new double[]{tk, nedc, wltp, my});
-            series[2].add(new double[]{totalKm - chargeBaseKm, nedc, wltp, my});
+            series[0].add(te.km, s.socPct, health, own);
+            series[1].add(tk, s.socPct, health, own);
+            series[2].add(totalKm - chargeBaseKm, s.socPct, health, own);
             if (s.at - savedAt > 30_000) {
                 savedAt = s.at;
-                store.edit().putString("day", day).putString("trip", series[0].save()).putLong("tripKm", Double.doubleToLongBits(lastTripKm)).putLong("tripStart", tripStart)
-                        .putString("today", series[1].save()).putString("charge", series[2].save())
+                store.edit().putString("day", day).putString("trip2", series[0].save()).putLong("tripKm", Double.doubleToLongBits(lastTripKm)).putLong("tripStart", tripStart)
+                        .putString("today2", series[1].save()).putString("charge2", series[2].save())
                         .putLong("total", Double.doubleToLongBits(totalKm)).putLong("chargeBase", Double.doubleToLongBits(chargeBaseKm)).apply();
             }
         }
 
-        synchronized List<double[]> copy(int mode) { return new ArrayList<>(series[mode].pts); }
+        synchronized Series copy(int mode) { return series[mode].copy(); }
     }
 
-    /** The drawing: grid, three lines, a dot and the current value at each line's end. */
+    /** The drawing: grid, the three straight lines, My range as a smooth curve, a dot and the km of each at your position. */
     private final class Plot extends View {
-        private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG), grid = new Paint(), text = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG), grid = new Paint(), text = new Paint(Paint.ANTI_ALIAS_FLAG), dash = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
         private final float d;
+        private double curLo = Double.NaN, curHi = Double.NaN;   // the height shown, gliding towards the wanted one
+        private int curMode = -1;
 
         Plot(Context c) {
             super(c);
@@ -241,91 +274,121 @@ final class RangeGraph extends LinearLayout {
             line.setStyle(Paint.Style.STROKE);
             line.setStrokeCap(Paint.Cap.ROUND);
             line.setStrokeJoin(Paint.Join.ROUND);
+            dash.setStyle(Paint.Style.STROKE);
+            dash.setPathEffect(new android.graphics.DashPathEffect(new float[]{6 * d, 6 * d}, 0));
             grid.setColor((th.line & 0x00FFFFFF) | 0x80000000);
             grid.setStrokeWidth(d);
         }
 
         @Override protected void onDraw(Canvas cv) {
-            List<double[]> pts = rec.copy(mode);
+            Series sr = rec.copy(mode);
+            List<double[]> pts = sr.pts;
             float w = getWidth(), h = getHeight();
-            // the values sit in their own column right of the lines, so they never cover them (user, 2026-11-21)
             text.setTextSize(13.5f * d);
             text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             float labW = text.measureText("888 km");
             float left = 32 * d, right = w - labW - 10 * d, top = 6 * d, bottom = h - 14 * d;
-            // across: from this series' start, at least 10 km (user, 2026-11-21: was 20)
-            double x0 = 0;   // always from 0 km: the start of the trip, the day or the charge (user, 2026-11-21)
-            double xEnd = pts.isEmpty() ? 0 : pts.get(pts.size() - 1)[0];
-            double xSpan = Math.max(10, xEnd);
-            // up: every value fits; at least 200 km tall, centred on the lines
-            double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
-            for (double[] p : pts) for (int k = 0; k < 4; k++) { double v = val(p, k); if (!Double.isNaN(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
-            if (lo == Double.MAX_VALUE) { lo = 150; hi = 350; }
-            double span = Math.max(200, (hi - lo) * 1.15);
-            double mid = (hi + lo) / 2;
-            double yMin = Math.floor((mid - span / 2) / 10) * 10, yMax = yMin + Math.ceil(span / 10) * 10;
-            text.setTextSize(11f * d);   // axis numbers bigger (user, 2026-11-21)
+            text.setTextSize(11f * d);
             text.setColor(th.muted);
             text.setTypeface(android.graphics.Typeface.DEFAULT);
-            for (int g = 0; g <= 2; g++) {
-                float y = top + (bottom - top) * g / 2f;
-                cv.drawLine(left, y, right, y, grid);
-                cv.drawText(String.valueOf(Math.round(yMax - (yMax - yMin) * g / 2.0)), 0, y + 4 * d, text);
-            }
-            for (int g = 0; g <= 2; g++) {
-                float x = left + (right - left) * g / 2f;
-                cv.drawLine(x, top, x, bottom, grid);
-                String lab = g == 0 ? "0" : String.format(Locale.US, "%.0f km", xSpan * g / 2);
-                float tw = text.measureText(lab);
-                cv.drawText(lab, g == 0 ? x : g == 1 ? x - tw / 2 : x - tw, h - 1.5f * d, text);
-            }
-            if (pts.isEmpty()) {
-                text.setTextSize(10 * d);
+            if (pts.isEmpty() || Double.isNaN(sr.soc0)) {
                 String msg = "fills in as you drive";
                 cv.drawText(msg, (left + right - text.measureText(msg)) / 2, (top + bottom) / 2, text);
                 return;
             }
+            double xc = pts.get(pts.size() - 1)[0];
+            boolean trip = mode == 0;
+            // across: this trip = the last 50 km (sliding); today / charge = from 0 to where NEDC reaches 0
+            double xs = trip ? Math.max(sr.xRef, xc - 50) : sr.xRef;
+            double xe = trip ? Math.max(xs + 10, xc) : Math.max(xs + 10, Math.max(xc, sr.xRef + sr.ref(0, sr.xRef)));
+            // up: this trip = just around the lines in the window; today / charge = 0 to the top
+            double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
+            for (int k = 0; k < 3; k++) for (double x : new double[]{xs, Math.min(xc, xe)}) { double v = sr.ref(k, x); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+            for (double[] p : pts) if (p[0] >= xs) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }
+            if (trip) { double pad = Math.max(8, (hi - lo) * 0.12); lo = Math.max(0, lo - pad); hi += pad; }
+            else { lo = 0; hi = hi * 1.06 + 5; }
+            // glide smoothly to the new height (no jumps) as the window moves right and down
+            if (curMode != mode || Double.isNaN(curLo)) { curLo = lo; curHi = hi; curMode = mode; }
+            else {
+                curLo += (lo - curLo) * 0.2; curHi += (hi - curHi) * 0.2;
+                if (Math.abs(lo - curLo) > 0.5 || Math.abs(hi - curHi) > 0.5) postInvalidateDelayed(40);
+            }
+            final double yLo = curLo, yHi = Math.max(curLo + 10, curHi);
+            final double fxs = xs, fxe = xe;
+            java.util.function.DoubleUnaryOperator X = x -> left + (right - left) * (x - fxs) / (fxe - fxs);
+            java.util.function.DoubleUnaryOperator Y = v -> bottom - (bottom - top) * (v - yLo) / (yHi - yLo);
+            for (int g = 0; g <= 2; g++) {
+                float y = top + (bottom - top) * g / 2f;
+                cv.drawLine(left, y, right, y, grid);
+                cv.drawText(String.valueOf(Math.round(yHi - (yHi - yLo) * g / 2.0)), 0, y + 4 * d, text);
+            }
+            for (int g = 0; g <= 2; g++) {
+                double xv = xs + (xe - xs) * g / 2;
+                float x = (float) X.applyAsDouble(xv);
+                cv.drawLine(x, top, x, bottom, grid);
+                String lab = String.format(Locale.US, "%.0f km", xv - sr.xRef);
+                if (g == 0 && xv - sr.xRef < 0.5) lab = "0";
+                float tw = text.measureText(lab);
+                cv.drawText(lab, g == 0 ? x : g == 1 ? x - tw / 2 : x - tw, h - 1.5f * d, text);
+            }
+            cv.save();
+            cv.clipRect(left, top - 4 * d, right + 2 * d, bottom + 4 * d);
             int[] colors = {NEDC, WLTP, EPA, MY};
             float[] endX = new float[4], endY = new float[4];
             double[] endV = new double[4];
-            for (int k = 0; k < 4; k++) {
-                path.reset();
-                boolean started = false;
-                endV[k] = Double.NaN;
-                for (double[] p : pts) {
-                    double v = val(p, k);
-                    if (Double.isNaN(v)) continue;
-                    float x = (float) (left + (right - left) * (p[0] - x0) / xSpan);
-                    float y = (float) (bottom - (bottom - top) * (v - yMin) / (yMax - yMin));
-                    if (!started) { path.moveTo(x, y); started = true; } else path.lineTo(x, y);
-                    endX[k] = x; endY[k] = y; endV[k] = v;
-                }
-                if (!started) continue;
+            // the three straight lines: solid up to you; Today / charge also show (faint) where each reaches 0 ahead
+            for (int k = 0; k < 3; k++) {
+                double zeroX = sr.xRef + sr.ref(k, sr.xRef);
+                double x1 = Math.min(xc, zeroX);
                 line.setColor(colors[k]);
-                line.setStrokeWidth((k == 3 ? 2.6f : 2f) * d);
-                cv.drawPath(path, line);
+                line.setStrokeWidth(2f * d);
+                cv.drawLine((float) X.applyAsDouble(xs), (float) Y.applyAsDouble(sr.ref(k, xs)), (float) X.applyAsDouble(x1), (float) Y.applyAsDouble(sr.ref(k, x1)), line);
+                if (!trip && zeroX > xc) {
+                    dash.setColor((colors[k] & 0x00FFFFFF) | 0x73000000);
+                    dash.setStrokeWidth(1.6f * d);
+                    cv.drawLine((float) X.applyAsDouble(xc), (float) Y.applyAsDouble(sr.ref(k, xc)), (float) X.applyAsDouble(zeroX), (float) Y.applyAsDouble(0), dash);
+                }
+                endX[k] = (float) X.applyAsDouble(xc); endY[k] = (float) Y.applyAsDouble(sr.ref(k, xc)); endV[k] = sr.ref(k, xc);
             }
-            // dots and values at the line ends; labels kept apart so they never sit on top of each other
-            text.setTextSize(13.5f * d);   // line-end values bigger (user, 2026-11-21)
+            // My range: a smooth curve through its points
+            path.reset();
+            float px = 0, py = 0;
+            boolean started = false;
+            for (double[] p : pts) {
+                if (p[0] < xs) continue;
+                float x = (float) X.applyAsDouble(p[0]), y = (float) Y.applyAsDouble(p[1]);
+                if (!started) { path.moveTo(x, y); started = true; }
+                else path.quadTo(px, py, (px + x) / 2, (py + y) / 2);
+                px = x; py = y;
+            }
+            if (started) path.lineTo(px, py);
+            line.setColor(MY);
+            line.setStrokeWidth(2.8f * d);
+            cv.drawPath(path, line);
+            double[] last = pts.get(pts.size() - 1);
+            endX[3] = (float) X.applyAsDouble(last[0]); endY[3] = (float) Y.applyAsDouble(last[1]); endV[3] = last[1];
+            // your position: a dashed vertical line (today / charge)
+            if (!trip) {
+                dash.setColor(0xFF3A6FD8); dash.setStrokeWidth(1.2f * d);
+                cv.drawLine(endX[3], top, endX[3], bottom, dash);
+            }
+            cv.restore();
+            // dots and the km of each line at your position, kept apart so they never sit on top of each other
+            text.setTextSize(13.5f * d);
             text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             Integer[] order = {0, 1, 2, 3};
             java.util.Arrays.sort(order, (a, b) -> Float.compare(endY[a], endY[b]));
             float[] ly = new float[4];
             float prev = -1e9f;
-            for (int i : order) {
-                if (Double.isNaN(endV[i])) continue;
-                ly[i] = Math.max(Math.max(endY[i] + 5f * d, top + 10 * d), prev + 13.5f * d);   // four values now: a little tighter
-                prev = ly[i];
-            }
-            float over = prev - (bottom + 4 * d);   // pushed past the bottom: move the whole column up
+            for (int i : order) { ly[i] = Math.max(Math.max(endY[i] + 5f * d, top + 10 * d), prev + 13.5f * d); prev = ly[i]; }
+            float over = prev - (bottom + 4 * d);
+            Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
             for (int i = 0; i < 4; i++) {
-                if (Double.isNaN(endV[i])) continue;
                 if (over > 0) ly[i] -= over;
-                Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
                 dot.setColor(colors[i]);
                 cv.drawCircle(endX[i], endY[i], (i == 3 ? 3.4f : 2.8f) * d, dot);
                 text.setColor(colors[i]);
-                cv.drawText(Math.round(endV[i]) + " km", right + 8 * d, ly[i], text);
+                cv.drawText(Math.round(endV[i]) + " km", Math.min(endX[i] + 8 * d, w - labW - 2 * d), ly[i], text);
             }
         }
     }
