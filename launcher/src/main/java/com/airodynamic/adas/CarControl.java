@@ -262,13 +262,20 @@ final class CarControl {
         String d = dest.trim();
         if (d.isEmpty()) return res(false, "where to?");
         String q = d.equalsIgnoreCase("home") || d.equals("บ้าน") ? "Home" : d.equalsIgnoreCase("work") || d.equals("ที่ทำงาน") ? "Work" : d;
-        String[] pkgs = {"com.google.android.apps.maps", "com.gbox.com.google.android.apps.maps"};
+        // (Air 2026-11-22: a second "navigate to…" opened another Maps window and got stuck) always the same Maps app as
+        // last time, and the new place goes to its open window (it reroutes there) instead of a new one
+        android.content.SharedPreferences st = c.getSharedPreferences("natee_chat", Context.MODE_PRIVATE);
+        String used = st.getString("mapsPkg", "");
+        String[] pkgs = used.isEmpty() ? new String[]{"com.google.android.apps.maps", "com.gbox.com.google.android.apps.maps"}
+                : new String[]{used, "com.google.android.apps.maps", "com.gbox.com.google.android.apps.maps"};
         for (String p : pkgs) {
             if (!Apps.installed(c, p)) continue;
             final android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW,
                     android.net.Uri.parse("google.navigation:q=" + android.net.Uri.encode(q))).setPackage(p)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP | android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
             if (c.getPackageManager().resolveActivity(i, 0) == null) continue;
+            st.edit().putString("mapsPkg", p).apply();
             main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
             return res(true, "navigating to " + q + " in " + Apps.label(c, p) + (q.equals("Home") || q.equals("Work") ? " (uses the Home/Work saved in Google Maps)" : ""));
         }
