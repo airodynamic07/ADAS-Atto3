@@ -67,7 +67,8 @@ public final class Apps {
 
     /** Opens an app full screen. Returns false (and says why) if it can't. */
     public static boolean open(Context c, String pkg, CarData.State car) {
-        if (VIDEO.contains(pkg) && !car.parked()) {
+        // video apps while driving only with Settings → Song video "While driving too" (for the passenger; Air 2026-11-22)
+        if (VIDEO.contains(pkg) && !car.parked() && !new Prefs(c).videoWhileDriving()) {
             Toast.makeText(c, "Video apps open only in P", Toast.LENGTH_SHORT).show();
             return false;
         }

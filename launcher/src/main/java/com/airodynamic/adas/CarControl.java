@@ -53,7 +53,7 @@ final class CarControl {
                 + " is stuck'), or an idea for a new function ('idea: show the charging time on the dashboard').", rp));
         f.put(fn("navigate", "Start Google Maps navigation to a place: an address, a place name, or 'home' / 'work' (the driver's saved places).",
                 props("destination", "string", "where to go, e.g. home, Central World, a full address")));
-        f.put(fn("youtube_video", "Search and open a YouTube video (only when the car is parked in P; while driving say it opens only in P).",
+        f.put(fn("youtube_video", "Search and open a YouTube video. Always call it when asked; the app itself decides if it may open.",
                 props("query", "string", "what to search for, e.g. Radiohead Creep live")));
         f.put(fn("music", "Control the music: play, pause, next or previous song, or play something by name.", mp));
         return new JSONArray().put(new JSONObject().put("functionDeclarations", f));
@@ -250,7 +250,7 @@ final class CarControl {
         if (best == null) return res(false, "no app called " + name + " on this car");
         final Apps.App app = best;
         main.post(() -> Apps.open(c, app.pkg, CarData.get(c).last()));   // video apps still only in P
-        boolean video = Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked();
+        boolean video = Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving();
         return res(!video, video ? app.label + " is a video app: it opens only in P" : "opening " + app.label);
     }
 
@@ -275,7 +275,9 @@ final class CarControl {
     /** YouTube search, opened full screen: only in P (the project's rule: video only when parked). */
     private JSONObject youtube(String query) throws Exception {
         if (query.trim().isEmpty()) return res(false, "which video?");
-        if (!CarData.get(c).last().parked()) return res(false, "videos open only in P; ask again when parked");
+        // while driving only with Settings → Song video "While driving too" (for the passenger; Air 2026-11-22)
+        if (!CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving())
+            return res(false, "videos open only in P (Settings → Song video → While driving too allows it for the passenger)");
         android.net.Uri u = android.net.Uri.parse("https://www.youtube.com/results?search_query=" + android.net.Uri.encode(query));
         for (String p : new String[]{"com.gbox.com.google.android.youtube", "com.google.android.youtube"}) {
             if (!Apps.installed(c, p)) continue;
