@@ -188,6 +188,10 @@ public final class TripEnergy implements CarData.Listener {
 
     public long startedAt;
     public double km, kwh, regenKwh, powerKw = Double.NaN;
+    /** Battery % used this trip: every drop of the car's battery % added up; charging never counts (Air 2026-11-22: the
+     *  card showed kWh ÷ 60.48 = 52 % while the battery went 97 → 39 %). */
+    public double socUsedPct;
+    private double lastSocSeen = Double.NaN;
     public boolean fromRemaining;           // true when using the battery's remaining energy instead of power
     private double startRemain = Double.NaN;
     private double lastSoc = Double.NaN;
@@ -389,6 +393,7 @@ public final class TripEnergy implements CarData.Listener {
         segKm = segKwh = segSpeedSum = 0;
         segN = 0;
         startRemain = Double.NaN;
+        socUsedPct = 0; lastSocSeen = Double.NaN;
         points.clear();
         clearStats();
         for (Listener l : listeners) l.onTrip(this);
@@ -410,7 +415,11 @@ public final class TripEnergy implements CarData.Listener {
             if (startNew) newTripPending = false;
             if (startNew || startedAt == 0 || (lastAt > 0 && s.at - lastAt > NEW_TRIP_GAP_MS)) {
                 startedAt = s.at; km = kwh = regenKwh = 0; rawTripKm = rawTripKwh = 0; segKm = segKwh = segSpeedSum = 0; segN = 0;
-                startRemain = Double.NaN; points.clear(); lastAt = 0; clearStats(); lastLeft = Double.NaN;
+                startRemain = Double.NaN; points.clear(); lastAt = 0; clearStats(); lastLeft = Double.NaN; socUsedPct = 0; lastSocSeen = Double.NaN;
+            }
+            if (!Double.isNaN(s.socPct)) {
+                if (!Double.isNaN(lastSocSeen) && s.socPct < lastSocSeen) socUsedPct += lastSocSeen - s.socPct;
+                lastSocSeen = s.socPct;
             }
             double dt = lastAt == 0 ? 0 : Math.min(2.0, (s.at - lastAt) / 1000.0);   // seconds; gaps don't count
             lastAt = s.at;
