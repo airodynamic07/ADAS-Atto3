@@ -28,7 +28,10 @@ public final class KeyWatch extends AccessibilityService {
             if (lines.length > 12) seen = android.text.TextUtils.join("\n", java.util.Arrays.copyOf(lines, 12));
             s.edit().putString("seen", seen).apply();
         }
-        if (!new Prefs(this).aiChat() || !isChatKey(this, code)) return false;
+        if (!new Prefs(this).aiChat()) return false;
+        // the wheel button also sends 327 right after 304: swallow it too, or BYD's own voice assistant opens as well
+        if (code == 327 && store(this).getInt("chosen", -1) < 0) return true;
+        if (!isChatKey(this, code)) return false;
         if (e.getAction() == KeyEvent.ACTION_UP) AiChat.startNow(this);
         return true;   // the wheel button now belongs to Natee chat
     }

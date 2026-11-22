@@ -35,7 +35,7 @@ final class CarControl {
         f.put(fn("set_temperature", "Set the A/C temperature.", props("celsius", "number", "target temperature, 17 to 33 °C")));
         f.put(fn("set_ac", "Switch the air conditioning on or off.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("set_cabin_light", "Switch the cabin / reading light on or off.", props("on", "boolean", "true = on, false = off")));
-        f.put(fn("sunshade", "Open, close or stop the sunroof sunshade. Only after the driver confirmed it.",
+        f.put(fn("sunshade", "Stop the sunroof / sunshade moving. Opening or closing the sunshade is not possible yet: say so.",
                 props("action", "string", "open, close or stop")));
         f.put(fn("open_app", "Open an app on the car screen by its name, including the apps inside GBox (e.g. Google Maps, YouTube Music, Spotify, Waze).",
                 props("name", "string", "the app's name as the driver said it")));
@@ -189,13 +189,15 @@ final class CarControl {
 
     private JSONObject shade(String action) {
         String a = action.toLowerCase(Locale.US);
-        int code = a.startsWith("open") ? 1 : a.startsWith("close") ? 2 : a.startsWith("stop") ? 4 : -1;
-        if (code < 0) return res(false, "say open, close or stop");
-        if (code == 4) { call(BODY, "setMoonRoofAndSunshadeStop"); return answer(call(BODY, "voiceCtlMoonRoof", 4), "sunshade stopped"); }
-        Object r = call(BODY, "voiceCtlMoonRoof", code);   // the car accepted this in the probe test; direction not confirmed yet
-        JSONObject o = answer(r, "sunshade " + (code == 1 ? "opening" : "closing"));
-        try { o.put("note", "first test: if it moved the wrong way, tell the driver to say stop and tell Claude"); } catch (Exception ignored) { }
-        return o;
+        // (Air 2026-11-22) voiceCtlMoonRoof opened the GLASS SUNROOF, not the sunshade: never used for open/close again.
+        // Only stop stays (it stops the roof and the sunshade). Open/close come back once the sunshade's own command is
+        // found (Settings → AI chat → Find car controls).
+        if (a.startsWith("stop")) {
+            Object r = call(BODY, "setMoonRoofAndSunshadeStop");
+            if (r == MISSING) r = call(BODY, "voiceCtlMoonRoof", 4);
+            return answer(r, "sunroof and sunshade stopped");
+        }
+        return res(false, "the sunshade can't be opened or closed from here yet (the command for it isn't known on this car); only stop works");
     }
 
     // ------------------------------------------------------------ apps and music (user, 2026-11-21)

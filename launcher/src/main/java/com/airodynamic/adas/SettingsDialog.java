@@ -180,6 +180,7 @@ public final class SettingsDialog {
         LinearLayout aw = row(c);
         int chosenKey = KeyWatch.store(c).getInt("chosen", -1);
         aw.addView(Ui.chip(c, "Wake word check ›", false, th, v -> wakeCheck(c)), weight(c));
+        aw.addView(Ui.chip(c, "Find car controls ›", false, th, v -> findControls(c)), weight(c));
         boolean permOk = AiChat.micAllowed(c) && AiChat.overlayAllowed(c);
         aw.addView(Ui.chip(c, permOk ? "Permissions: OK" : "Fix permissions ›", false, th, v -> fixPerms(c)), weight(c));
         aw.addView(Ui.chip(c, "Wheel mic button: " + (chosenKey >= 0 ? "key " + chosenKey : "usual voice keys") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
@@ -380,6 +381,53 @@ public final class SettingsDialog {
                                     c.getSharedPreferences("adas_launcher", 0).edit().putString("read_" + n, keys.get(i)).apply();
                                 }).show())
                         .setPositiveButton("Close", null).show();
+            });
+        }).start();
+    }
+
+    /**
+     * Finds the sunshade and cabin-light commands (Air 2026-11-22: "open sunshade" opened the glass sunroof): lists the
+     * car's commands with matching names, then which readings change when the driver uses the car's own buttons.
+     */
+    private static void findControls(Context c) {
+        final String[] devs = {"bodywork.BYDAutoBodyworkDevice", "light.BYDAutoLightDevice", "setting.BYDAutoSettingDevice"};
+        android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+        new Thread(() -> {
+            StringBuilder names = new StringBuilder();
+            java.util.regex.Pattern want = java.util.regex.Pattern.compile("(?i).*(shade|curtain|blind|read|dome|lamp|roof|ceiling|interior|cabin|inner|top).*");
+            for (String d : devs) {
+                Object dev = CarControl.CarDev.get(c, d);
+                if (dev == null) continue;
+                java.util.TreeSet<String> ms = new java.util.TreeSet<>();
+                for (java.lang.reflect.Method m : dev.getClass().getMethods()) {
+                    if (!want.matcher(m.getName()).matches()) continue;
+                    if (!(m.getName().startsWith("set") || m.getName().startsWith("get") || m.getName().startsWith("voice"))) continue;
+                    ms.add(m.getName() + "(" + m.getParameterTypes().length + ")");
+                }
+                if (!ms.isEmpty()) names.append(d.replaceAll(".*\\.BYDAuto|Device", "")).append(": ").append(android.text.TextUtils.join(", ", ms)).append("\n\n");
+            }
+            final java.util.Map<String, Integer> before = CarData.get(c).snapshot(devs);
+            final String list = names.length() == 0 ? "no matching commands found\n\n" : names.toString();
+            ui.post(() -> {
+                TextView t1 = Ui.text(c, list + "Next: with the car's OWN buttons, open or close the SUNSHADE a little and switch the READING LIGHT on, then tap Done.", 12, 0xFFFFFFFF, false);
+                t1.setTextIsSelectable(true);
+                t1.setPadding(32, 16, 32, 16);
+                ScrollView sv = new ScrollView(c);
+                sv.addView(t1);
+                new AlertDialog.Builder(c).setTitle("Find car controls (1/2) — send a photo to Claude").setView(sv)
+                        .setPositiveButton("Done", (dd, w) -> new Thread(() -> {
+                            java.util.Map<String, Integer> after = CarData.get(c).snapshot(devs);
+                            StringBuilder ch = new StringBuilder();
+                            for (java.util.Map.Entry<String, Integer> e : after.entrySet()) {
+                                Integer b = before.get(e.getKey());
+                                if (b != null && !b.equals(e.getValue()))
+                                    ch.append(e.getKey().replaceAll(".*\\.BYDAuto|Device", "")).append(": ").append(b).append(" → ").append(e.getValue()).append("\n");
+                            }
+                            final String changed = ch.length() == 0 ? "No reading changed." : ch.toString();
+                            ui.post(() -> new AlertDialog.Builder(c).setTitle("Find car controls (2/2) — send a photo to Claude")
+                                    .setMessage(changed).setPositiveButton("Close", null).show());
+                        }).start())
+                        .setNegativeButton("Close", null).show();
             });
         }).start();
     }
