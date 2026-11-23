@@ -219,7 +219,7 @@ public final class SettingsDialog {
         // their own row, so the labels aren't cut off (Air 2026-11-23: couldn't find the button)
         LinearLayout aw2 = row(c);
         aw2.addView(Ui.chip(c, "Switch BYD voice assistant off / on ›", false, th, v -> bydVoice(c)), weight(c));
-        aw2.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) && KeyWatch.connected ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
+        aw2.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) && KeyWatch.running() ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
         root.addView(aw2);
 
         section(c, root, th, "Tyre pressure unit");
@@ -580,11 +580,11 @@ public final class SettingsDialog {
         android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
         new Thread(() -> {
             KeyWatch.ensureOn(c);   // by the launcher itself when it may, else through the car's ADB
-            for (int i = 0; i < 16 && !(KeyWatch.isOn(c) && KeyWatch.connected); i++) {   // Android needs a moment to start it
+            for (int i = 0; i < 16 && !(KeyWatch.isOn(c) && KeyWatch.running()); i++) {   // Android needs a moment to start it
                 try { Thread.sleep(500); } catch (InterruptedException ignored) { }
             }
-            String err = KeyWatch.isOn(c) && KeyWatch.connected ? null
-                    : "The button watcher isn't running yet. Update once with ADAS Probe's \"Install / update NATEE Launcher\" (it gives the launcher the permission to switch it on itself).";
+            String err = KeyWatch.isOn(c) && KeyWatch.running() ? null
+                    : "Watcher not running — send a photo.";
             final String e2 = err;
             ui.post(() -> showKeys(c, e2));
         }).start();
@@ -594,7 +594,9 @@ public final class SettingsDialog {
         String seen = KeyWatch.store(c).getString("seen", "");
         String after = KeyWatch.store(c).getString("afterPress", "");
         if (!after.isEmpty()) seen = "opened after the press: " + after + (seen.isEmpty() ? "" : "\n" + seen);
-        seen = "watcher started " + KeyWatch.store(c).getString("connAt", "never") + " · now "
+        seen = "listed: " + (KeyWatch.isOn(c) ? "yes" : "NO") + " · running: " + (KeyWatch.running() ? "yes" : "NO") + " · can fix itself: "
+                + (c.checkCallingOrSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED ? "yes" : "NO")
+                + "\nwatcher started " + KeyWatch.store(c).getString("connAt", "never") + " · now "
                 + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(new java.util.Date()) + (seen.isEmpty() ? "" : "\n" + seen);
         final String[] lines = seen.split("\n");
         AlertDialog.Builder b = new AlertDialog.Builder(c)

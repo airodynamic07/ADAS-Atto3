@@ -110,6 +110,7 @@ public final class KeyWatch extends AccessibilityService {
     // 20 s check kept restarting a healthy watcher, and BYD's assistant got the button in the gaps
     private static volatile KeyWatch live;
     private static volatile long lastToggle;
+    private static volatile boolean force;
     @Override protected void onServiceConnected() {
         super.onServiceConnected(); live = this; connected = true;
         store(this).edit().putString("connAt", new java.text.SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).format(new java.util.Date())).apply();
@@ -118,11 +119,16 @@ public final class KeyWatch extends AccessibilityService {
     /** After a car start the watcher is listed and looks alive but the button goes to BYD again (Air 2026-11-23:
      *  "it works until I restart"): start it afresh, whatever it says about itself. */
     static void restart(Context c) {
-        connected = false; lastToggle = 0;
+        lastToggle = 0; force = true;
         ensureOn(c);
     }
-    @Override public boolean onUnbind(android.content.Intent i) { if (live == this) connected = false; return super.onUnbind(i); }
-    @Override public void onDestroy() { if (live == this) connected = false; super.onDestroy(); }
+    // (Air 2026-11-23: "not running" shown although Quinn had just opened) Android can reuse the same watcher when it
+    // is restarted, and its late goodbye then marked the fresh one dead: ask Android itself instead of keeping a flag
+    static boolean running() {
+        KeyWatch k = live;
+        if (k == null) return false;
+        try { return k.getServiceInfo() != null; } catch (Throwable t) { return false; }
+    }
 
     /**
      * The watcher is switched off by updates and by every car start (Air 2026-11-23: "after I turn the car off and on it
@@ -135,7 +141,8 @@ public final class KeyWatch extends AccessibilityService {
             android.content.ContentResolver cr = c.getContentResolver();
             String cur = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
             boolean listed = cur != null && cur.contains(me);
-            if (listed && connected) return;
+            boolean forced = force; force = false;
+            if (listed && running() && !forced) return;
             long now = android.os.SystemClock.uptimeMillis();
             if (listed && lastToggle != 0 && now - lastToggle < 120_000) return;   // give Android time; never restart it in a loop
             lastToggle = now;
@@ -145,13 +152,13 @@ public final class KeyWatch extends AccessibilityService {
             if (own) {
                 if (listed) {   // listed but not running: take it out and put it back, so Android starts it again
                     android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, without);
-                    try { Thread.sleep(700); } catch (InterruptedException ignored) { }
+                    try { Thread.sleep(1500); } catch (InterruptedException ignored) { }
                 }
                 android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, with);
                 android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, "1");
                 return;
             }
-            Updater.adbShell(c, (listed ? "settings put secure enabled_accessibility_services '" + without + "'; sleep 1; " : "")
+            Updater.adbShell(c, (listed ? "settings put secure enabled_accessibility_services '" + without + "'; sleep 2; " : "")
                     + "settings put secure enabled_accessibility_services '" + with + "'; settings put secure accessibility_enabled 1; "
                     + "pm grant " + c.getPackageName() + " android.permission.WRITE_SECURE_SETTINGS");
         } catch (Throwable ignored) { }
