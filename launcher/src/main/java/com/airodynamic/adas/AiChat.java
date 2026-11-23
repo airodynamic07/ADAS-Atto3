@@ -104,10 +104,14 @@ public final class AiChat extends Service {
     private static final int C_LISTEN = 0xFF3AA0FF, C_HEAR = 0xFF2EE59D, C_ANSWER = 0xFF7C4DFF, C_REPEAT = 0xFFFF8A1F;
     private final Runnable hideLater = () -> closeWhenQuiet();
     private volatile long lastSoundAt;   // the last moment the microphone heard a voice (talking turn or not)
+    // (Air 2026-11-23: "I can't press to stop and it keeps waiting because of the noise while driving") road noise is
+    // as loud as a voice, so a turn started by the wake word ends on WORDS: Gemini writes down what it hears, noise
+    // gives no words. 1.8 s without new words = finished; no words at all within 6 s = only noise; 20 s at most.
+    private volatile long lastWordsAt, openedAt;
 
     /** Never close while someone is still talking (Air 2026-11-22: "I'm still talking and it closes"). */
     private void closeWhenQuiet() {
-        if (System.currentTimeMillis() - lastSoundAt < 3000) { main.postDelayed(this::closeWhenQuiet, 1000); return; }
+        if (System.currentTimeMillis() - lastWordsAt < 3000) { main.postDelayed(this::closeWhenQuiet, 1000); return; }
         endChat();
     }
     private boolean silentStart;   // listening again after an answer: no beep
@@ -159,6 +163,8 @@ public final class AiChat extends Service {
                 dropReply = true;
                 talking = true; heard = false;
                 look(C_LISTEN, "listening… (closes in 10 s if you say nothing)");
+                main.removeCallbacks(noAnswer);
+                main.postDelayed(noAnswer, 10_000);
                 return;
             }
             look(C_ANSWER, "answering…");
@@ -196,7 +202,8 @@ public final class AiChat extends Service {
         main.postDelayed(noAnswer, askedQuestion() ? 20_000 : 10_000);
     }
 
-    private final Runnable noAnswer = () -> { if (talking && !activityOpen) closeWhenQuiet(); };
+    // closes when no words came for a while, even if road noise keeps the microphone busy
+    private final Runnable noAnswer = () -> { if (talking && (!activityOpen || System.currentTimeMillis() - lastWordsAt > 8000)) closeWhenQuiet(); };
 
     /** Gemini asked something ("Open the sunroof?"): it waits 20 s for the answer instead of 10. */
     private boolean askedQuestion() {
@@ -501,8 +508,12 @@ public final class AiChat extends Service {
                 main.post(() -> {
                     if (newTurn) { you.setLength(0); gem.setLength(0); lastAction = ""; newTurn = false; }
                     you.append(t); lastActive = System.currentTimeMillis(); showText();
-                    if (t.trim().length() > 0 && !t.trim().startsWith("<")) wordsThisTurn = true;   // "<noise>" isn't words
-                    if (talking) look(C_HEAR, "I hear you · press the mic when you've finished");
+                    if (t.trim().length() > 0 && !t.trim().startsWith("<")) {
+                        wordsThisTurn = true; lastWordsAt = System.currentTimeMillis();
+                        // the words came in after the turn was taken for noise: it was you after all, let the answer through
+                        if (dropReply && !activityOpen && talking && !isEcho()) { dropReply = false; talking = false; main.removeCallbacks(noAnswer); look(C_ANSWER, "answering…"); }
+                    }   // "<noise>" isn't words
+                    if (talking) look(C_HEAR, (byPress ? "I hear you · press the mic when you've finished" : "I hear you · pause when you've finished"));
                     String all = you.toString().toLowerCase(java.util.Locale.US);
                     // "close <any spelling of Natee> chat" / "ปิด…แชท" (the name is written differently each time)
                     boolean close = all.matches("(?s).*\\bclose\\b.{0,20}\\bchat\\b.*") || all.matches("(?s).*ปิด.{0,20}แชท.*")
@@ -611,16 +622,21 @@ public final class AiChat extends Service {
                         if (!voice && !byPress) continue;   // pressed: you said you're talking, everything is sent
                         wordsThisTurn = false;
                         // your voice: tell Gemini you started, with the moment just before
-                        activityOpen = true; heard = true;
+                        activityOpen = true; heard = true; openedAt = System.currentTimeMillis();
                         if (manual) s.send("{\"realtimeInput\":{\"activityStart\":{}}}");
                         while (!pre.isEmpty()) s.send(pre.removeFirst());
                         lastVoiceAt = voice || someVoice ? System.currentTimeMillis() : 0;
-                        if (voice || someVoice) main.post(() -> { if (talking) look(C_HEAR, "I hear you · press the mic when you've finished"); });
+                        if (voice || someVoice) main.post(() -> { if (talking) look(C_HEAR, (byPress ? "I hear you · press the mic when you've finished" : "I hear you · pause when you've finished")); });
                         continue;
                     }
                     s.send(msg);
+                    if (!byPress) {   // wake word / listening again: no press will come, so words decide
+                        long now = System.currentTimeMillis();
+                        if (wordsThisTurn ? now - lastWordsAt > 1800 : now - openedAt > 6000) { main.post(this::finishTalk); continue; }
+                        if (now - openedAt > 20_000) { main.post(this::finishTalk); continue; }
+                    }
                     if (byPress ? someVoice : loud) {
-                        if (lastVoiceAt == 0) main.post(() -> { if (talking) look(C_HEAR, "I hear you · press the mic when you've finished"); });
+                        if (lastVoiceAt == 0) main.post(() -> { if (talking) look(C_HEAR, (byPress ? "I hear you · press the mic when you've finished" : "I hear you · pause when you've finished")); });
                         lastVoiceAt = System.currentTimeMillis();
                     }
                     // 2 s quiet after your voice = finished (or press the mic); never before any voice was heard
