@@ -226,8 +226,11 @@ public final class AiChat extends Service {
             } catch (Throwable e) { wakeState = "engine couldn't start: " + e.getClass().getSimpleName() + " " + e.getMessage(); status("Harley Quinn: wake word engine couldn't start (" + e.getClass().getSimpleName() + ")"); return; }
             wakeState = "ready";
             // only these phrases are listened for ("natee" isn't an English word: the nearest sounds stand in for it)
-            // wake word "Harley Quinn" (Air 2026-11-23: "Quinn" alone woke up too easily); "queen" accepted for "Quinn"
-            String grammar = "[\"harley quinn\", \"harley queen\", \"hey harley quinn\", \"hi harley quinn\", \"[unk]\"]";
+            // wake word = the assistant's two-word name from Settings (Air 2026-11-23, default "Harley Quinn"; "queen" for "Quinn")
+            final String w1 = prefs.aiName1(), w2 = prefs.aiName2();
+            String alt = w2.equals("quinn") ? ", \"" + w1 + " queen\"" : "";
+            String grammar = "[\"" + w1 + " " + w2 + "\", \"hey " + w1 + " " + w2 + "\", \"hi " + w1 + " " + w2 + "\"" + alt + ", \"[unk]\"]";
+            wakeWords = new String[]{w1, w2};
             while (alive) {
                 if (chatting) { sleep(300); continue; }
                 Mic mic = null;
@@ -291,10 +294,14 @@ public final class AiChat extends Service {
         try { return new JSONObject(json).optString("text", "").trim(); } catch (Exception e) { return ""; }
     }
 
+    private static volatile String[] wakeWords = {"harley", "quinn"};
+
     private static boolean isWake(String json) {
         if (json == null) return false;
         String t = " " + json.toLowerCase(java.util.Locale.US).replaceAll("[^a-z]+", " ") + " ";
-        return t.contains(" harley quinn ") || t.contains(" harley queen ");   // both words, one right after the other
+        String a = wakeWords[0], b = wakeWords[1];
+        // both words, one right after the other
+        return t.contains(" " + a + " " + b + " ") || (b.equals("quinn") && t.contains(" " + a + " queen "));
     }
 
     // ---------------- chat ----------------
@@ -395,7 +402,7 @@ public final class AiChat extends Service {
             JSONObject gen = new JSONObject().put("responseModalities", new JSONArray().put("AUDIO"))
                     .put("speechConfig", new JSONObject().put("voiceConfig", voice));
             JSONObject sys = new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text",
-                    "You are Quinn, a friendly voice assistant in the driver's BYD Atto 3 electric car in Thailand. The driver is"
+                    "You are " + prefs.aiName() + ", a friendly voice assistant in the driver's BYD Atto 3 electric car in Thailand. The driver is"
                             + " driving: keep answers short and easy to listen to (one to three sentences), no lists or links."
                             + " You cannot see the road. You can read the car's information with get_car_info (use it whenever the"
                             + " driver asks about the car: range, battery, tyres, air, temperatures, trip, doors) and change comfort"

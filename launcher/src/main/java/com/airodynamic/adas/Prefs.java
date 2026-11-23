@@ -44,6 +44,12 @@ public final class Prefs {
     public void setAiVoice(String v) { p.edit().putString("aiVoice", v).apply(); }
     public String aiLang() { return p.getString("aiLang", "auto"); }
     public void setAiLang(String l) { p.edit().putString("aiLang", l).apply(); }
+    /** The assistant's name = the wake word: two words, typed in Settings (Air 2026-11-23); default Harley Quinn */
+    public String aiName1() { return p.getString("aiName1", "harley"); }
+    public String aiName2() { return p.getString("aiName2", "quinn"); }
+    public void setAiName(String a, String b) { p.edit().putString("aiName1", a).putString("aiName2", b).apply(); }
+    public String aiName() { return cap(aiName1()) + " " + cap(aiName2()); }
+    private static String cap(String w) { return w.isEmpty() ? w : Character.toUpperCase(w.charAt(0)) + w.substring(1); }
 
     public void setSpeedVoice(boolean on) { p.edit().putBoolean("speedVoice", on).apply(); }
 

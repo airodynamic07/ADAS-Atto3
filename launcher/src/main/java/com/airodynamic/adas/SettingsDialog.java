@@ -153,7 +153,7 @@ public final class SettingsDialog {
 
         // "Hey Natee chat": voice chat with Gemini (user, 2026-11-21). Reads the car; changes comfort things only (CarControl).
         String key = prefs.aiKey();
-        section(c, root, th, "AI chat (Gemini) · say \"Harley Quinn\" or press the wheel mic: " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
+        section(c, root, th, "AI chat (Gemini) · say \"" + prefs.aiName() + "\" or press the wheel mic: " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
         LinearLayout ai = row(c);
         ai.addView(Ui.chip(c, "On", prefs.aiChat(), th, v -> { prefs.setAiChat(true); AiChat.sync(c); redo.run(); }), weight(c));
         ai.addView(Ui.chip(c, "Off", !prefs.aiChat(), th, v -> { prefs.setAiChat(false); AiChat.sync(c); redo.run(); }), weight(c));
@@ -167,6 +167,37 @@ public final class SettingsDialog {
                     .setNegativeButton("Cancel", null).show();
         }), weight(c));
         root.addView(ai);
+        // the assistant's name = the wake word: two words (Air 2026-11-23)
+        LinearLayout an = row(c);
+        an.addView(Ui.chip(c, "Name / wake word: " + prefs.aiName() + " ›", false, th, v -> {
+            LinearLayout box = new LinearLayout(c);
+            box.setOrientation(LinearLayout.VERTICAL);
+            int pd = Ui.dp(c, 18);
+            box.setPadding(pd, pd / 2, pd, 0);
+            android.widget.EditText e1 = new android.widget.EditText(c), e2 = new android.widget.EditText(c);
+            e1.setSingleLine(true); e2.setSingleLine(true);
+            e1.setHint("first word, e.g. Harley"); e2.setHint("second word, e.g. Quinn");
+            e1.setText(prefs.aiName1()); e2.setText(prefs.aiName2());
+            box.addView(e1); box.addView(e2);
+            TextView hint = Ui.text(c, "Two English words (the offline listener knows English words). Check it with Wake word check.", 12, th.muted, false);
+            box.addView(hint);
+            new AlertDialog.Builder(c).setTitle("Assistant name (= wake word)").setView(box)
+                    .setPositiveButton("Save", (d, i) -> {
+                        String a1 = e1.getText().toString().trim().toLowerCase(java.util.Locale.US).replaceAll("[^a-z]", "");
+                        String a2 = e2.getText().toString().trim().toLowerCase(java.util.Locale.US).replaceAll("[^a-z]", "");
+                        if (a1.length() < 2 || a2.length() < 2) {
+                            android.widget.Toast.makeText(c, "Please fill in both words (English letters)", android.widget.Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        prefs.setAiName(a1, a2);
+                        // restart the listener with the new name
+                        c.stopService(new android.content.Intent(c, AiChat.class));
+                        AiChat.sync(c);
+                        redo.run();
+                    })
+                    .setNegativeButton("Cancel", null).show();
+        }), weight(c));
+        root.addView(an);
         LinearLayout al = row(c);
         for (String[] l : new String[][]{{"auto", "Thai + English"}, {"en", "English"}, {"th", "Thai"}}) {
             al.addView(Ui.chip(c, l[1], prefs.aiLang().equals(l[0]), th, v -> { prefs.setAiLang(l[0]); redo.run(); }), weight(c));
@@ -244,7 +275,7 @@ public final class SettingsDialog {
         }).start()), weight(c));
         String[] reports = ProblemLog.all(c);
         pb.addView(Ui.chip(c, "Voice reports & ideas (" + reports.length + ")", false, th, v -> {
-            TextView t = Ui.text(c, reports.length == 0 ? "Nothing yet. Say \"Harley Quinn\" (or press the wheel mic), then \"report a problem: …\" or \"idea: …\"" : android.text.TextUtils.join("\n\n", reports), 12, th.text, false);
+            TextView t = Ui.text(c, reports.length == 0 ? "Nothing yet. Say \"" + prefs.aiName() + "\" (or press the wheel mic), then \"report a problem: …\" or \"idea: …\"" : android.text.TextUtils.join("\n\n", reports), 12, th.text, false);
             t.setTextIsSelectable(true);
             t.setPadding(24, 16, 24, 16);
             ScrollView sv3 = new ScrollView(c);
@@ -495,7 +526,7 @@ public final class SettingsDialog {
                         + "\nWake word: " + AiChat.wakeState
                         + "\nMicrophone: " + (lv < 0 ? "–" : lv + "  " + bar)
                         + "\nLast heard: " + (AiChat.lastHeard.isEmpty() ? "–" : "\"" + AiChat.lastHeard + "\"")
-                        + "\n\nSay \"Harley Quinn\" and watch the microphone bar. If it stays at 0 while you talk, another app"
+                        + "\n\nSay your assistant's name and watch the microphone bar. If it stays at 0 while you talk, another app"
                         + " (the car's own voice assistant) is holding the microphone.");
                 if (t.isAttachedToWindow() || t.getWindowToken() == null) ui.postDelayed(this, 300);
             }
