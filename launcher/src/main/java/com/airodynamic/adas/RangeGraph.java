@@ -266,6 +266,30 @@ final class RangeGraph extends LinearLayout {
         private final Path path = new Path();
         private final float d;
         private double curLo = Double.NaN, curHi = Double.NaN;   // the height shown, gliding towards the wanted one
+        private double pan, panMax, spanKm = 10, downPan;        // This trip: km dragged back from now
+        private float downX;
+        private long touchedAt;
+
+        @Override public boolean onTouchEvent(android.view.MotionEvent e) {
+            if (mode != 0 || panMax <= 0) return super.onTouchEvent(e);
+            float plotW = Math.max(1, getWidth() - 50 * d);
+            switch (e.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    downX = e.getX(); downPan = pan; touchedAt = android.os.SystemClock.uptimeMillis();
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                    return true;
+                case android.view.MotionEvent.ACTION_MOVE:
+                    // drag right = look back (older km come in from the left), drag left = towards now
+                    pan = Math.max(0, Math.min(panMax, downPan + (e.getX() - downX) / plotW * spanKm));
+                    touchedAt = android.os.SystemClock.uptimeMillis();
+                    invalidate();
+                    return true;
+                default:
+                    touchedAt = android.os.SystemClock.uptimeMillis();
+                    postInvalidateDelayed(20_100);   // then it starts gliding back to now
+                    return true;
+            }
+        }
         private int curMode = -1;
 
         Plot(Context c) {
@@ -298,15 +322,23 @@ final class RangeGraph extends LinearLayout {
             }
             double xc = pts.get(pts.size() - 1)[0];
             boolean trip = mode == 0;
-            // across: this trip = the last 50 km (sliding); today / charge = from 0 to where NEDC reaches 0
-            double xs = trip ? Math.max(sr.xRef, xc - 50) : sr.xRef;
-            double xe = trip ? Math.max(xs + 10, xc) : Math.max(xs + 10, Math.max(xc, sr.xRef + sr.ref(0, sr.xRef)));
-            // up: this trip = just around the lines in the window; today / charge = 0 to the top
+            // (Air 2026-11-23) all views start 10 km wide. This trip grows to 50 km, then slides with you and can be
+            // dragged back; Today / C to C grow to show everything from the start to now (no sliding).
+            double maxPan = trip ? Math.max(0, xc - sr.xRef - 50) : 0;
+            if (pan > maxPan) pan = maxPan;
+            if (trip && pan > 0 && android.os.SystemClock.uptimeMillis() - touchedAt > 20_000) {   // left alone: glide back to now
+                pan = pan < 0.3 ? 0 : pan * 0.8;
+                postInvalidateDelayed(40);
+            }
+            double xView = trip ? xc - pan : xc;   // the right edge of what is shown
+            double xs = trip ? Math.max(sr.xRef, xView - 50) : sr.xRef;
+            double xe = Math.max(xs + 10, xView);
+            spanKm = xe - xs; panMax = maxPan;
+            // up: just around the lines in the window
             double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
-            for (int k = 0; k < 3; k++) for (double x : new double[]{xs, Math.min(xc, xe)}) { double v = sr.ref(k, x); lo = Math.min(lo, v); hi = Math.max(hi, v); }
-            for (double[] p : pts) if (p[0] >= xs) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }
-            if (trip) { double pad = Math.max(8, (hi - lo) * 0.12); lo = Math.max(0, lo - pad); hi += pad; }
-            else { lo = 0; hi = hi * 1.06 + 5; }
+            for (int k = 0; k < 3; k++) for (double x : new double[]{xs, Math.min(xView, xe)}) { double v = sr.ref(k, x); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+            for (double[] p : pts) if (p[0] >= xs && p[0] <= xView) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }
+            double pad = Math.max(8, (hi - lo) * 0.12); lo = Math.max(0, lo - pad); hi += pad;
             // glide smoothly to the new height (no jumps) as the window moves right and down
             if (curMode != mode || Double.isNaN(curLo)) { curLo = lo; curHi = hi; curMode = mode; }
             else {
@@ -339,23 +371,21 @@ final class RangeGraph extends LinearLayout {
             // the three straight lines: solid up to you; Today / charge also show (faint) where each reaches 0 ahead
             for (int k = 0; k < 3; k++) {
                 double zeroX = sr.xRef + sr.ref(k, sr.xRef);
-                double x1 = Math.min(xc, zeroX);
+                double x1 = Math.min(xView, zeroX);
                 line.setColor(colors[k]);
                 line.setStrokeWidth(2f * d);
                 cv.drawLine((float) X.applyAsDouble(xs), (float) Y.applyAsDouble(sr.ref(k, xs)), (float) X.applyAsDouble(x1), (float) Y.applyAsDouble(sr.ref(k, x1)), line);
-                if (!trip && zeroX > xc) {
-                    dash.setColor((colors[k] & 0x00FFFFFF) | 0x73000000);
-                    dash.setStrokeWidth(1.6f * d);
-                    cv.drawLine((float) X.applyAsDouble(xc), (float) Y.applyAsDouble(sr.ref(k, xc)), (float) X.applyAsDouble(zeroX), (float) Y.applyAsDouble(0), dash);
-                }
-                endX[k] = (float) X.applyAsDouble(xc); endY[k] = (float) Y.applyAsDouble(sr.ref(k, xc)); endV[k] = sr.ref(k, xc);
+                endX[k] = (float) X.applyAsDouble(xView); endY[k] = (float) Y.applyAsDouble(sr.ref(k, xView)); endV[k] = sr.ref(k, xView);
             }
             // My range: a smooth curve through its points
             path.reset();
             float px = 0, py = 0;
             boolean started = false;
+            double[] at = null;   // My range at the right edge of what is shown
             for (double[] p : pts) {
                 if (p[0] < xs) continue;
+                if (p[0] > xView + 0.05) break;
+                at = p;
                 float x = (float) X.applyAsDouble(p[0]), y = (float) Y.applyAsDouble(p[1]);
                 if (!started) { path.moveTo(x, y); started = true; }
                 else path.quadTo(px, py, (px + x) / 2, (py + y) / 2);
@@ -365,12 +395,12 @@ final class RangeGraph extends LinearLayout {
             line.setColor(MY);
             line.setStrokeWidth(2.8f * d);
             cv.drawPath(path, line);
-            double[] last = pts.get(pts.size() - 1);
+            double[] last = at != null ? at : pts.get(pts.size() - 1);
             endX[3] = (float) X.applyAsDouble(last[0]); endY[3] = (float) Y.applyAsDouble(last[1]); endV[3] = last[1];
-            // your position: a dashed vertical line (today / charge)
-            if (!trip) {
-                dash.setColor(0xFF3A6FD8); dash.setStrokeWidth(1.2f * d);
-                cv.drawLine(endX[3], top, endX[3], bottom, dash);
+            if (pan > 0) {   // looking back: say how far back, tap-free (it glides back to now by itself)
+                text.setTextSize(10.5f * d); text.setColor(th.muted); text.setTypeface(android.graphics.Typeface.DEFAULT);
+                String back = String.format(Locale.US, "◀ %.0f km back · drag right for now", pan);
+                cv.drawText(back, left + 4 * d, top + 12 * d, text);
             }
             cv.restore();
             // dots and the km of each line at your position, kept apart so they never sit on top of each other
