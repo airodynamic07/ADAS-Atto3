@@ -57,10 +57,18 @@ public final class Updater {
         File apk = new File(ctx.getExternalFilesDir(null), "adas-launcher.apk");
         HttpURLConnection d = open(url);
         d.setRequestProperty("Accept", "application/octet-stream");
+        long total = d.getContentLengthLong(), got = 0;
+        int step = -1;
         try (InputStream in = d.getInputStream(); FileOutputStream out = new FileOutputStream(apk)) {
             byte[] buf = new byte[65536];
             int n;
-            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+                got += n;
+                // a progress line every 10 % (2026-11-23: the 190 MB download looked stuck)
+                int s10 = total > 0 ? (int) (got * 10 / total) : -1;
+                if (s10 > step) { step = s10; r.info(String.format(java.util.Locale.US, "Downloading… %d %% (%.0f / %.0f MB)", s10 * 10, got / 1048576.0, total / 1048576.0)); }
+            }
         }
         apk.setReadable(true, false);
         r.ok("downloaded", (apk.length() / 1024) + " KB");

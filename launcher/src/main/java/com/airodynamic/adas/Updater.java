@@ -25,7 +25,11 @@ import dadb.Dadb;
 public final class Updater {
     private Updater() {}
 
-    public interface Log { void line(String s); }
+    public interface Log {
+        void line(String s);
+        /** download progress 0–100 (−1 = finished / hide) with a short text (Air 2026-11-23: show a status bar) */
+        default void progress(int pct, String text) { }
+    }
 
     private static final String LATEST = "https://api.github.com/repos/airodynamic07/ADAS-Atto3/releases/latest";
     private static final String ASSET = "adas-launcher.apk";
@@ -69,11 +73,24 @@ public final class Updater {
             }
             log.line("Downloading build " + latest + "…");
             File apk = new File(ctx.getExternalFilesDir(null), "update.apk");
-            try (InputStream in = open(url).getInputStream(); FileOutputStream out = new FileOutputStream(apk)) {
+            HttpURLConnection dc = open(url);
+            long total = dc.getContentLengthLong(), got = 0;
+            int lastPct = -1;
+            try (InputStream in = dc.getInputStream(); FileOutputStream out = new FileOutputStream(apk)) {
                 byte[] buf = new byte[65536];
                 int n;
-                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    got += n;
+                    int pct = total > 0 ? (int) (got * 100 / total) : 0;
+                    if (pct != lastPct) {
+                        lastPct = pct;
+                        log.progress(pct, String.format(java.util.Locale.US, "Downloading build %d · %d %% · %.0f / %.0f MB",
+                                latest, pct, got / 1048576.0, total / 1048576.0));
+                    }
+                }
             }
+            log.progress(100, "Installing build " + latest + "… the launcher restarts by itself in about 15 s");
             apk.setReadable(true, false);
             install(ctx, apk, log);
         } catch (Throwable t) {

@@ -348,4 +348,31 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     @Override public void log(String s) {
         runOnUiThread(() -> Toast.makeText(this, s, Toast.LENGTH_SHORT).show());
     }
+
+    /** Update download: a small window with a bar, % and MB (Air 2026-11-23). */
+    private android.app.AlertDialog updDlg;
+    private android.widget.ProgressBar updBar;
+    private TextView updText;
+    @Override public void progress(int pct, String text) {
+        runOnUiThread(() -> {
+            if (pct < 0) { if (updDlg != null) updDlg.dismiss(); updDlg = null; return; }
+            if (updDlg == null) {
+                LinearLayout box = new LinearLayout(this);
+                box.setOrientation(LinearLayout.VERTICAL);
+                int p = Ui.dp(this, 20);
+                box.setPadding(p, p, p, p);
+                updText = Ui.text(this, "", 15, theme.text, false);
+                box.addView(updText);
+                updBar = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+                updBar.setMax(100);
+                LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 16));
+                bl.topMargin = Ui.dp(this, 12);
+                box.addView(updBar, bl);
+                updDlg = new android.app.AlertDialog.Builder(this).setTitle("Updating NATEE Launcher").setView(box)
+                        .setPositiveButton("Hide", null).show();
+            }
+            updBar.setProgress(pct);
+            updText.setText(text);
+        });
+    }
 }

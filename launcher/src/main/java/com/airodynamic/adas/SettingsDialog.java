@@ -12,7 +12,7 @@ import android.widget.TextView;
 public final class SettingsDialog {
     private SettingsDialog() {}
 
-    public interface Host { void rebuild(); void log(String s); default void settingsClosed() { } }
+    public interface Host { void rebuild(); void log(String s); default void settingsClosed() { } default void progress(int pct, String text) { } }
 
     public static void show(Context c, Theme th, Prefs prefs, Host host) {
         LinearLayout root = new LinearLayout(c);
@@ -263,7 +263,10 @@ public final class SettingsDialog {
         LinearLayout up = row(c);
         up.addView(Ui.chip(c, "⟳ Check for updates", false, th, v -> {
             host.log("Checking for updates…");
-            new Thread(() -> Updater.update(c, host::log)).start();
+            new Thread(() -> Updater.update(c, new Updater.Log() {
+                @Override public void line(String s) { host.log(s); }
+                @Override public void progress(int pct, String text) { host.progress(pct, text); }
+            })).start();
         }), weight(c));
         root.addView(up);
 
