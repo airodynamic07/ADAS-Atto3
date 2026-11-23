@@ -425,11 +425,15 @@ final class CarControl {
      */
     private void launch(android.content.Intent i, String pkg) {
         i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-        main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
+        final long t0 = android.os.SystemClock.uptimeMillis();
+        // (Air 2026-11-23: no navigation while on the Maps page) already in front = Android may silently drop it and we
+        // couldn't tell: go straight through the car's ADB then
+        final boolean alreadyFront = pkg.equals(KeyWatch.front);
+        if (!alreadyFront) main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
         new Thread(() -> {
-            for (int k = 0; k < 8; k++) {
+            if (!alreadyFront) for (int k = 0; k < 8; k++) {
                 try { Thread.sleep(250); } catch (InterruptedException ignored) { }
-                if (pkg.equals(KeyWatch.front)) return;
+                if (pkg.equals(KeyWatch.front) && KeyWatch.frontAt > t0) return;   // it really came up after the request
             }
             try {
                 String cmd;
