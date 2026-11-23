@@ -406,7 +406,7 @@ final class RangeGraph extends LinearLayout {
                 text.setTextSize(10f * d); text.setColor(th.muted); text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
                 for (Object[] m : sr.marks) {
                     double mx = (Double) m[0];
-                    if (mx <= xs || mx >= xe) continue;
+                    if (mx <= xs + 0.05 || mx > xe + 0.05) continue;   // a trip that just started sits right at the edge: shown too
                     float x = (float) X.applyAsDouble(mx);
                     cv.drawLine(x, top + 12 * d, x, bottom, dash);
                     String lab = (String) m[1];
