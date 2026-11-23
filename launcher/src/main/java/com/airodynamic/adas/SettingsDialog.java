@@ -215,9 +215,12 @@ public final class SettingsDialog {
         aw.addView(Ui.chip(c, "Find car controls ›", false, th, v -> findControls(c)), weight(c));
         boolean permOk = AiChat.micAllowed(c) && AiChat.overlayAllowed(c);
         aw.addView(Ui.chip(c, permOk ? "Permissions: OK" : "Fix permissions ›", false, th, v -> fixPerms(c)), weight(c));
-        aw.addView(Ui.chip(c, "BYD voice assistant ›", false, th, v -> bydVoice(c)), weight(c));
-        aw.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) && KeyWatch.connected ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
         root.addView(aw);
+        // their own row, so the labels aren't cut off (Air 2026-11-23: couldn't find the button)
+        LinearLayout aw2 = row(c);
+        aw2.addView(Ui.chip(c, "Switch BYD voice assistant off / on ›", false, th, v -> bydVoice(c)), weight(c));
+        aw2.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) && KeyWatch.connected ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
+        root.addView(aw2);
 
         section(c, root, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
