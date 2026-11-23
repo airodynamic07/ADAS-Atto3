@@ -562,6 +562,7 @@ public final class SettingsDialog {
                 .setItems(lab.toArray(new String[0]), (d, i) -> {
                     final String p = pk.get(i);
                     final boolean turnOff = lab.get(i).startsWith("ON");
+                    KeyWatch.rememberOff(c, p, turnOff);   // kept off after every car start
                     new Thread(() -> {
                         String r;
                         try { r = Updater.adbShell(c, (turnOff ? "pm disable-user --user 0 " : "pm enable ") + p); }

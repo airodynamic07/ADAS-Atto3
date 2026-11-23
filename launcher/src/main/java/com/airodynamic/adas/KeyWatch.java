@@ -147,6 +147,28 @@ public final class KeyWatch extends AccessibilityService {
         } catch (Throwable ignored) { }
     }
 
+    /** Voice apps Air switched off in Settings: the car switches them back on at every start (Air 2026-11-23:
+     *  "it works until I restart"), so they are switched off again whenever they are found on. */
+    static void rememberOff(Context c, String pkg, boolean off) {
+        java.util.Set<String> set = new java.util.HashSet<>(store(c).getStringSet("bydOff", new java.util.HashSet<String>()));
+        if (off) set.add(pkg); else set.remove(pkg);
+        store(c).edit().putStringSet("bydOff", set).apply();
+    }
+
+    static void keepOff(Context c) {
+        try {
+            StringBuilder cmd = new StringBuilder();
+            for (String p : store(c).getStringSet("bydOff", new java.util.HashSet<String>())) {
+                if (!p.matches("[A-Za-z0-9._]+")) continue;
+                int st = c.getPackageManager().getApplicationEnabledSetting(p);
+                boolean on = st != android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+                        && st != android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+                if (on) cmd.append("pm disable-user --user 0 ").append(p).append("; ");
+            }
+            if (cmd.length() > 0) Updater.adbShell(c, cmd.toString());
+        } catch (Throwable ignored) { }
+    }
+
     static boolean isChatKey(Context c, int code) {
         int chosen = store(c).getInt("chosen", -1);
         if (chosen >= 0) return code == chosen;

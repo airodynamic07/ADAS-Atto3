@@ -203,7 +203,8 @@ public final class AiChat extends Service {
         @Override public void run() {
             if (!alive) return;
             // not listed, or listed but not running (after a car start): repair it; checked every 20 s
-            if (!KeyWatch.isOn(AiChat.this) || !KeyWatch.connected) new Thread(() -> KeyWatch.ensureOn(AiChat.this)).start();
+            final boolean fix = !KeyWatch.isOn(AiChat.this) || !KeyWatch.connected;
+            new Thread(() -> { if (fix) KeyWatch.ensureOn(AiChat.this); KeyWatch.keepOff(AiChat.this); }).start();
             main.postDelayed(this, 20_000);
         }
     };
