@@ -38,9 +38,13 @@ public final class KeyWatch extends AccessibilityService {
         if (!wheel && !isChatKey(this, code)) return false;
         // (Air 2026-11-22: "press mic, Natee chat doesn't wake up") act on the first key that arrives (304 or 327, the
         // wheel sends both), once per press; walkie-talkie: AiChat decides talk / finished
+        // (Air 2026-11-23) one press sends 304 then 327, sometimes well apart: only the press key counts (304, or the
+        // chosen key); 327 is swallowed and never counted as a second press (that made every press a "double = close")
+        int pressKey = store(this).getInt("chosen", -1) >= 0 ? store(this).getInt("chosen", -1) : 304;
+        if (code != pressKey && code != KeyEvent.KEYCODE_VOICE_ASSIST && code != KeyEvent.KEYCODE_ASSIST && code != KeyEvent.KEYCODE_SEARCH) return true;
         if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
             long now = android.os.SystemClock.uptimeMillis();
-            if (now - lastPress < 150) return true;   // the second key code of the same press (304 + 327)
+            if (now - lastPress < 150) return true;
             lastPress = now; pressedAt = now;
             // (Air 2026-11-23) double press = close the chat; a single press waits a moment to see if a second one follows
             if (singlePending) {
