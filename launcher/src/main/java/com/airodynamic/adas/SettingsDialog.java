@@ -184,6 +184,7 @@ public final class SettingsDialog {
         aw.addView(Ui.chip(c, "Find car controls ›", false, th, v -> findControls(c)), weight(c));
         boolean permOk = AiChat.micAllowed(c) && AiChat.overlayAllowed(c);
         aw.addView(Ui.chip(c, permOk ? "Permissions: OK" : "Fix permissions ›", false, th, v -> fixPerms(c)), weight(c));
+        aw.addView(Ui.chip(c, "BYD voice assistant ›", false, th, v -> bydVoice(c)), weight(c));
         aw.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
         root.addView(aw);
 
@@ -503,6 +504,40 @@ public final class SettingsDialog {
                 .setOnDismissListener(d -> ui.removeCallbacksAndMessages(null))
                 .setPositiveButton("Close", null).show();
         ui.post(tick);
+    }
+
+    /**
+     * BYD's own voice assistant opens from the wheel button alongside Quinn (the car starts it itself, so swallowing the
+     * key doesn't stop it; Air 2026-11-23). Lists the car's voice apps; tap one to switch it off or on again (through the
+     * car's ADB: pm disable-user / enable, nothing is deleted).
+     */
+    private static void bydVoice(Context c) {
+        android.content.pm.PackageManager pm = c.getPackageManager();
+        final java.util.List<String> pk = new java.util.ArrayList<>();
+        final java.util.List<String> lab = new java.util.ArrayList<>();
+        java.util.regex.Pattern want = java.util.regex.Pattern.compile("(?i).*(voice|speech|\\.vr|vrservice|assistant|aispeech|iflytek|txz|xiaodi|dilink.*voice).*");
+        for (android.content.pm.ApplicationInfo ai : pm.getInstalledApplications(android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS)) {
+            if (!want.matcher(ai.packageName).matches() || ai.packageName.equals(c.getPackageName())) continue;
+            boolean on = ai.enabled;
+            try { int st = pm.getApplicationEnabledSetting(ai.packageName); on = st != android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER && st != android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED; } catch (Throwable ignored) { }
+            pk.add(ai.packageName);
+            lab.add((on ? "ON   " : "OFF  ") + pm.getApplicationLabel(ai) + "  (" + ai.packageName + ")");
+        }
+        if (pk.isEmpty()) { new AlertDialog.Builder(c).setTitle("BYD voice assistant").setMessage("No voice app found on this car.").setPositiveButton("OK", null).show(); return; }
+        new AlertDialog.Builder(c).setTitle("Tap the BYD voice app to switch it off / on (\"Hi BYD\" stops while it's off) — send a photo to Claude")
+                .setItems(lab.toArray(new String[0]), (d, i) -> {
+                    final String p = pk.get(i);
+                    final boolean turnOff = lab.get(i).startsWith("ON");
+                    new Thread(() -> {
+                        String r;
+                        try { r = Updater.adbShell(c, (turnOff ? "pm disable-user --user 0 " : "pm enable ") + p); }
+                        catch (Exception e) { r = "couldn't reach the car's ADB (" + e.getClass().getSimpleName() + ")"; }
+                        final String rr = r;
+                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                                android.widget.Toast.makeText(c, (turnOff ? "Off: " : "On: ") + p + " · " + rr, android.widget.Toast.LENGTH_LONG).show());
+                    }).start();
+                })
+                .setPositiveButton("Close", null).show();
     }
 
     /** Switches the key watcher on (through the car's own ADB), then lists the keys it saw: press the wheel's mic button and tap it. */
