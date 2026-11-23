@@ -17,6 +17,9 @@ public final class KeyWatch extends AccessibilityService {
     static SharedPreferences store(Context c) { return c.getSharedPreferences("key_watch", Context.MODE_PRIVATE); }
 
     private long lastPress, pressedAt;
+    private boolean singlePending;
+    private final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable single = () -> { singlePending = false; AiChat.startNow(this); };
 
     @Override protected boolean onKeyEvent(KeyEvent e) {
         int code = e.getKeyCode();
@@ -37,7 +40,17 @@ public final class KeyWatch extends AccessibilityService {
         // wheel sends both), once per press; walkie-talkie: AiChat decides talk / finished
         if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
             long now = android.os.SystemClock.uptimeMillis();
-            if (now - lastPress > 700) { lastPress = now; pressedAt = now; AiChat.startNow(this); }
+            if (now - lastPress < 150) return true;   // the second key code of the same press (304 + 327)
+            lastPress = now; pressedAt = now;
+            // (Air 2026-11-23) double press = close the chat; a single press waits a moment to see if a second one follows
+            if (singlePending) {
+                singlePending = false;
+                h.removeCallbacks(single);
+                AiChat.closeNow(this);
+            } else {
+                singlePending = true;
+                h.postDelayed(single, 450);
+            }
         }
         return true;   // the wheel button now belongs to Natee chat
     }

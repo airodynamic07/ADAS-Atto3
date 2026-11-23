@@ -74,6 +74,11 @@ public final class AiChat extends Service {
         startWake();
     }
 
+    /** Close the chat (double press on the wheel mic button). */
+    static void closeNow(Context c) {
+        try { c.startService(new Intent(c, AiChat.class).setAction("close")); } catch (Throwable ignored) { }
+    }
+
     /** Open the chat now (wheel mic button, see KeyWatch / VoiceEntry). */
     static void startNow(Context c) {
         try { c.startService(new Intent(c, AiChat.class).setAction("chat")); } catch (Throwable ignored) { }
@@ -81,6 +86,7 @@ public final class AiChat extends Service {
 
     @Override public int onStartCommand(Intent i, int f, int id) {
         if (i != null && "chat".equals(i.getAction())) main.post(this::pressMic);
+        if (i != null && "close".equals(i.getAction())) main.post(this::endChat);
         return START_STICKY;
     }
 
@@ -653,7 +659,7 @@ public final class AiChat extends Service {
         talkScroll = new android.widget.ScrollView(this);
         talkScroll.addView(talk);
         box.addView(talkScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
-        TextView hint = Ui.text(this, "talk any time · press the wheel mic (or pause 2 s) when you've finished · ✕ closes", 12, 0xFF9FB0D0, false);
+        TextView hint = Ui.text(this, "press the wheel mic to talk, again when you've finished (or pause 2 s) · double press or ✕ closes", 12, 0xFF9FB0D0, false);
         hint.setPadding(0, Ui.dp(this, 8), 0, 0);
         box.addView(hint);
         try {
