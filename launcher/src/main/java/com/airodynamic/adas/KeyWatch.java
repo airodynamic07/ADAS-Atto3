@@ -90,14 +90,39 @@ public final class KeyWatch extends AccessibilityService {
         return cur != null && cur.contains(me);
     }
 
-    /** The key watcher is switched off by some updates: switch it on again through the car's ADB. */
+    /** Is the watcher really running (Android has connected it)? */
+    static volatile boolean connected;
+    @Override protected void onServiceConnected() { super.onServiceConnected(); connected = true; }
+    @Override public boolean onUnbind(android.content.Intent i) { connected = false; return super.onUnbind(i); }
+    @Override public void onDestroy() { connected = false; super.onDestroy(); }
+
+    /**
+     * The watcher is switched off by updates and by every car start (Air 2026-11-23: "after I turn the car off and on it
+     * always goes back to BYD's assistant"). Switch it on again: by the launcher itself when it has the secure-settings
+     * permission (granted once through ADB, survives restarts), else through the car's ADB.
+     */
     static void ensureOn(Context c) {
         try {
             String me = c.getPackageName() + "/" + KeyWatch.class.getName();
-            String cur = android.provider.Settings.Secure.getString(c.getContentResolver(), android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            if (cur != null && cur.contains(me)) return;
-            String list = cur == null || cur.isEmpty() || "null".equals(cur) ? me : cur + ":" + me;
-            Updater.adbShell(c, "settings put secure enabled_accessibility_services " + list + "; settings put secure accessibility_enabled 1");
+            android.content.ContentResolver cr = c.getContentResolver();
+            String cur = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            boolean listed = cur != null && cur.contains(me);
+            if (listed && connected) return;
+            boolean own = c.checkCallingOrSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            String without = cur == null || "null".equals(cur) ? "" : cur.replace(":" + me, "").replace(me + ":", "").replace(me, "");
+            String with = without.isEmpty() ? me : without + ":" + me;
+            if (own) {
+                if (listed) {   // listed but not running: take it out and put it back, so Android starts it again
+                    android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, without);
+                    try { Thread.sleep(700); } catch (InterruptedException ignored) { }
+                }
+                android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, with);
+                android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, "1");
+                return;
+            }
+            Updater.adbShell(c, (listed ? "settings put secure enabled_accessibility_services '" + without + "'; sleep 1; " : "")
+                    + "settings put secure enabled_accessibility_services '" + with + "'; settings put secure accessibility_enabled 1; "
+                    + "pm grant " + c.getPackageName() + " android.permission.WRITE_SECURE_SETTINGS");
         } catch (Throwable ignored) { }
     }
 

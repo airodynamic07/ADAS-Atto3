@@ -216,7 +216,7 @@ public final class SettingsDialog {
         boolean permOk = AiChat.micAllowed(c) && AiChat.overlayAllowed(c);
         aw.addView(Ui.chip(c, permOk ? "Permissions: OK" : "Fix permissions ›", false, th, v -> fixPerms(c)), weight(c));
         aw.addView(Ui.chip(c, "BYD voice assistant ›", false, th, v -> bydVoice(c)), weight(c));
-        aw.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
+        aw.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) && KeyWatch.connected ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
         root.addView(aw);
 
         section(c, root, th, "Tyre pressure unit");
@@ -575,15 +575,10 @@ public final class SettingsDialog {
     private static void wheelTest(Context c) {
         android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
         new Thread(() -> {
-            String err = null;
-            try {
-                String me = c.getPackageName() + "/" + KeyWatch.class.getName();
-                String cur = Updater.adbShell(c, "settings get secure enabled_accessibility_services").trim();
-                if (!cur.contains(me)) {
-                    String list = cur.isEmpty() || "null".equals(cur) ? me : cur + ":" + me;
-                    Updater.adbShell(c, "settings put secure enabled_accessibility_services " + list + "; settings put secure accessibility_enabled 1");
-                }
-            } catch (Exception e) { err = "Couldn't switch the button watcher on (car's ADB: " + e.getClass().getSimpleName() + "). Turn it on by hand: Android Settings → Accessibility → NATEE wheel mic button"; }
+            KeyWatch.ensureOn(c);   // by the launcher itself when it may, else through the car's ADB
+            try { Thread.sleep(1500); } catch (InterruptedException ignored) { }
+            String err = KeyWatch.isOn(c) && KeyWatch.connected ? null
+                    : "The button watcher isn't running yet. Update once with ADAS Probe's \"Install / update NATEE Launcher\" (it gives the launcher the permission to switch it on itself).";
             final String e2 = err;
             ui.post(() -> showKeys(c, e2));
         }).start();

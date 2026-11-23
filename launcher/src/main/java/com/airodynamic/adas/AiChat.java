@@ -70,7 +70,7 @@ public final class AiChat extends Service {
         control = new CarControl(this);
         alive = true;
         new Thread(() -> { if (!micAllowed(this) || !overlayAllowed(this)) fixPermissions(this); }).start();
-        main.post(watchCheck);
+        main.postDelayed(watchCheck, 6000);   // a moment after start, so Android can connect the watcher by itself first
         startWake();
     }
 
@@ -201,8 +201,9 @@ public final class AiChat extends Service {
     private final Runnable watchCheck = new Runnable() {
         @Override public void run() {
             if (!alive) return;
-            if (!KeyWatch.isOn(AiChat.this)) new Thread(() -> KeyWatch.ensureOn(AiChat.this)).start();
-            main.postDelayed(this, 60_000);
+            // not listed, or listed but not running (after a car start): repair it; checked every 20 s
+            if (!KeyWatch.isOn(AiChat.this) || !KeyWatch.connected) new Thread(() -> KeyWatch.ensureOn(AiChat.this)).start();
+            main.postDelayed(this, 20_000);
         }
     };
 
@@ -285,7 +286,7 @@ public final class AiChat extends Service {
     static String fixPermissions(Context c) {
         String p = c.getPackageName();
         try {
-            Updater.adbShell(c, "pm grant " + p + " android.permission.RECORD_AUDIO; appops set " + p + " RECORD_AUDIO allow; appops set " + p + " SYSTEM_ALERT_WINDOW allow");
+            Updater.adbShell(c, "pm grant " + p + " android.permission.RECORD_AUDIO; appops set " + p + " RECORD_AUDIO allow; appops set " + p + " SYSTEM_ALERT_WINDOW allow; pm grant " + p + " android.permission.WRITE_SECURE_SETTINGS");
         } catch (Exception e) { return "adb: " + e.getClass().getSimpleName(); }
         return "";
     }

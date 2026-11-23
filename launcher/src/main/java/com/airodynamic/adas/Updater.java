@@ -126,7 +126,7 @@ public final class Updater {
         log.line("Installing… if the car asks 'Allow USB debugging?', tick Always allow + OK.");
         try (Dadb d = Dadb.create("127.0.0.1", 5555, AdbKeyPair.read(priv, pub), 5000, 120000)) {
             // after the update: start again, and switch the wheel-button watcher + mic + floating windows on again (2026-11-22)
-            d.shell("setsid sh -c 'sleep 15; am start -n " + ctx.getPackageName() + "/.LauncherActivity; X=com.airodynamic.adas/com.airodynamic.adas.KeyWatch; c=$(settings get secure enabled_accessibility_services); case \"$c\" in *KeyWatch*) ;; null|\"\") settings put secure enabled_accessibility_services $X ;; *) settings put secure enabled_accessibility_services \"$c:$X\" ;; esac; settings put secure accessibility_enabled 1; pm grant com.airodynamic.adas android.permission.RECORD_AUDIO; appops set com.airodynamic.adas SYSTEM_ALERT_WINDOW allow' </dev/null >/dev/null 2>&1 &");
+            d.shell("setsid sh -c 'sleep 15; am start -n " + ctx.getPackageName() + "/.LauncherActivity; X=com.airodynamic.adas/com.airodynamic.adas.KeyWatch; c=$(settings get secure enabled_accessibility_services); case \"$c\" in *KeyWatch*) ;; null|\"\") settings put secure enabled_accessibility_services $X ;; *) settings put secure enabled_accessibility_services \"$c:$X\" ;; esac; settings put secure accessibility_enabled 1; pm grant com.airodynamic.adas android.permission.RECORD_AUDIO; appops set com.airodynamic.adas SYSTEM_ALERT_WINDOW allow; pm grant com.airodynamic.adas android.permission.WRITE_SECURE_SETTINGS' </dev/null >/dev/null 2>&1 &");
             d.install(apk, "-r");
         }
     }
