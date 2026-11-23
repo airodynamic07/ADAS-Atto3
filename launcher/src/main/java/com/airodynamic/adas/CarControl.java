@@ -177,7 +177,15 @@ final class CarControl {
     private JSONObject fan(int level) {
         if (level < 1 || level > 7) return res(false, "fan level must be 1 to 7");
         Object v = call(AC, "setAcWindLevel", 0, level);   // confirmed on this car (probe: fan 3 → 4)
-        return answer(v, "fan " + level);
+        JSONObject o = answer(v, "fan " + level);
+        // (Air 2026-11-23: "it said done but no") read the car's real setting back and report that
+        try { Thread.sleep(900); } catch (InterruptedException ignored) { }
+        Object now = call(AC, "getAcWindLevel");
+        if (now instanceof Number) {
+            int n = ((Number) now).intValue();
+            try { o.put("ok", n == level).put("result", n == level ? "fan is now " + n : "the car's fan is still " + n + " (it didn't change)"); } catch (Exception ignored) { }
+        }
+        return o;
     }
 
     private JSONObject temp(double celsius) {
@@ -186,7 +194,16 @@ final class CarControl {
         int unit = u instanceof Number ? ((Number) u).intValue() : 1;
         int v = (int) Math.round(celsius);
         Object r = call(AC, "setAcTemperature", 0, v, 0, unit);   // confirmed on this car (probe: temperature +1)
-        return answer(r, "temperature " + v + " °C");
+        JSONObject o = answer(r, "temperature " + v + " °C");
+        // read the car's real setting back and report that
+        try { Thread.sleep(900); } catch (InterruptedException ignored) { }
+        Object now = call(AC, "getTemprature", 1);
+        if (!(now instanceof Number)) now = call(AC, "getTemprature", 0);
+        if (now instanceof Number) {
+            int n = ((Number) now).intValue();
+            if (n >= 10 && n <= 40) try { o.put("ok", n == v).put("result", n == v ? "temperature is now " + n + " °C" : "the car's temperature is still " + n + " °C (it didn't change)"); } catch (Exception ignored) { }
+        }
+        return o;
     }
 
     private JSONObject ac(boolean on) {
