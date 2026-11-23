@@ -579,7 +579,9 @@ public final class SettingsDialog {
         android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
         new Thread(() -> {
             KeyWatch.ensureOn(c);   // by the launcher itself when it may, else through the car's ADB
-            try { Thread.sleep(1500); } catch (InterruptedException ignored) { }
+            for (int i = 0; i < 16 && !(KeyWatch.isOn(c) && KeyWatch.connected); i++) {   // Android needs a moment to start it
+                try { Thread.sleep(500); } catch (InterruptedException ignored) { }
+            }
             String err = KeyWatch.isOn(c) && KeyWatch.connected ? null
                     : "The button watcher isn't running yet. Update once with ADAS Probe's \"Install / update NATEE Launcher\" (it gives the launcher the permission to switch it on itself).";
             final String e2 = err;

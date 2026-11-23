@@ -57,7 +57,8 @@ public final class AiChat extends Service {
     }
 
     private final Handler main = new Handler(Looper.getMainLooper());
-    private volatile boolean alive, chatting, muted, speaking;
+    private volatile boolean alive, muted, speaking;
+    static volatile boolean chatting;
     private Thread wakeThread;
     private org.vosk.Model model;
     private Prefs prefs;

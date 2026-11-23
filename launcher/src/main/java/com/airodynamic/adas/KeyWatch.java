@@ -18,6 +18,7 @@ public final class KeyWatch extends AccessibilityService {
 
     private long lastPress, pressedAt;
     private boolean singlePending;
+    private long openGuard;
     private final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable single = () -> { singlePending = false; AiChat.startNow(this); };
 
@@ -27,7 +28,7 @@ public final class KeyWatch extends AccessibilityService {
             SharedPreferences s = store(this);
             String seen = s.getString("seen", "");
             String item = code + " " + KeyEvent.keyCodeToString(code).replace("KEYCODE_", "") + " · " +
-                    new java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(new java.util.Date());
+                    new java.text.SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(new java.util.Date());
             seen = item + (seen.isEmpty() ? "" : "\n" + seen);
             String[] lines = seen.split("\n");
             if (lines.length > 12) seen = android.text.TextUtils.join("\n", java.util.Arrays.copyOf(lines, 12));
@@ -47,6 +48,16 @@ public final class KeyWatch extends AccessibilityService {
             if (now - lastPress < 150) return true;
             lastPress = now; pressedAt = now;
             // (Air 2026-11-23) double press = close the chat; a single press waits a moment to see if a second one follows
+            // (Air 2026-11-23: "press mic, only BYD's assistant") while the chat is closed a press opens it at once;
+            // anything the wheel sends in the next second belongs to that same press, never a "double = close"
+            if (!AiChat.chatting) {
+                if (now < openGuard) return true;
+                openGuard = now + 1000;
+                store(this).edit().putString("afterPress", "").apply();
+                AiChat.startNow(this);
+                return true;
+            }
+            if (now < openGuard) return true;
             if (singlePending) {
                 singlePending = false;
                 h.removeCallbacks(single);
@@ -77,7 +88,8 @@ public final class KeyWatch extends AccessibilityService {
         String known = s.getString("bydVoice", "");
         boolean voice = p.equals(known) || lp.contains("voice") || lp.contains("speech") || lp.contains("assistant") || lp.contains(".vr")
                 || lp.contains("xiaodi") || lp.contains("aispeech") || lp.contains("iflytek") || lp.contains("txz");
-        s.edit().putString("afterPress", p).apply();   // shown in the wheel button test
+        String ap = s.getString("afterPress", "");   // every app that opened after the press, shown in the wheel button test
+        if (!(" " + ap + " ").contains(" " + p + " ")) s.edit().putString("afterPress", (ap + " " + p).trim()).apply();
         if (!voice) return;
         if (!p.equals(known)) s.edit().putString("bydVoice", p).apply();
         performGlobalAction(GLOBAL_ACTION_BACK);
