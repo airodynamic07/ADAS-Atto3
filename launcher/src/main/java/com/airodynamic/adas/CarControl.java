@@ -250,14 +250,20 @@ final class CarControl {
             return res(true, "opening GBox");
         }
         if (want.isEmpty()) return res(false, "which app?");
+        // (Air 2026-11-23: "open Google Maps" opened the Google app) the word Google is ignored on both sides, so
+        // "Google Maps" = Maps; only "Google" on its own means the Google app
+        final String wantG = want.startsWith("google") && want.length() > 6 ? want.substring(6) : want;
         // (Air 2026-11-22) maps apps: the car's own Google Maps (outside GBox) wins; other apps: the GBox copy wins
         boolean mapsApp = want.contains("map") || want.contains("waze") || want.contains("นำทาง");
         Apps.App best = null; int bestScore = 0;
         for (Apps.App a : Apps.all(c)) {
             if (a.pkg.equals("com.gbox.android") && !want.isEmpty() && !norm(name).contains("gbox")) continue;   // GBox itself only when asked for
             String l = norm(a.label).replace("gbox", "");
+            if (!wantG.equals(want) && l.startsWith("google") && l.length() > 6) l = l.substring(6);
             if (l.length() < 2) continue;
-            int sc = l.equals(want) ? 3 : l.startsWith(want) || want.startsWith(l) ? 2 : l.contains(want) || want.contains(l) ? 1 : 0;
+            if (!wantG.equals(want) && l.equals("google")) continue;   // asked for "Google X": never the Google app itself
+            String w = wantG;
+            int sc = l.equals(w) ? 3 : l.startsWith(w) || w.startsWith(l) ? 2 : l.contains(w) || w.contains(l) ? 1 : 0;
             if (sc == 0) continue;
             boolean gbox = a.pkg.startsWith("com.gbox.");
             sc = sc * 2 + (mapsApp ? (gbox ? 0 : 1) : (gbox ? 1 : 0));
