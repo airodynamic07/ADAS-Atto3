@@ -406,6 +406,8 @@ public final class AiChat extends Service {
                             + " say in a few words what you did (\"Fan 4.\"); if the result says it failed, say so plainly."
                             + " For anything current (weather, news, traffic, opening hours, prices, places, facts you aren't sure of) use Google"
                             + " Search; for \"here\" or \"near me\" use the car's location from get_car_info (lat, lng). Answer everything you can."
+                            + " Never say something is done, playing or open before the tool's result comes back; then say only what the"
+                            + " result says (if it says it didn't work, say that)."
                             + " Never refuse music, apps or videos yourself because the car might be moving: always call the tool, it knows the"
                             + " car's state and the driver's settings, and tells you if something can't open."
                             + " If what you hear is only noise, music, silence or no clear words, do not answer at all: stay silent."

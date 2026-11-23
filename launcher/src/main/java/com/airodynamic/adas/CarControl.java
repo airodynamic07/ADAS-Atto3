@@ -253,6 +253,13 @@ final class CarControl {
         // (Air 2026-11-23: "open Google Maps" opened the Google app) the word Google is ignored on both sides, so
         // "Google Maps" = Maps; only "Google" on its own means the Google app
         final String wantG = want.startsWith("google") && want.length() > 6 ? want.substring(6) : want;
+        // (Air 2026-11-23: "open YouTube Music" opened YouTube) YouTube Music always means the music app itself
+        if (want.contains("music") && (want.contains("youtube") || want.contains("yt"))) {
+            for (String y : MusicCard.YTM) if (Apps.installed(c, y)) {
+                main.post(() -> Apps.open(c, y, CarData.get(c).last()));
+                return res(true, "opening YouTube Music");
+            }
+        }
         // (Air 2026-11-22) maps apps: the car's own Google Maps (outside GBox) wins; other apps: the GBox copy wins
         boolean mapsApp = want.contains("map") || want.contains("waze") || want.contains("นำทาง");
         Apps.App best = null; int bestScore = 0;
