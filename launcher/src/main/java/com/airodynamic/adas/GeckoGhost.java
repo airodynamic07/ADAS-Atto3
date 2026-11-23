@@ -63,6 +63,10 @@ final class GeckoGhost {
         try { ua = GeckoSession.getDefaultUserAgent(); } catch (Throwable t) { ua = "Mozilla/5.0 (Android 10; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0"; }
         session = new GeckoSession(new org.mozilla.geckoview.GeckoSessionSettings.Builder()
                 .userAgentOverride(ua + " NATEELauncher/1").build());
+        // (Air 2026-11-23: no Paste menu when holding the search box) Firefox's own copy / paste menu
+        if (c instanceof android.app.Activity) {
+            try { session.setSelectionActionDelegate(new org.mozilla.geckoview.BasicSelectionActionDelegate((android.app.Activity) c)); } catch (Throwable ignored) { }
+        }
         session.setPermissionDelegate(new GeckoSession.PermissionDelegate() {
             @Override public void onAndroidPermissionsRequest(GeckoSession s, String[] permissions, Callback callback) {
                 callback.grant();   // location is already granted to the launcher at install
