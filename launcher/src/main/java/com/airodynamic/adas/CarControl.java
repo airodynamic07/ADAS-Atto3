@@ -56,7 +56,8 @@ final class CarControl {
         f.put(fn("youtube_video", "Search and open a YouTube video. Always call it when asked; the app itself decides if it may open.",
                 props("query", "string", "what to search for, e.g. Radiohead Creep live")));
         f.put(fn("navigate_ghost_race", "Open Ghost Race (the driver's own navigation and race app in this launcher) with a destination: use"
-                + " it when the driver says Ghost Race, else use navigate (Google Maps).",
+                + " it when the driver says Ghost Race (or its favourites), else use navigate (Google Maps). Ghost Race first looks the"
+                + " place up in the driver's own favourites list by name, so pass just the place's name as said (e.g. 'Seacon Square Golf').",
                 props("destination", "string", "the place name or address")));
         f.put(fn("music", "Control the music: play, pause, next or previous song, or play something by name.", mp));
         return new JSONArray().put(new JSONObject().put("functionDeclarations", f));
