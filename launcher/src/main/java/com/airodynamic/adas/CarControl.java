@@ -296,14 +296,20 @@ final class CarControl {
                 : new String[]{used, "com.google.android.apps.maps", "com.gbox.com.google.android.apps.maps"};
         for (String p : pkgs) {
             if (!Apps.installed(c, p)) continue;
-            final android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse("google.navigation:q=" + android.net.Uri.encode(q))).setPackage(p)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP | android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            // (Air 2026-11-23: a second "navigate to…" did nothing) Google's directions link with navigation: Maps takes it
+            // even with a route already on; CLEAR_TOP restarts its screen on the new place instead of ignoring it
+            String url = "https://www.google.com/maps/dir/?api=1&travelmode=driving&dir_action=navigate&destination=" + android.net.Uri.encode(q);
+            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).setPackage(p)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            if (c.getPackageManager().resolveActivity(i, 0) == null)   // this copy doesn't take the link: the old way
+                i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("google.navigation:q=" + android.net.Uri.encode(q)))
+                        .setPackage(p).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
             if (c.getPackageManager().resolveActivity(i, 0) == null) continue;
             st.edit().putString("mapsPkg", p).apply();
-            main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
-            return res(true, "navigating to " + q + " in " + Apps.label(c, p) + (q.equals("Home") || q.equals("Work") ? " (uses the Home/Work saved in Google Maps)" : ""));
+            final android.content.Intent fi = i;
+            main.post(() -> { try { c.startActivity(fi); } catch (Throwable ignored) { } });
+            return res(true, "asked " + Apps.label(c, p) + " to navigate to " + q + " (it may ask to confirm the place or start)"
+                    + (q.equals("Home") || q.equals("Work") ? "; uses the Home/Work saved in Google Maps" : ""));
         }
         return res(false, "Google Maps isn't installed");
     }
