@@ -24,6 +24,7 @@ public final class KeyWatch extends AccessibilityService {
 
     @Override protected boolean onKeyEvent(KeyEvent e) {
         int code = e.getKeyCode();
+        live = this; connected = true;   // a key arrived: it is running
         if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
             SharedPreferences s = store(this);
             String seen = s.getString("seen", "");
@@ -104,9 +105,14 @@ public final class KeyWatch extends AccessibilityService {
 
     /** Is the watcher really running (Android has connected it)? */
     static volatile boolean connected;
-    @Override protected void onServiceConnected() { super.onServiceConnected(); connected = true; }
-    @Override public boolean onUnbind(android.content.Intent i) { connected = false; return super.onUnbind(i); }
-    @Override public void onDestroy() { connected = false; super.onDestroy(); }
+    // (Air 2026-11-23: test said "not running" while it was logging keys) after a restart of the watcher the OLD one
+    // says goodbye after the new one has connected: only the newest one may say "not running" — otherwise the
+    // 20 s check kept restarting a healthy watcher, and BYD's assistant got the button in the gaps
+    private static volatile KeyWatch live;
+    private static volatile long lastToggle;
+    @Override protected void onServiceConnected() { super.onServiceConnected(); live = this; connected = true; }
+    @Override public boolean onUnbind(android.content.Intent i) { if (live == this) connected = false; return super.onUnbind(i); }
+    @Override public void onDestroy() { if (live == this) connected = false; super.onDestroy(); }
 
     /**
      * The watcher is switched off by updates and by every car start (Air 2026-11-23: "after I turn the car off and on it
@@ -120,6 +126,9 @@ public final class KeyWatch extends AccessibilityService {
             String cur = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
             boolean listed = cur != null && cur.contains(me);
             if (listed && connected) return;
+            long now = android.os.SystemClock.uptimeMillis();
+            if (listed && lastToggle != 0 && now - lastToggle < 120_000) return;   // give Android time; never restart it in a loop
+            lastToggle = now;
             boolean own = c.checkCallingOrSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED;
             String without = cur == null || "null".equals(cur) ? "" : cur.replace(":" + me, "").replace(me + ":", "").replace(me, "");
             String with = without.isEmpty() ? me : without + ":" + me;
