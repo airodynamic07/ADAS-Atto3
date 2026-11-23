@@ -332,20 +332,38 @@ final class CarControl {
         // ask whichever music player is there (not the car's own Media). None yet: open YouTube Music, then ask it.
         if (!query.trim().isEmpty() && !a.equals("pause") && !a.equals("next") && !a.equals("previous")) {   // "play" + a name = search too
             android.media.session.MediaController p = searchablePlayer();
-            if (p != null) {
-                p.getTransportControls().playFromSearch(query, new android.os.Bundle());
-                return res(true, "asked " + Apps.label(c, p.getPackageName()) + " to play " + query);
+            if (p == null) {   // nothing playing yet: open YouTube Music first and give it a few seconds
+                for (String y : MusicCard.YTM) {
+                    if (!Apps.installed(c, y)) continue;
+                    main.post(() -> Apps.open(c, y, CarData.get(c).last()));
+                    for (int i = 0; i < 10 && p == null; i++) { try { Thread.sleep(600); } catch (InterruptedException ignored) { } p = searchablePlayer(); }
+                    break;
+                }
             }
+            if (p != null) {
+                // (Air 2026-11-23: "it said it plays the song, but it doesn't") ask, then check a different song really started
+                String before = songOf(p);
+                p.getTransportControls().playFromSearch(query, new android.os.Bundle());
+                for (int i = 0; i < 10; i++) {
+                    try { Thread.sleep(500); } catch (InterruptedException ignored) { }
+                    String now = songOf(p);
+                    android.media.session.PlaybackState ps = p.getPlaybackState();
+                    boolean playing = ps != null && ps.getState() == android.media.session.PlaybackState.STATE_PLAYING;
+                    if (playing && !now.isEmpty() && !now.equals(before)) return res(true, "now playing: " + now);
+                }
+            }
+            // it ignored the request: open its search page for it, one tap to play
             for (String y : MusicCard.YTM) {
                 if (!Apps.installed(c, y)) continue;
-                final String q = query;
-                main.post(() -> Apps.open(c, y, CarData.get(c).last()));
-                main.postDelayed(() -> {   // give it a few seconds to start, then ask
-                    android.media.session.MediaController p2 = searchablePlayer();
-                    if (p2 != null) p2.getTransportControls().playFromSearch(q, new android.os.Bundle());
-                }, 5000);
-                return res(true, "opening YouTube Music and asking it to play " + query);
+                final android.content.Intent v = new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://music.youtube.com/search?q=" + android.net.Uri.encode(query)))
+                        .setPackage(y).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                final String yy = y;
+                main.post(() -> { try { c.startActivity(v); } catch (Throwable t) { Apps.open(c, yy, CarData.get(c).last()); } });
+                return res(false, "YouTube Music didn't start it by itself; its search for \"" + query
+                        + "\" is open (or YouTube Music itself): tap the song to play. Tell the driver exactly this.");
             }
+            return res(false, "YouTube Music isn't installed");
         }
         android.media.session.MediaController mc = musicSession();
         if (mc == null) {
@@ -370,6 +388,15 @@ final class CarControl {
                 t.playFromSearch(query, new android.os.Bundle());
                 return res(true, "asked " + Apps.label(c, mc.getPackageName()) + " to play " + query + " (some apps don't support this)");
         }
+    }
+
+    private static String songOf(android.media.session.MediaController p) {
+        try {
+            android.media.MediaMetadata m = p.getMetadata();
+            if (m == null) return "";
+            String t = m.getString(android.media.MediaMetadata.METADATA_KEY_TITLE), ar = m.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST);
+            return (t == null ? "" : t) + (ar == null ? "" : " · " + ar);
+        } catch (Throwable e) { return ""; }
     }
 
     /** A music player to ask "play …": YouTube Music or anything inside GBox first, never the car's own Media / radio. */
