@@ -38,8 +38,12 @@ final class RangeGraph extends LinearLayout {
         final List<double[]> pts = new ArrayList<>();
         double soc0 = Double.NaN, health = 100, xRef;   // battery % and health at the start, and the km it was taken at
         double sm = Double.NaN, lastX = Double.NaN;      // smoothed My range
+        /** dashed lines (Air 2026-11-23): Today = each new trip (its start time), C to C = each new day (its date) */
+        final List<Object[]> marks = new ArrayList<>();
 
-        void clear() { pts.clear(); soc0 = Double.NaN; sm = Double.NaN; lastX = Double.NaN; }
+        void clear() { pts.clear(); marks.clear(); soc0 = Double.NaN; sm = Double.NaN; lastX = Double.NaN; }
+
+        void mark(double x, String label) { if (!pts.isEmpty()) marks.add(new Object[]{x, label}); }
 
         /** the three straight lines: k 0 NEDC, 1 WLTP, 2 EPA, at km x (never below 0) */
         double ref(int k, double x) {
@@ -73,6 +77,8 @@ final class RangeGraph extends LinearLayout {
         String save() {
             StringBuilder b = new StringBuilder(String.format(Locale.US, "%.2f,%.2f,%.3f,%.2f,%.3f|", soc0, health, xRef, sm, lastX));
             for (double[] p : pts) b.append(String.format(Locale.US, "%.2f,%.1f;", p[0], p[1]));
+            b.append('#');
+            for (Object[] m : marks) b.append(String.format(Locale.US, "%.2f,%s;", (Double) m[0], m[1]));
             return b.toString();
         }
 
@@ -83,16 +89,22 @@ final class RangeGraph extends LinearLayout {
                 String[] h = s.substring(0, s.indexOf('|')).split(",");
                 soc0 = Double.parseDouble(h[0]); health = Double.parseDouble(h[1]); xRef = Double.parseDouble(h[2]);
                 sm = Double.parseDouble(h[3]); lastX = Double.parseDouble(h[4]);
-                for (String part : s.substring(s.indexOf('|') + 1).split(";")) {
+                String body = s.substring(s.indexOf('|') + 1), mk = "";
+                if (body.contains("#")) { mk = body.substring(body.indexOf('#') + 1); body = body.substring(0, body.indexOf('#')); }
+                for (String part : body.split(";")) {
                     String[] v = part.split(",");
                     if (v.length == 2) pts.add(new double[]{Double.parseDouble(v[0]), Double.parseDouble(v[1])});
+                }
+                for (String part : mk.split(";")) {
+                    String[] v = part.split(",", 2);
+                    if (v.length == 2) marks.add(new Object[]{Double.parseDouble(v[0]), v[1]});
                 }
             } catch (Exception e) { clear(); }
         }
 
         Series copy() {
             Series c = new Series();
-            c.pts.addAll(pts); c.soc0 = soc0; c.health = health; c.xRef = xRef; c.sm = sm; c.lastX = lastX;
+            c.pts.addAll(pts); c.marks.addAll(marks); c.soc0 = soc0; c.health = health; c.xRef = xRef; c.sm = sm; c.lastX = lastX;
             return c;
         }
     }
@@ -233,7 +245,11 @@ final class RangeGraph extends LinearLayout {
             double own = ownRange(app, s);
             double health = te.health();   // the battery health calibrated every day from your driving (Air 2026-11-22)
             String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
-            if (!today.equals(day)) { day = today; series[1].clear(); lastTodayKm = -1; }
+            if (!today.equals(day)) {
+                // C to C: a dashed line where the new day starts, with its date
+                if (!day.isEmpty()) series[2].mark(totalKm - chargeBaseKm, new java.text.SimpleDateFormat("dd/MM", Locale.US).format(new java.util.Date()));
+                day = today; series[1].clear(); lastTodayKm = -1;
+            }
             double tk = te.todayKm();
             if (lastTodayKm >= 0) totalKm += tk >= lastTodayKm ? tk - lastTodayKm : tk;
             lastTodayKm = tk;
@@ -244,7 +260,14 @@ final class RangeGraph extends LinearLayout {
                 if (Double.isNaN(lastSoc) || !still || s.socPct < lastSoc || s.socPct >= lastSoc + 1) lastSoc = s.socPct;
             }
             // a real new trip (car turned off, or Reset) starts the trip view again
-            if (te.startedAt != tripStart) { if (tripStart != 0 || te.km < lastTripKm - 1) series[0].clear(); tripStart = te.startedAt; }
+            if (te.startedAt != tripStart) {
+                if (tripStart != 0 || te.km < lastTripKm - 1) {
+                    series[0].clear();
+                    // Today: a dashed line where the new trip starts, with its start time
+                    series[1].mark(tk, new java.text.SimpleDateFormat("HH:mm", Locale.US).format(new java.util.Date()));
+                }
+                tripStart = te.startedAt;
+            }
             lastTripKm = te.km;
             series[0].add(te.km, s.socPct, health, own);
             series[1].add(tk, s.socPct, health, own);
@@ -376,6 +399,19 @@ final class RangeGraph extends LinearLayout {
                 line.setStrokeWidth(2f * d);
                 cv.drawLine((float) X.applyAsDouble(xs), (float) Y.applyAsDouble(sr.ref(k, xs)), (float) X.applyAsDouble(x1), (float) Y.applyAsDouble(sr.ref(k, x1)), line);
                 endX[k] = (float) X.applyAsDouble(xView); endY[k] = (float) Y.applyAsDouble(sr.ref(k, xView)); endV[k] = sr.ref(k, xView);
+            }
+            // dashed lines: Today = each trip's start (time), C to C = each day's start (date)
+            if (!trip) {
+                dash.setColor((th.muted & 0x00FFFFFF) | 0xB0000000); dash.setStrokeWidth(1.2f * d);
+                text.setTextSize(10f * d); text.setColor(th.muted); text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                for (Object[] m : sr.marks) {
+                    double mx = (Double) m[0];
+                    if (mx <= xs || mx >= xe) continue;
+                    float x = (float) X.applyAsDouble(mx);
+                    cv.drawLine(x, top + 12 * d, x, bottom, dash);
+                    String lab = (String) m[1];
+                    cv.drawText(lab, x - text.measureText(lab) / 2, top + 9 * d, text);
+                }
             }
             // My range: a smooth curve through its points
             path.reset();

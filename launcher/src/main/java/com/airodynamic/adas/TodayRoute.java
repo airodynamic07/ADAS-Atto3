@@ -38,17 +38,19 @@ public final class TodayRoute {
         roll();
     }
 
-    private static String today() { return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date()); }
+    private static String todayNow() { return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date()); }
     private File file() { return new File(dir, day + ".bin"); }
 
-    /** New day: start empty, drop old days' files, load today's file if there is one. */
+    /** New day: start empty, load today's file if there is one. Earlier days are kept for "Every day Map" (Air
+     *  2026-11-23; they used to be deleted); only days older than ~400 are removed. */
     private synchronized void roll() {
-        String d = today();
+        String d = todayNow();
         if (d.equals(day)) return;
         day = d;
         n = 0;
         File[] old = dir.listFiles();
-        if (old != null) for (File f : old) if (!f.getName().equals(day + ".bin")) //noinspection ResultOfMethodCallIgnored
+        String cutoff = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(System.currentTimeMillis() - 400L * 86_400_000L));
+        if (old != null) for (File f : old) if (f.getName().compareTo(cutoff) < 0) //noinspection ResultOfMethodCallIgnored
             f.delete();
         File f = file();
         if (f.exists()) {
@@ -84,4 +86,29 @@ public final class TodayRoute {
     /** Copy of today's points as lat, lon pairs. */
     public synchronized double[] points() { roll(); return java.util.Arrays.copyOf(pts, 2 * n); }
     public int version() { return version; }
+
+    /** Days that have a route (yyyy-MM-dd), newest first. */
+    public synchronized java.util.List<String> days() {
+        roll();
+        java.util.List<String> out = new java.util.ArrayList<>();
+        File[] fs = dir.listFiles();
+        if (fs != null) for (File f : fs) if (f.getName().endsWith(".bin") && f.length() >= 32) out.add(f.getName().substring(0, f.getName().length() - 4));
+        java.util.Collections.sort(out, java.util.Collections.reverseOrder());
+        return out;
+    }
+
+    /** One day's route as lat, lon pairs (today: live copy). */
+    public synchronized double[] load(String d) {
+        roll();
+        if (d == null || d.equals(day)) return points();
+        File f = new File(dir, d + ".bin");
+        double[] a = new double[Math.max(0, (int) (f.length() / 8))];
+        int k = 0;
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(f)))) {
+            while (k + 1 < a.length && in.available() >= 16) { a[k++] = in.readDouble(); a[k++] = in.readDouble(); }
+        } catch (Exception ignored) { }
+        return java.util.Arrays.copyOf(a, k);
+    }
+
+    public String today() { roll(); return day; }
 }

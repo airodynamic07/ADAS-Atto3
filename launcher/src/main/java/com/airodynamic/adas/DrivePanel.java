@@ -125,7 +125,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
 
         // 8 short cards, 2 rows x 4, same columns as above (user, 2026-11-13)
         LinearLayout r1 = new LinearLayout(c), r2 = new LinearLayout(c);
-        LinearLayout t1 = tile("Today route"); TextView mapB = big(t1); mapB.setText("🗺 Map ›");
+        LinearLayout t1 = tile("Every day"); TextView mapB = big(t1); mapB.setText("🗺 Map ›");   // was "Today route" (Air 2026-11-23)
         tapButton(t1, mapB);
         t1.setOnClickListener(v -> openRoute());
         LinearLayout t2 = tile("Peak power"); power = big(t2);

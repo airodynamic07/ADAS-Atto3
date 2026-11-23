@@ -262,15 +262,23 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
 
     // Today's route map: covers the middle window (Engine Sound keeps playing underneath); ✕ closes it
     private boolean routeOpen;
-    private RouteOverlay route;
-    private void showRoute() {
+    private android.view.View route;
+    private void showRoute() {   // "Every day Map": the months / days list first (Air 2026-11-23)
         if (route != null && route.getParent() != null) ((android.view.ViewGroup) route.getParent()).removeView(route);
-        route = new RouteOverlay(this, theme, () -> {
-            routeOpen = false;
-            if (route != null && route.getParent() != null) ((android.view.ViewGroup) route.getParent()).removeView(route);
-            route = null;
-        });
+        route = new MapDaysOverlay(this, theme, this::closeRoute, this::showRouteDay);
         bodies[1].addView(route, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    private void showRouteDay(String day) {
+        if (route != null && route.getParent() != null) ((android.view.ViewGroup) route.getParent()).removeView(route);
+        route = new RouteOverlay(this, theme, this::closeRoute, day, this::showRoute);
+        bodies[1].addView(route, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    private void closeRoute() {
+        routeOpen = false;
+        if (route != null && route.getParent() != null) ((android.view.ViewGroup) route.getParent()).removeView(route);
+        route = null;
     }
 
     /** Blue / white / red dots and the Settings button. */

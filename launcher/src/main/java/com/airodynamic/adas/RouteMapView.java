@@ -211,15 +211,19 @@ final class RouteMapView extends View {
 
     // ---------------------------------------------------------------- drawing
     private long lastFrame;
+    /** an earlier day to show (null = today, live) */
+    private String fixedDay;
+    void showDay(String day) { fixedDay = day; seenVersion = Integer.MIN_VALUE; fitted = false; invalidate(); }
 
     @Override protected void onDraw(Canvas c) {
         int w = getWidth(), h = getHeight();
         c.drawColor(light ? 0xFFF2F2F2 : 0xFF0B1220);
         TodayRoute r = TodayRoute.get(getContext());
-        if (r.version() != seenVersion) { seenVersion = r.version(); pts = r.points(); }
+        if (fixedDay != null) { if (seenVersion != -7) { seenVersion = -7; pts = r.load(fixedDay); following = false; } }   // an earlier day: as it was
+        else if (r.version() != seenVersion) { seenVersion = r.version(); pts = r.points(); }
         int n = pts.length / 2;
         if (!fitted) fit();
-        if (!following && SystemClock.uptimeMillis() - touchedAt > 10_000) following = true;
+        if (fixedDay == null && !following && SystemClock.uptimeMillis() - touchedAt > 10_000) following = true;
         if (following && n > 0) {   // keep the car in view: pan only when it gets near the edge
             float px = sx(wx(pts[2 * n - 1])), py = sy(wy(pts[2 * n - 2]));
             if (px < w * .15f || px > w * .85f || py < h * .2f || py > h * .85f) { cx = wx(pts[2 * n - 1]); cy = wy(pts[2 * n - 2]); }
