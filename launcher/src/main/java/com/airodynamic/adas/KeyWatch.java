@@ -56,11 +56,15 @@ public final class KeyWatch extends AccessibilityService {
     }
 
     /** BYD's own voice assistant still pops up from the wheel button: a voice window opening right after the press is closed. */
+    /** The app in front right now (for Quinn: did the app really open?). */
+    static volatile String front = "";
+
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null || event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
-        if (android.os.SystemClock.uptimeMillis() - pressedAt > 3000) return;
         CharSequence pk = event.getPackageName();
         if (pk == null) return;
+        front = pk.toString();
+        if (android.os.SystemClock.uptimeMillis() - pressedAt > 3000) return;
         String p = pk.toString(), lp = p.toLowerCase(Locale.US);
         if (p.equals(getPackageName())) return;
         SharedPreferences s = store(this);

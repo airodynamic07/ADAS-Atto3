@@ -101,6 +101,15 @@ final class CarControl {
                             .putExtra(ShareActivity.TEXT, d).putExtra(ShareActivity.TITLE, d)
                             .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
                     main.post(() -> { try { c.startActivity(gi); } catch (Throwable ignored) { } });
+                    final String dd = d;
+                    new Thread(() -> {   // blocked while another app is in front: through the car's ADB
+                        try { Thread.sleep(2000); } catch (InterruptedException ignored) { }
+                        if (c.getPackageName().equals(KeyWatch.front)) return;
+                        try {
+                            Updater.adbShell(c, "am start -n " + c.getPackageName() + "/.LauncherActivity -f 0x30000000 --es "
+                                    + ShareActivity.TEXT + " '" + dd.replace("'", "") + "' --es " + ShareActivity.TITLE + " '" + dd.replace("'", "") + "'");
+                        } catch (Throwable ignored) { }
+                    }).start();
                     return res(true, "Ghost Race is searching for " + d + ": tap the right result to start");
                 }
                 case "youtube_video": return youtube(a.optString("query", ""));
@@ -246,7 +255,8 @@ final class CarControl {
         String want = norm(name).replace("ingbox", "").replace("gbox", "");
         if (want.isEmpty() && norm(name).contains("gbox")) {   // "open GBox" (Air 2026-11-22)
             if (!Apps.installed(c, "com.gbox.android")) return res(false, "GBox isn't installed");
-            main.post(() -> Apps.open(c, "com.gbox.android", CarData.get(c).last()));
+            android.content.Intent gl = c.getPackageManager().getLaunchIntentForPackage("com.gbox.android");
+            if (gl != null) launch(gl, "com.gbox.android");
             return res(true, "opening GBox");
         }
         if (want.isEmpty()) return res(false, "which app?");
@@ -256,7 +266,8 @@ final class CarControl {
         // (Air 2026-11-23: "open YouTube Music" opened YouTube) YouTube Music always means the music app itself
         if (want.contains("music") && (want.contains("youtube") || want.contains("yt"))) {
             for (String y : MusicCard.YTM) if (Apps.installed(c, y)) {
-                main.post(() -> Apps.open(c, y, CarData.get(c).last()));
+                android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y);
+                if (li != null) launch(li, y);
                 return res(true, "opening YouTube Music");
             }
         }
@@ -278,7 +289,10 @@ final class CarControl {
         }
         if (best == null) return res(false, "no app called " + name + " on this car");
         final Apps.App app = best;
-        main.post(() -> Apps.open(c, app.pkg, CarData.get(c).last()));   // video apps still only in P
+        if (!(Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving())) {
+            android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(app.pkg);
+            if (li != null) launch(li, app.pkg);
+        }
         boolean video = Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving();
         return res(!video, video ? app.label + " is a video app: it opens only in P" : "opening " + app.label);
     }
@@ -306,8 +320,7 @@ final class CarControl {
                         .setPackage(p).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
             if (c.getPackageManager().resolveActivity(i, 0) == null) continue;
             st.edit().putString("mapsPkg", p).apply();
-            final android.content.Intent fi = i;
-            main.post(() -> { try { c.startActivity(fi); } catch (Throwable ignored) { } });
+            launch(i, p);
             return res(true, "asked " + Apps.label(c, p) + " to navigate to " + q + " (it may ask to confirm the place or start)"
                     + (q.equals("Home") || q.equals("Work") ? "; uses the Home/Work saved in Google Maps" : ""));
         }
@@ -330,8 +343,8 @@ final class CarControl {
                 final android.content.Intent s2 = new android.content.Intent(android.content.Intent.ACTION_SEARCH).setPackage(p)
                         .putExtra(android.app.SearchManager.QUERY, query).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                 if (c.getPackageManager().resolveActivity(s2, 0) == null) continue;
-                main.post(() -> { try { c.startActivity(s2); } catch (Throwable ignored) { } });
-            } else main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
+                launch(s2, p);
+            } else launch(i, p);
             return res(true, "opening YouTube: " + query);
         }
         return res(false, "YouTube isn't installed");
@@ -348,7 +361,8 @@ final class CarControl {
             if (p == null) {   // nothing playing yet: open YouTube Music first and give it a few seconds
                 for (String y : MusicCard.YTM) {
                     if (!Apps.installed(c, y)) continue;
-                    main.post(() -> Apps.open(c, y, CarData.get(c).last()));
+                    android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y);
+                    if (li != null) launch(li, y);
                     for (int i = 0; i < 10 && p == null; i++) { try { Thread.sleep(600); } catch (InterruptedException ignored) { } p = searchablePlayer(); }
                     break;
                 }
@@ -371,8 +385,8 @@ final class CarControl {
                 final android.content.Intent v = new android.content.Intent(android.content.Intent.ACTION_VIEW,
                         android.net.Uri.parse("https://music.youtube.com/search?q=" + android.net.Uri.encode(query)))
                         .setPackage(y).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                final String yy = y;
-                main.post(() -> { try { c.startActivity(v); } catch (Throwable t) { Apps.open(c, yy, CarData.get(c).last()); } });
+                if (c.getPackageManager().resolveActivity(v, 0) != null) launch(v, y);
+                else { android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y); if (li != null) launch(li, y); }
                 return res(false, "YouTube Music didn't start it by itself; its search for \"" + query
                         + "\" is open (or YouTube Music itself): tap the song to play. Tell the driver exactly this.");
             }
@@ -381,7 +395,8 @@ final class CarControl {
         android.media.session.MediaController mc = musicSession();
         if (mc == null) {
             for (String y : MusicCard.YTM) if (Apps.installed(c, y)) {
-                main.post(() -> Apps.open(c, y, CarData.get(c).last()));
+                android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y);
+                if (li != null) launch(li, y);
                 return res(false, "no music was playing: opened YouTube Music, ask again in a few seconds");
             }
             return res(false, "no music app is playing (and Notification access may be off)");
@@ -401,6 +416,33 @@ final class CarControl {
                 t.playFromSearch(query, new android.os.Bundle());
                 return res(true, "asked " + Apps.label(c, mc.getPackageName()) + " to play " + query + " (some apps don't support this)");
         }
+    }
+
+    /**
+     * Opens an app / link, also while another app is in front (Air 2026-11-23: it only worked from the home screen —
+     * Android blocks apps in the background from opening others). The normal way first; if the app isn't in front 2 s
+     * later, through the car's own ADB, which Android always allows.
+     */
+    private void launch(android.content.Intent i, String pkg) {
+        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+        main.post(() -> { try { c.startActivity(i); } catch (Throwable ignored) { } });
+        new Thread(() -> {
+            for (int k = 0; k < 8; k++) {
+                try { Thread.sleep(250); } catch (InterruptedException ignored) { }
+                if (pkg.equals(KeyWatch.front)) return;
+            }
+            try {
+                String cmd;
+                if (i.getData() != null)
+                    cmd = "am start -a " + i.getAction() + " -d '" + i.getData().toString().replace("'", "") + "' -p " + pkg + " -f 0x14000000";
+                else {
+                    android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(pkg);
+                    cmd = li != null && li.getComponent() != null ? "am start -n " + li.getComponent().flattenToShortString() + " -f 0x10200000"
+                            : "monkey -p " + pkg + " -c android.intent.category.LAUNCHER 1";
+                }
+                Updater.adbShell(c, cmd);
+            } catch (Throwable ignored) { }
+        }).start();
     }
 
     private static String songOf(android.media.session.MediaController p) {
