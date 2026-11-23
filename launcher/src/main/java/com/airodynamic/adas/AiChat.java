@@ -34,7 +34,7 @@ import okio.ByteString;
 
 /**
  * "Hey Natee chat" (user, 2026-11-21): a voice chat with Google's Gemini (Live API), straight from the launcher, no
- * Gemini app needed. An offline wake-word listener (Vosk, nothing leaves the car) waits for "Quinn" (was "hey natee chat"); then a
+ * Gemini app needed. An offline wake-word listener (Vosk, nothing leaves the car) waits for "Harley Quinn" (was "Quinn", before that "hey natee chat"); then a
  * bubble opens over the screen and the voice goes to Gemini, which answers by voice and text. It can read the car's
  * information and change comfort things only (fan, temperature, A/C, cabin light, sunshade: see CarControl), never
  * anything about driving (user's OK for comfort controls, 2026-11-21).
@@ -217,11 +217,11 @@ public final class AiChat extends Service {
                     org.vosk.LibVosk.setLogLevel(org.vosk.LogLevel.WARNINGS);
                     model = new org.vosk.Model(org.vosk.android.StorageService.sync(this, "vosk-model", "model"));
                 }
-            } catch (Throwable e) { wakeState = "engine couldn't start: " + e.getClass().getSimpleName() + " " + e.getMessage(); status("Quinn: wake word engine couldn't start (" + e.getClass().getSimpleName() + ")"); return; }
+            } catch (Throwable e) { wakeState = "engine couldn't start: " + e.getClass().getSimpleName() + " " + e.getMessage(); status("Harley Quinn: wake word engine couldn't start (" + e.getClass().getSimpleName() + ")"); return; }
             wakeState = "ready";
             // only these phrases are listened for ("natee" isn't an English word: the nearest sounds stand in for it)
-            // wake word "Quinn" (Air 2026-11-22, was "hey Natee chat"); the car's English model may hear it as "queen"
-            String grammar = "[\"quinn\", \"hi quinn\", \"hey quinn\", \"queen\", \"hi queen\", \"hey queen\", \"[unk]\"]";
+            // wake word "Harley Quinn" (Air 2026-11-23: "Quinn" alone woke up too easily); "queen" accepted for "Quinn"
+            String grammar = "[\"harley quinn\", \"harley queen\", \"hey harley quinn\", \"hi harley quinn\", \"[unk]\"]";
             while (alive) {
                 if (chatting) { sleep(300); continue; }
                 Mic mic = null;
@@ -288,7 +288,7 @@ public final class AiChat extends Service {
     private static boolean isWake(String json) {
         if (json == null) return false;
         String t = " " + json.toLowerCase(java.util.Locale.US).replaceAll("[^a-z]+", " ") + " ";
-        return t.contains(" quinn ") || t.contains(" queen ");
+        return t.contains(" harley quinn ") || t.contains(" harley queen ");   // both words, one right after the other
     }
 
     // ---------------- chat ----------------
