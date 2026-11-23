@@ -79,6 +79,7 @@ public final class AiChat extends Service {
             registerReceiver(wokeUp, f);
         } catch (Throwable ignored) { }
         freshWatcher(8000);
+        main.postDelayed(this::showArm, 4000);
         startWake();
     }
 
@@ -93,7 +94,7 @@ public final class AiChat extends Service {
     }
 
     @Override public int onStartCommand(Intent i, int f, int id) {
-        if (i != null && "chat".equals(i.getAction())) main.post(this::pressMic);
+        if (i != null && "chat".equals(i.getAction())) { main.post(this::hideArm); main.post(this::pressMic); }
         if (i != null && "close".equals(i.getAction())) main.post(this::endChat);
         return START_STICKY;
     }
@@ -207,8 +208,48 @@ public final class AiChat extends Service {
 
     /** The wheel button watcher: switched on again whenever an update turned it off (checked every minute). */
     private final android.content.BroadcastReceiver wokeUp = new android.content.BroadcastReceiver() {
-        @Override public void onReceive(Context c, Intent i) { freshWatcher(3000); }
+        @Override public void onReceive(Context c, Intent i) { freshWatcher(3000); main.postDelayed(AiChat.this::showArm, 1500); }
     };
+    // (Air 2026-11-23) after a car start the wheel mic goes to BYD again: a small button to tap once, "like Snow
+    // Assistant, which has to be opened first"; it switches the mic button to the chat and disappears
+    private View arm;
+    private void showArm() {
+        if (arm != null || !alive || !prefs.aiChat()) return;
+        android.widget.TextView t = new android.widget.TextView(this);
+        t.setText("\uD83C\uDFA4  Tap: wheel mic \u2192 " + prefs.aiName());
+        t.setTextSize(16); t.setTextColor(0xFFFFFFFF); t.setTypeface(null, android.graphics.Typeface.BOLD);
+        t.setPadding(Ui.dp(this, 18), Ui.dp(this, 10), Ui.dp(this, 18), Ui.dp(this, 10));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(0xE61E88E5); bg.setCornerRadius(Ui.dp(this, 22));
+        t.setBackground(bg);
+        t.setOnClickListener(v -> {
+            t.setText("\uD83C\uDFA4  switching\u2026");
+            new Thread(() -> {
+                KeyWatch.restart(AiChat.this); KeyWatch.keepOff(AiChat.this);
+                for (int i = 0; i < 12 && !KeyWatch.running(); i++) { try { Thread.sleep(500); } catch (InterruptedException ignored) { } }
+                final boolean ok = KeyWatch.running();
+                main.post(() -> {
+                    t.setText(ok ? "\uD83C\uDFA4  wheel mic \u2192 " + prefs.aiName() + " \u2713" : "\uD83C\uDFA4  couldn't switch \u00b7 tap again");
+                    if (ok) main.postDelayed(AiChat.this::hideArm, 1500);
+                });
+            }).start();
+        });
+        try {
+            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+            @SuppressWarnings("deprecation") int type = WindowManager.LayoutParams.TYPE_PHONE;
+            WindowManager.LayoutParams lp = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, type,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT);
+            lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL; lp.y = Ui.dp(this, 70);
+            wm.addView(t, lp);
+            arm = t;
+        } catch (Throwable ignored) { }
+    }
+    private void hideArm() {
+        if (arm == null) return;
+        try { ((WindowManager) getSystemService(WINDOW_SERVICE)).removeView(arm); } catch (Throwable ignored) { }
+        arm = null;
+    }
+
     private long freshAt;
     private void freshWatcher(long delay) {
         long now = android.os.SystemClock.uptimeMillis();
@@ -230,6 +271,7 @@ public final class AiChat extends Service {
     @Override public void onDestroy() {
         alive = false;
         try { unregisterReceiver(wokeUp); } catch (Throwable ignored) { }
+        hideArm();
         wakeState = "off"; micLevel = -1;
         endChat();
         if (wakeThread != null) wakeThread.interrupt();
