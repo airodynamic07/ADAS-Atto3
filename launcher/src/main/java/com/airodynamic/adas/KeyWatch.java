@@ -110,7 +110,17 @@ public final class KeyWatch extends AccessibilityService {
     // 20 s check kept restarting a healthy watcher, and BYD's assistant got the button in the gaps
     private static volatile KeyWatch live;
     private static volatile long lastToggle;
-    @Override protected void onServiceConnected() { super.onServiceConnected(); live = this; connected = true; }
+    @Override protected void onServiceConnected() {
+        super.onServiceConnected(); live = this; connected = true;
+        store(this).edit().putString("connAt", new java.text.SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).format(new java.util.Date())).apply();
+    }
+
+    /** After a car start the watcher is listed and looks alive but the button goes to BYD again (Air 2026-11-23:
+     *  "it works until I restart"): start it afresh, whatever it says about itself. */
+    static void restart(Context c) {
+        connected = false; lastToggle = 0;
+        ensureOn(c);
+    }
     @Override public boolean onUnbind(android.content.Intent i) { if (live == this) connected = false; return super.onUnbind(i); }
     @Override public void onDestroy() { if (live == this) connected = false; super.onDestroy(); }
 

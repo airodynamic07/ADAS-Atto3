@@ -72,6 +72,13 @@ public final class AiChat extends Service {
         alive = true;
         new Thread(() -> { if (!micAllowed(this) || !overlayAllowed(this)) fixPermissions(this); }).start();
         main.postDelayed(watchCheck, 6000);   // a moment after start, so Android can connect the watcher by itself first
+        // the car waking up (screen on again, or the launcher started): start the wheel button watcher afresh
+        try {
+            android.content.IntentFilter f = new android.content.IntentFilter(Intent.ACTION_SCREEN_ON);
+            f.addAction(Intent.ACTION_USER_PRESENT);
+            registerReceiver(wokeUp, f);
+        } catch (Throwable ignored) { }
+        freshWatcher(8000);
         startWake();
     }
 
@@ -199,6 +206,17 @@ public final class AiChat extends Service {
     }
 
     /** The wheel button watcher: switched on again whenever an update turned it off (checked every minute). */
+    private final android.content.BroadcastReceiver wokeUp = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { freshWatcher(3000); }
+    };
+    private long freshAt;
+    private void freshWatcher(long delay) {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (freshAt != 0 && now - freshAt < 30_000) return;
+        freshAt = now;
+        main.postDelayed(() -> new Thread(() -> { KeyWatch.restart(AiChat.this); KeyWatch.keepOff(AiChat.this); }).start(), delay);
+    }
+
     private final Runnable watchCheck = new Runnable() {
         @Override public void run() {
             if (!alive) return;
@@ -211,6 +229,7 @@ public final class AiChat extends Service {
 
     @Override public void onDestroy() {
         alive = false;
+        try { unregisterReceiver(wokeUp); } catch (Throwable ignored) { }
         wakeState = "off"; micLevel = -1;
         endChat();
         if (wakeThread != null) wakeThread.interrupt();

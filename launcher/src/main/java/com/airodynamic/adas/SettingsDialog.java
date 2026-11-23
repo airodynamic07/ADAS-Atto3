@@ -594,7 +594,9 @@ public final class SettingsDialog {
         String seen = KeyWatch.store(c).getString("seen", "");
         String after = KeyWatch.store(c).getString("afterPress", "");
         if (!after.isEmpty()) seen = "opened after the press: " + after + (seen.isEmpty() ? "" : "\n" + seen);
-        final String[] lines = seen.isEmpty() ? new String[0] : seen.split("\n");
+        seen = "watcher started " + KeyWatch.store(c).getString("connAt", "never") + " · now "
+                + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(new java.util.Date()) + (seen.isEmpty() ? "" : "\n" + seen);
+        final String[] lines = seen.split("\n");
         AlertDialog.Builder b = new AlertDialog.Builder(c)
                 .setTitle((err != null ? err + "\n" : "") + "Press the wheel's mic button, then tap Refresh. Tap the key it sent to use it:");
         if (lines.length == 0) b.setMessage("No button press seen yet.");
