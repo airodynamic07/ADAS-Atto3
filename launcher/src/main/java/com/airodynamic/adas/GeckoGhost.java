@@ -197,7 +197,14 @@ final class GeckoGhost {
                     + "user_pref(\"network.http.http2.ping-timeout\", 5);\n"
                     + "user_pref(\"network.http.connection-timeout\", 15);\n"
                     + "user_pref(\"network.http.response.timeout\", 30);\n"
-                    + "user_pref(\"network.http.network-changed.timeout\", 3);\n");
+                    + "user_pref(\"network.http.network-changed.timeout\", 3);\n"
+                    // (Air 2026-11-23: same school route, map black on the way back) keep up to 500 MB of downloaded map
+                    // pieces, so roads driven before load from the car instead of the internet
+                    + "user_pref(\"browser.cache.disk.enable\", true);\n"
+                    + "user_pref(\"browser.cache.disk.smart_size.enabled\", false);\n"
+                    + "user_pref(\"browser.cache.disk.capacity\", 512000);\n"
+                    + "user_pref(\"browser.cache.disk.max_entry_size\", 51200);\n"
+                    + "user_pref(\"browser.cache.check_doc_frequency\", 3);\n");
         } catch (Throwable ignored) { }
     }
 
