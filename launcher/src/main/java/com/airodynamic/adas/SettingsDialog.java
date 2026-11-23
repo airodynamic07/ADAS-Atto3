@@ -219,7 +219,7 @@ public final class SettingsDialog {
         // their own row, so the labels aren't cut off (Air 2026-11-23: couldn't find the button)
         LinearLayout aw2 = row(c);
         aw2.addView(Ui.chip(c, "Switch BYD voice assistant off / on ›", false, th, v -> bydVoice(c)), weight(c));
-        aw2.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) && KeyWatch.running() ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
+        aw2.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
         root.addView(aw2);
 
         section(c, root, th, "Tyre pressure unit");
@@ -580,11 +580,8 @@ public final class SettingsDialog {
         android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
         new Thread(() -> {
             KeyWatch.ensureOn(c);   // by the launcher itself when it may, else through the car's ADB
-            for (int i = 0; i < 16 && !(KeyWatch.isOn(c) && KeyWatch.running()); i++) {   // Android needs a moment to start it
-                try { Thread.sleep(500); } catch (InterruptedException ignored) { }
-            }
-            String err = KeyWatch.isOn(c) && KeyWatch.running() ? null
-                    : "Watcher not running — send a photo.";
+            try { Thread.sleep(1000); } catch (InterruptedException ignored) { }
+            String err = KeyWatch.isOn(c) ? null : "Watcher is not in Android's list — send a photo.";
             final String e2 = err;
             ui.post(() -> showKeys(c, e2));
         }).start();

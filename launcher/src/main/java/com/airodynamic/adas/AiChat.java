@@ -78,7 +78,6 @@ public final class AiChat extends Service {
             f.addAction(Intent.ACTION_USER_PRESENT);
             registerReceiver(wokeUp, f);
         } catch (Throwable ignored) { }
-        freshWatcher(8000);
         main.postDelayed(this::showArm, 4000);
         startWake();
     }
@@ -208,7 +207,7 @@ public final class AiChat extends Service {
 
     /** The wheel button watcher: switched on again whenever an update turned it off (checked every minute). */
     private final android.content.BroadcastReceiver wokeUp = new android.content.BroadcastReceiver() {
-        @Override public void onReceive(Context c, Intent i) { freshWatcher(3000); main.postDelayed(AiChat.this::showArm, 1500); }
+        @Override public void onReceive(Context c, Intent i) { main.postDelayed(AiChat.this::showArm, 1500); }
     };
     // (Air 2026-11-23) after a car start the wheel mic goes to BYD again: a small button to tap once, "like Snow
     // Assistant, which has to be opened first"; it switches the mic button to the chat and disappears
@@ -225,9 +224,8 @@ public final class AiChat extends Service {
         t.setOnClickListener(v -> {
             t.setText("\uD83C\uDFA4  switching\u2026");
             new Thread(() -> {
-                KeyWatch.restart(AiChat.this); KeyWatch.keepOff(AiChat.this);
-                for (int i = 0; i < 12 && !KeyWatch.running(); i++) { try { Thread.sleep(500); } catch (InterruptedException ignored) { } }
-                final boolean ok = KeyWatch.running();
+                final boolean ok = KeyWatch.restart(AiChat.this);
+                KeyWatch.keepOff(AiChat.this);
                 main.post(() -> {
                     t.setText(ok ? "\uD83C\uDFA4  wheel mic \u2192 " + prefs.aiName() + " \u2713" : "\uD83C\uDFA4  couldn't switch \u00b7 tap again");
                     if (ok) main.postDelayed(AiChat.this::hideArm, 1500);
@@ -250,19 +248,11 @@ public final class AiChat extends Service {
         arm = null;
     }
 
-    private long freshAt;
-    private void freshWatcher(long delay) {
-        long now = android.os.SystemClock.uptimeMillis();
-        if (freshAt != 0 && now - freshAt < 30_000) return;
-        freshAt = now;
-        main.postDelayed(() -> new Thread(() -> { KeyWatch.restart(AiChat.this); KeyWatch.keepOff(AiChat.this); }).start(), delay);
-    }
-
     private final Runnable watchCheck = new Runnable() {
         @Override public void run() {
             if (!alive) return;
             // not listed, or listed but not running (after a car start): repair it; checked every 20 s
-            final boolean fix = !KeyWatch.isOn(AiChat.this) || !KeyWatch.running();
+            final boolean fix = !KeyWatch.isOn(AiChat.this);   // only when it is missing from Android's list; never a restart
             new Thread(() -> { if (fix) KeyWatch.ensureOn(AiChat.this); KeyWatch.keepOff(AiChat.this); }).start();
             main.postDelayed(this, 20_000);
         }

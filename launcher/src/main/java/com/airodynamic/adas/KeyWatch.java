@@ -105,25 +105,15 @@ public final class KeyWatch extends AccessibilityService {
 
     /** Is the watcher really running (Android has connected it)? */
     static volatile boolean connected;
-    // (Air 2026-11-23: test said "not running" while it was logging keys) after a restart of the watcher the OLD one
-    // says goodbye after the new one has connected: only the newest one may say "not running" — otherwise the
-    // 20 s check kept restarting a healthy watcher, and BYD's assistant got the button in the gaps
     private static volatile KeyWatch live;
-    private static volatile long lastToggle;
-    private static volatile boolean force;
+    /** when Android last connected the watcher (uptime ms) */
+    static volatile long connAtMs;
     @Override protected void onServiceConnected() {
-        super.onServiceConnected(); live = this; connected = true;
+        super.onServiceConnected(); live = this; connected = true; connAtMs = android.os.SystemClock.uptimeMillis();
         store(this).edit().putString("connAt", new java.text.SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).format(new java.util.Date())).apply();
     }
 
-    /** After a car start the watcher is listed and looks alive but the button goes to BYD again (Air 2026-11-23:
-     *  "it works until I restart"): start it afresh, whatever it says about itself. */
-    static void restart(Context c) {
-        lastToggle = 0; force = true;
-        ensureOn(c);
-    }
-    // (Air 2026-11-23: "not running" shown although Quinn had just opened) Android can reuse the same watcher when it
-    // is restarted, and its late goodbye then marked the fresh one dead: ask Android itself instead of keeping a flag
+    /** Best guess only (shown in the test window); nothing is restarted because of it. */
     static boolean running() {
         KeyWatch k = live;
         if (k == null) return false;
@@ -131,34 +121,43 @@ public final class KeyWatch extends AccessibilityService {
     }
 
     /**
-     * The watcher is switched off by updates and by every car start (Air 2026-11-23: "after I turn the car off and on it
-     * always goes back to BYD's assistant"). Switch it on again: by the launcher itself when it has the secure-settings
-     * permission (granted once through ADB, survives restarts), else through the car's ADB.
+     * (Air 2026-11-23) The launcher's own automatic restarts of the watcher did more harm than good: a watcher that was
+     * taking the button fine right after a start stopped once it was restarted. So nothing is restarted automatically
+     * any more. Only Air's tap on the "wheel mic → chat" button does it: out of Android's list, a pause, back in.
+     * True when Android connected it afresh.
      */
-    static void ensureOn(Context c) {
+    static synchronized boolean restart(Context c) {
+        long t0 = android.os.SystemClock.uptimeMillis();
+        toggle(c, true);
+        for (int i = 0; i < 20 && connAtMs < t0; i++) { try { Thread.sleep(500); } catch (InterruptedException ignored) { } }
+        return connAtMs >= t0;
+    }
+
+    /** Puts the watcher into Android's list when it is missing (updates and car starts can drop it). Never restarts it. */
+    static synchronized void ensureOn(Context c) {
+        if (!isOn(c)) toggle(c, false);
+    }
+
+    private static void toggle(Context c, boolean restart) {
         try {
             String me = c.getPackageName() + "/" + KeyWatch.class.getName();
             android.content.ContentResolver cr = c.getContentResolver();
             String cur = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
             boolean listed = cur != null && cur.contains(me);
-            boolean forced = force; force = false;
-            if (listed && running() && !forced) return;
-            long now = android.os.SystemClock.uptimeMillis();
-            if (listed && lastToggle != 0 && now - lastToggle < 120_000) return;   // give Android time; never restart it in a loop
-            lastToggle = now;
+            if (listed && !restart) return;
             boolean own = c.checkCallingOrSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED;
             String without = cur == null || "null".equals(cur) ? "" : cur.replace(":" + me, "").replace(me + ":", "").replace(me, "");
             String with = without.isEmpty() ? me : without + ":" + me;
             if (own) {
-                if (listed) {   // listed but not running: take it out and put it back, so Android starts it again
+                if (listed) {
                     android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, without);
-                    try { Thread.sleep(1500); } catch (InterruptedException ignored) { }
+                    try { Thread.sleep(3000); } catch (InterruptedException ignored) { }
                 }
                 android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, with);
                 android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, "1");
                 return;
             }
-            Updater.adbShell(c, (listed ? "settings put secure enabled_accessibility_services '" + without + "'; sleep 2; " : "")
+            Updater.adbShell(c, (listed ? "settings put secure enabled_accessibility_services '" + without + "'; sleep 3; " : "")
                     + "settings put secure enabled_accessibility_services '" + with + "'; settings put secure accessibility_enabled 1; "
                     + "pm grant " + c.getPackageName() + " android.permission.WRITE_SECURE_SETTINGS");
         } catch (Throwable ignored) { }
