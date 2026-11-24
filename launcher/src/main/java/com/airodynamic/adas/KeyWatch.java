@@ -136,9 +136,29 @@ public final class KeyWatch extends AccessibilityService {
         // which makes Android connect every watcher afresh
         long t1 = android.os.SystemClock.uptimeMillis();
         log.append(" · adb: ").append(toggle(c, true, true));
-        boolean ok = waitConnected(t1, 10_000);
-        fixLog(c, log.append(ok ? " → ok" : " → still not connected"));
-        return ok;
+        if (waitConnected(t1, 8000)) { fixLog(c, log.append(" → ok")); return true; }
+        // step 3 (Air 2026-11-24: steps 1 and 2 "still not connected"; only an update brought it back): Android can keep a
+        // watcher stuck "waiting to start" and then ignores the settings; switching the watcher's own part of the app
+        // off and on makes Android read it afresh, as an update does
+        long t2 = android.os.SystemClock.uptimeMillis();
+        try {
+            android.content.ComponentName me = new android.content.ComponentName(c, KeyWatch.class);
+            android.content.pm.PackageManager pm = c.getPackageManager();
+            pm.setComponentEnabledSetting(me, android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED, android.content.pm.PackageManager.DONT_KILL_APP);
+            try { Thread.sleep(2000); } catch (InterruptedException ignored) { }
+            pm.setComponentEnabledSetting(me, android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED, android.content.pm.PackageManager.DONT_KILL_APP);
+            try { Thread.sleep(1000); } catch (InterruptedException ignored) { }
+            log.append(" · part: ").append(toggle(c, true, false));
+        } catch (Throwable t) { log.append(" · part: error ").append(t.getClass().getSimpleName()); }
+        boolean ok = waitConnected(t2, 8000);
+        if (!ok) {
+            // step 4: the launcher restarts itself (a blink); Android brings it back with the watcher
+            fixLog(c, log.append(" → restarting the launcher"));
+            store(c).edit().putBoolean("restartedForWatcher", true).commit();
+            android.os.Process.killProcess(android.os.Process.myPid());
+        }
+        fixLog(c, log.append(" → ok"));
+        return true;
     }
     private static boolean waitConnected(long since, long ms) {
         for (long i = 0; i < ms / 500 && connAtMs < since; i++) { try { Thread.sleep(500); } catch (InterruptedException ignored) { } }
