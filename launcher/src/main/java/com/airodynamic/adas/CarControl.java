@@ -10,7 +10,7 @@ import java.util.Locale;
 
 /**
  * What "Hey Natee chat" may read and change (user, 2026-11-21: "add everything now so I can test at once").
- * Reading: the car's state the launcher already knows. Changing: COMFORT ONLY — fan, temperature, A/C on/off,
+ * Reading: the car's state the launcher already knows. Changing: COMFORT ONLY — fan, temperature, A/C on/off, A/C auto, defrost, air direction, recirculation, purifier,
  * cabin light, sunshade. Nothing that drives, brakes, steers or assists: those calls simply don't exist here
  * (tools/safety-check.sh still fails the build on any driving-system command).
  * Fan and temperature use the calls the probe confirmed on this car (2026-11-10); A/C on/off, cabin light and
@@ -34,6 +34,13 @@ final class CarControl {
         f.put(fn("set_fan", "Set the A/C fan speed.", props("level", "integer", "fan level 1 (lowest) to 7 (highest)")));
         f.put(fn("set_temperature", "Set the A/C temperature.", props("celsius", "number", "target temperature, 17 to 33 °C")));
         f.put(fn("set_ac", "Switch the air conditioning on or off.", props("on", "boolean", "true = on, false = off")));
+        f.put(fn("set_defrost", "Front windscreen defrost (ไล่ฝ้า / ไล่ฝ้ากระจกหน้า) on or off.", props("on", "boolean", "true = on, false = off")));
+        f.put(fn("set_air_direction", "Where the A/C blows (ทิศทางลม): face (เป่าหน้า), face_feet (หน้าและขา), feet (เป่าขา), "
+                + "feet_windscreen (ขาและกระจก), windscreen (กระจก).", props("direction", "string", "face, face_feet, feet, feet_windscreen or windscreen")));
+        f.put(fn("set_recirculation", "Inside air / recirculation (หมุนเวียนอากาศภายใน) or fresh outside air (อากาศภายนอก).",
+                props("inside", "boolean", "true = inside air (recirculation), false = outside air")));
+        f.put(fn("set_purifier", "The A/C air purifier / clean air (ฟอกอากาศ) on or off.", props("on", "boolean", "true = on, false = off")));
+        f.put(fn("set_ac_auto", "A/C AUTO mode (แอร์ออโต้) on or off.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("set_cabin_light", "Cabin / reading light: this car has no command for it, so say it can't be done from here.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("sunroof", "Open, close or stop the glass SUNROOF (not the sunshade). Ask the driver to confirm open/close first.",
                 props("action", "string", "open, close or stop")));
@@ -84,6 +91,11 @@ final class CarControl {
                 case "set_temperature": return temp(a.optDouble("celsius", Double.NaN));
                 case "set_ac": return ac(a.optBoolean("on", true));
                 case "set_cabin_light": return light(a.optBoolean("on", true));
+                case "set_defrost": return defrost(a.optBoolean("on", true));
+                case "set_air_direction": return airDirection(a.optString("direction", ""));
+                case "set_recirculation": return recirc(a.optBoolean("inside", true));
+                case "set_purifier": return purifier(a.optBoolean("on", true));
+                case "set_ac_auto": return acAuto(a.optBoolean("on", true));
                 case "sunshade": return shade(a.optString("action", ""));
                 case "sunroof": return roof(a.optString("action", ""));
                 case "report_problem": {
@@ -206,6 +218,88 @@ final class CarControl {
         }
         return o;
     }
+
+    // ---- more A/C (Air 2026-11-24: "add them"). Comfort only. Defrost and recirculation use the car's feature write,
+    // as the ADAS Probe tests did (accepted on this car); purifier and air direction the calls the probe confirmed.
+    private JSONObject defrost(boolean on) {
+        Object r = acFeature(new String[]{"AC_DEFROST_FRONT_STATE_SET", "DEFROST_FRONT_SET"}, 501219362, on ? 1 : 0);
+        return answer(r, on ? "front defrost on" : "front defrost off");
+    }
+
+    private JSONObject recirc(boolean inside) {
+        Object r = acFeature(new String[]{"AC_CYCLE_MODE_SET", "CYCLE_MODE_SET"}, 501219355, inside ? 1 : 0);
+        JSONObject o = answer(r, inside ? "inside air (recirculation)" : "outside air");
+        try { Thread.sleep(900); } catch (InterruptedException ignored) { }
+        Object now = call(AC, "getAcCycleMode");   // probe: 1 = inside air, 0 = outside air
+        if (now instanceof Number) {
+            boolean in = ((Number) now).intValue() == 1;
+            try { o.put("ok", in == inside).put("result", in == inside ? (in ? "now inside air" : "now outside air") : "the car didn't change it"); } catch (Exception ignored) { }
+        }
+        return o;
+    }
+
+    private JSONObject purifier(boolean on) {
+        Object r = call(AC, "setAutoCleanAirState", on ? 1 : 2);   // probe: 1 = on, 2 = off
+        return answer(r, on ? "air purifier on" : "air purifier off");
+    }
+
+    /** Which setAcWindMode number is which direction: learned in Settings → AI chat → Air direction test. */
+    static final String[] DIRECTIONS = {"face", "face_feet", "feet", "feet_windscreen", "windscreen"};
+    private JSONObject airDirection(String dir) {
+        dir = dir.trim().toLowerCase(Locale.US).replace(' ', '_').replace('+', '_');
+        int mode = c.getSharedPreferences("air_dir", Context.MODE_PRIVATE).getInt(dir, -1);
+        if (mode < 0) return res(false, "the launcher doesn't know this car's number for '" + dir + "' yet: the driver can teach it in Settings → AI chat → Air direction test");
+        Object r = call(AC, "setAcWindMode", 0, mode);
+        JSONObject o = answer(r, "air to " + dir.replace('_', ' '));
+        try { Thread.sleep(900); } catch (InterruptedException ignored) { }
+        Object now = call(AC, "getAcWindMode");
+        if (now instanceof Number) {
+            int n = ((Number) now).intValue();
+            try { o.put("ok", n == mode).put("result", n == mode ? "air direction changed" : "the car didn't change the air direction"); } catch (Exception ignored) { }
+        }
+        return o;
+    }
+
+    private JSONObject acAuto(boolean on) {
+        // not found on this car yet: the likely calls, one or two numbers, first one that exists wins
+        String[] names = {"setAcAutoState", "setAcAutoMode", "setAutoMode", "setAcAuto", "setAcAutoSwitch"};
+        for (String n : names) {
+            Object r = call(AC, n, 0, on ? 1 : 0);
+            if (r == MISSING) r = call(AC, n, on ? 1 : 0);
+            if (r != MISSING) { JSONObject a = answer(r, on ? "A/C auto on" : "A/C auto off"); try { a.put("call", n); } catch (Exception ignored) { } return a; }
+        }
+        Object r = acFeature(new String[]{"AC_AUTO_MODE_SET", "AUTO_MODE_SET", "AC_AUTO_SET"}, -1, on ? 1 : 0);
+        if (r != MISSING) return answer(r, on ? "A/C auto on" : "A/C auto off");
+        return res(false, "this car has no A/C auto command the launcher can use yet");
+    }
+
+    /** The car's generic A/C feature write, set(int[]{id}, value) — only Ac.* feature ids. */
+    Object acFeature(String[] fields, int fallbackId, int value) {
+        Object d = CarDev.get(c, AC);
+        if (d == null) return MISSING;
+        int id = fallbackId;
+        try {
+            Class<?> ids = Class.forName(P + "BYDAutoFeatureIds");
+            outer:
+            for (Class<?> inner : ids.getDeclaredClasses()) {
+                if (!inner.getSimpleName().equals("Ac")) continue;
+                for (String f : fields) { try { id = inner.getField(f).getInt(null); break outer; } catch (NoSuchFieldException ignored) { } }
+            }
+        } catch (Throwable ignored) { }
+        if (id < 0) return MISSING;
+        try {
+            Class<?> evc = Class.forName(P + "BYDAutoEventValue");
+            Object ev = evc.getConstructor().newInstance();
+            evc.getField("intValue").setInt(ev, value);
+            Method set = d.getClass().getMethod("set", int[].class, evc);
+            Object r = set.invoke(d, new int[]{id}, ev);
+            return r == null ? 0 : r;
+        } catch (NoSuchMethodException e) { return MISSING; } catch (Throwable e) { return FAILED; }
+    }
+
+    /** For the air direction test in Settings. */
+    Object setWindMode(int m) { return call(AC, "setAcWindMode", 0, m); }
+    Object windMode() { return call(AC, "getAcWindMode"); }
 
     private JSONObject ac(boolean on) {
         // not tested on this car yet: the likely calls, first one that exists wins

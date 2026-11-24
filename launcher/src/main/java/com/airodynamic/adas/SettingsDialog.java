@@ -230,6 +230,10 @@ public final class SettingsDialog {
         aw2.addView(Ui.chip(c, "Switch BYD voice assistant off / on ›", false, th, v -> bydVoice(c)), weight(c));
         aw2.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
         root.addView(aw2);
+        LinearLayout aw3 = row(c);
+        android.content.SharedPreferences airDirP = c.getSharedPreferences("air_dir", Context.MODE_PRIVATE);
+        aw3.addView(Ui.chip(c, "Air direction test ›" + (airDirP.getAll().isEmpty() ? " (not done yet)" : " (" + airDirP.getAll().size() + " of 5 known)"), false, th, v -> airDirTest(c, 1, -1)), weight(c));
+        root.addView(aw3);
 
         section(c, root, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
@@ -459,6 +463,45 @@ public final class SettingsDialog {
      * Finds the sunshade and cabin-light commands (Air 2026-11-22: "open sunshade" opened the glass sunroof): lists the
      * car's commands with matching names, then which readings change when the driver uses the car's own buttons.
      */
+    /** (Air 2026-11-24) teaches "เป่าขา / เป่าหน้า …": each air direction number in turn, the driver says what the car
+     *  screen shows. Comfort only (where the A/C blows). The car's own setting is put back at the end. */
+    private static void airDirTest(Context c, int m, int orig) {
+        CarControl cc = new CarControl(c);
+        android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+        new Thread(() -> {
+            int o = orig;
+            if (o < 0) { Object now = cc.windMode(); o = now instanceof Number ? ((Number) now).intValue() : 1; }
+            final int first = o;
+            int n = m;
+            Object r = null; int read = -1;
+            for (; n <= 8; n++) {   // skip numbers the car doesn't take
+                r = cc.setWindMode(n);
+                try { Thread.sleep(2500); } catch (InterruptedException ignored) { }
+                Object now = cc.windMode();
+                read = now instanceof Number ? ((Number) now).intValue() : -1;
+                if (read == n || read == -1) break;   // can't read it back: ask anyway
+            }
+            final int nn = n;
+            ui.post(() -> {
+                if (nn > 8) {
+                    new Thread(() -> cc.setWindMode(first)).start();
+                    android.content.SharedPreferences sp = c.getSharedPreferences("air_dir", Context.MODE_PRIVATE);
+                    new AlertDialog.Builder(c).setTitle("Air direction test finished").setMessage("Known now: " + (sp.getAll().isEmpty() ? "none" : sp.getAll().toString())
+                            + "\nYour own setting is back. Close and reopen Settings to see it on the button.").setPositiveButton("OK", null).show();
+                    return;
+                }
+                String[] names = {"Face", "Face + feet", "Feet", "Feet + windscreen", "Windscreen", "Something else / nothing changed"};
+                new AlertDialog.Builder(c).setTitle("Number " + nn + ": where does the car screen show the air going now?")
+                        .setItems(names, (d, i) -> {
+                            if (i < CarControl.DIRECTIONS.length) c.getSharedPreferences("air_dir", Context.MODE_PRIVATE).edit().putInt(CarControl.DIRECTIONS[i], nn).apply();
+                            airDirTest(c, nn + 1, first);
+                        })
+                        .setNegativeButton("Stop", (d, i) -> new Thread(() -> cc.setWindMode(first)).start())
+                        .setCancelable(false).show();
+            });
+        }).start();
+    }
+
     private static void findControls(Context c) {
         final String[] devs = {"bodywork.BYDAutoBodyworkDevice", "light.BYDAutoLightDevice", "setting.BYDAutoSettingDevice",
                 "ac.BYDAutoAcDevice", "instrument.BYDAutoInstrumentDevice", "multimedia.BYDAutoMultimediaDevice", "sensor.BYDAutoSensorDevice"};
