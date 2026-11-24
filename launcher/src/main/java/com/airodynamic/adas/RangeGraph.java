@@ -18,7 +18,7 @@ import java.util.Locale;
  * Range graph in the right window (user, 2026-11-21; redesigned 2026-11-22). For this trip, today or charge to charge:
  * NEDC (grey) = 480 km, WLTP (blue) = 420 km, EPA (purple) = WLTP − 12 %, each × battery health × the battery % at the
  * start, then straight down 1 km per km driven (parallel; your driving never changes them). My range (orange) = 100 %
- * your own driving: battery left ÷ your kWh/100 km over the last 10 km; it starts on the WLTP point, slides into your own
+ * your own driving: battery left ÷ your kWh/100 km over the last 20 km; it starts on the WLTP point, slides into your own
  * range over 5 km, and is smoothed over ~2 km (no jitter). This trip shows the last 30 km, zoomed, sliding right and
  * down; Today and Charge to charge show everything from 0, with where each line reaches 0 ahead. Read only.
  */
@@ -231,11 +231,11 @@ final class RangeGraph extends LinearLayout {
             return new double[]{nedc, wltp, ownRange(c, s)};
         }
 
-        /** battery left ÷ your kWh/100 km over the last 10 km (else 50 km, else the car's own figure) × 100 */
+        /** battery left ÷ your kWh/100 km over the last 20 km (else 50 km, else the car's own figure) × 100 */
         static double ownRange(Context c, CarData.State s) {
             double left = !Double.isNaN(s.battLeftKwh) ? s.battLeftKwh : !Double.isNaN(s.socPct) ? s.socPct / 100 * 60.48 * (Double.isNaN(s.healthPct) ? 1 : s.healthPct / 100.0) : Double.NaN;
             TripEnergy te = TripEnergy.get(c);
-            double mine = te.myAvg10();
+            double mine = te.myAvg20();
             if (Double.isNaN(mine)) mine = te.myAvg50();
             if (Double.isNaN(mine)) mine = s.last50;
             return !Double.isNaN(left) && !Double.isNaN(mine) && mine > 3 ? left / mine * 100 : Double.NaN;
