@@ -221,6 +221,7 @@ public final class AiChat extends Service {
     private View arm;
     private void showArm() {
         if (arm != null || !alive || !prefs.aiChat()) return;
+        boolean after = KeyWatch.store(this).getBoolean("restartedForWatcher", false);
         android.widget.TextView t = new android.widget.TextView(this);
         t.setText("\uD83C\uDFA4  Tap: wheel mic \u2192 " + prefs.aiName());
         t.setTextSize(16); t.setTextColor(0xFFFFFFFF); t.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -234,7 +235,9 @@ public final class AiChat extends Service {
                 final boolean ok = KeyWatch.restart(AiChat.this);
                 KeyWatch.keepOff(AiChat.this);
                 main.post(() -> {
-                    t.setText(ok ? "\uD83C\uDFA4  wheel mic \u2192 " + prefs.aiName() + " \u2713" : "\uD83C\uDFA4  couldn't switch \u00b7 tap again");
+                    boolean re = KeyWatch.store(AiChat.this).getString("lastFix", "").contains("reinstalling");
+                    t.setText(ok ? "\uD83C\uDFA4  wheel mic \u2192 " + prefs.aiName() + " \u2713"
+                            : re ? "\uD83C\uDFA4  re-installing the launcher \u00b7 back in about a minute" : "\uD83C\uDFA4  couldn't switch \u00b7 tap again");
                     if (ok) main.postDelayed(AiChat.this::hideArm, 1500);
                 });
             }).start();
@@ -247,6 +250,16 @@ public final class AiChat extends Service {
             lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL; lp.y = Ui.dp(this, 70);
             wm.addView(t, lp);
             arm = t;
+            if (after) {   // back after the blue button reinstalled the launcher: say whether it worked
+                KeyWatch.store(this).edit().putBoolean("restartedForWatcher", false).apply();
+                t.setText("\uD83C\uDFA4  checking the wheel mic\u2026");
+                main.postDelayed(() -> {
+                    if (arm != t) return;
+                    boolean ok = KeyWatch.running();
+                    t.setText(ok ? "\uD83C\uDFA4  wheel mic \u2192 " + prefs.aiName() + " \u2713" : "\uD83C\uDFA4  still not working \u00b7 send Claude the test photo");
+                    main.postDelayed(this::hideArm, ok ? 4000 : 15000);
+                }, 6000);
+            }
         } catch (Throwable ignored) { }
     }
     private void hideArm() {

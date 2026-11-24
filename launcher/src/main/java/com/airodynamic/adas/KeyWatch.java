@@ -151,14 +151,24 @@ public final class KeyWatch extends AccessibilityService {
             log.append(" · part: ").append(toggle(c, true, false));
         } catch (Throwable t) { log.append(" · part: error ").append(t.getClass().getSimpleName()); }
         boolean ok = waitConnected(t2, 8000);
-        if (!ok) {
-            // step 4: the launcher restarts itself (a blink); Android brings it back with the watcher
-            fixLog(c, log.append(" → restarting the launcher"));
+        if (ok) { fixLog(c, log.append(" → ok")); return true; }
+        // step 4 (Air 2026-11-24: a plain launcher restart didn't help; only installing an update ever did): the car
+        // installs the launcher's own APK over itself, exactly like an update, then switches the watcher on and opens
+        // the launcher again. Runs in the car's shell, so it carries on while the launcher is replaced.
+        try {
+            String me = c.getPackageName() + "/" + KeyWatch.class.getName();
+            String cur = android.provider.Settings.Secure.getString(c.getContentResolver(), android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            String without = cur == null || "null".equals(cur) ? "" : cur.replace(":" + me, "").replace(me + ":", "").replace(me, "");
+            String with = without.isEmpty() ? me : without + ":" + me;
+            String pk = c.getPackageName();
+            fixLog(c, log.append(" → reinstalling the launcher (like an update)"));
             store(c).edit().putBoolean("restartedForWatcher", true).commit();
-            android.os.Process.killProcess(android.os.Process.myPid());
-        }
-        fixLog(c, log.append(" → ok"));
-        return true;
+            Updater.adbShell(c, "nohup sh -c 'pm install -r \"$(pm path " + pk + " | head -n 1 | cut -d: -f2)\"; sleep 2; "
+                    + "settings put secure enabled_accessibility_services \"" + with + "\"; settings put secure accessibility_enabled 1; "
+                    + "pm grant " + pk + " android.permission.WRITE_SECURE_SETTINGS; "
+                    + "am start -n " + pk + "/.LauncherActivity' > /dev/null 2>&1 &");
+        } catch (Throwable t) { fixLog(c, log.append(" → couldn't reach the car's ADB (").append(t.getClass().getSimpleName()).append(")")); }
+        return false;
     }
     private static boolean waitConnected(long since, long ms) {
         for (long i = 0; i < ms / 500 && connAtMs < since; i++) { try { Thread.sleep(500); } catch (InterruptedException ignored) { } }
