@@ -127,6 +127,11 @@ public final class AiChat extends Service {
 
     /** Gemini's own voice coming back through the microphone (Air 2026-11-22: "you: ok ค่ะ" five times): a lone
      *  short filler word, or words Gemini itself just said. Only for turns that ended by themselves, never a press. */
+    private static boolean closesSystem(String t) {
+        String e = t.replaceAll("[\\s.,!?…]+$", "");
+        return e.matches("(?s).*ปิด\\s*ระบบ\\s*(นะ)?\\s*(ครับ|คับ|คะ|ค่ะ|ค๊ะ)?") || e.matches("(?s).*\\bclose\\s+(the\\s+)?system(\\s+please)?");
+    }
+
     private static boolean endsSentence(String t) {
         String e = t.replaceAll("[\\s.,!?…]+$", "");
         return e.endsWith("ครับ") || e.endsWith("คับ") || e.endsWith("คะ") || e.endsWith("ค่ะ") || e.endsWith("ค๊ะ") || e.endsWith("please");
@@ -539,6 +544,9 @@ public final class AiChat extends Service {
                     boolean close = all.matches("(?s).*\\bclose\\b.{0,20}\\bchat\\b.*") || all.matches("(?s).*ปิด.{0,20}แชท.*")
                             || all.contains("bye natee") || all.contains("ปิดนที") || all.contains("ปิด นที");
                     if (close) main.postDelayed(this::endChat, 1500);
+                    // (Air 2026-11-24) "ปิดระบบ" / "close the system" closes it too, but only when it ends what was said
+                    // ("ปิดระบบแอร์" is the A/C, not the chat): checked again a moment later
+                    if (closesSystem(all)) main.postDelayed(() -> { if (closesSystem(you.toString().toLowerCase(java.util.Locale.US))) endChat(); }, 1200);
                     // (Air 2026-11-24) a sentence ending in ครับ / คับ / คะ / ค่ะ, or "please", is finished: answer at once
                     // (a short moment first, in case more words follow)
                     if (talking && activityOpen && endsSentence(all)) {
