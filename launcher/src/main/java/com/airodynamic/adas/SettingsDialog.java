@@ -303,6 +303,27 @@ public final class SettingsDialog {
                 @Override public void progress(int pct, String text) { host.progress(pct, text); }
             })).start();
         }), weight(c));
+        // (Air 2026-11-24) real screenshots for the feature guide: Settings closes, then the car's ADB takes one
+        // screenshot every 8 s (6 in all) so you can change what's on screen between them; saved on the head unit and
+        // copied to a USB stick when one is plugged in
+        up.addView(Ui.chip(c, "📸 6 screenshots for the guide", false, th, v -> {
+            if (dlg[0] != null) dlg[0].dismiss();
+            android.widget.Toast.makeText(c, "Screenshots start in 8 s: one every 8 s, 6 in all. Change the screen between them.", android.widget.Toast.LENGTH_LONG).show();
+            new Thread(() -> {
+                String stamp = new java.text.SimpleDateFormat("MMdd_HHmm", java.util.Locale.US).format(new java.util.Date());
+                String out;
+                try {
+                    out = Updater.adbShell(c, "mkdir -p /sdcard/Pictures/NATEE; for i in 1 2 3 4 5 6; do sleep 8; "
+                            + "screencap -p /sdcard/Pictures/NATEE/natee_" + stamp + "_$i.png; done; n=0; "
+                            + "for d in /storage/*; do case $d in */emulated|*/self) ;; *) mkdir -p $d/NATEE 2>/dev/null && cp /sdcard/Pictures/NATEE/natee_" + stamp + "_*.png $d/NATEE/ 2>/dev/null && echo USB:$d/NATEE && n=1;; esac; done; "
+                            + "ls /sdcard/Pictures/NATEE | grep -c " + stamp);
+                } catch (Exception e) { out = "couldn't reach the car's ADB (" + e.getClass().getSimpleName() + ")"; }
+                final String r = out.contains("USB:") ? "6 screenshots saved, also on the USB stick in the NATEE folder."
+                        : out.contains("ADB") ? "Screenshots failed: " + out
+                        : "6 screenshots saved in Pictures/NATEE on the head unit (no USB stick found to copy them to).";
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> android.widget.Toast.makeText(c, r, android.widget.Toast.LENGTH_LONG).show());
+            }).start();
+        }), weight(c));
         root.addView(up);
 
         dlg[0] = new AlertDialog.Builder(c).setTitle("Settings").setView(sv).setPositiveButton("Close", null)
