@@ -127,40 +127,59 @@ public final class KeyWatch extends AccessibilityService {
      * True when Android connected it afresh.
      */
     static synchronized boolean restart(Context c) {
+        StringBuilder log = new StringBuilder(new java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(new java.util.Date()));
         long t0 = android.os.SystemClock.uptimeMillis();
-        toggle(c, true);
-        for (int i = 0; i < 20 && connAtMs < t0; i++) { try { Thread.sleep(500); } catch (InterruptedException ignored) { } }
-        return connAtMs >= t0;
+        // step 1: out of Android's list, a pause, back in (by the launcher itself)
+        log.append(" · own: ").append(toggle(c, true, false));
+        if (waitConnected(t0, 6000)) { fixLog(c, log.append(" → ok")); return true; }
+        // step 2 (Air 2026-11-24: "couldn't switch"): switch ALL accessibility off and on through the car's ADB,
+        // which makes Android connect every watcher afresh
+        long t1 = android.os.SystemClock.uptimeMillis();
+        log.append(" · adb: ").append(toggle(c, true, true));
+        boolean ok = waitConnected(t1, 10_000);
+        fixLog(c, log.append(ok ? " → ok" : " → still not connected"));
+        return ok;
     }
+    private static boolean waitConnected(long since, long ms) {
+        for (long i = 0; i < ms / 500 && connAtMs < since; i++) { try { Thread.sleep(500); } catch (InterruptedException ignored) { } }
+        return connAtMs >= since;
+    }
+    private static void fixLog(Context c, CharSequence l) { store(c).edit().putString("lastFix", l.toString()).apply(); }
 
     /** Puts the watcher into Android's list when it is missing (updates and car starts can drop it). Never restarts it. */
     static synchronized void ensureOn(Context c) {
-        if (!isOn(c)) toggle(c, false);
+        if (!isOn(c)) toggle(c, false, false);
     }
 
-    private static void toggle(Context c, boolean restart) {
+    /** @return what happened, for the test window */
+    private static String toggle(Context c, boolean restart, boolean viaAdb) {
         try {
             String me = c.getPackageName() + "/" + KeyWatch.class.getName();
             android.content.ContentResolver cr = c.getContentResolver();
             String cur = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
             boolean listed = cur != null && cur.contains(me);
-            if (listed && !restart) return;
+            if (listed && !restart) return "listed";
             boolean own = c.checkCallingOrSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED;
             String without = cur == null || "null".equals(cur) ? "" : cur.replace(":" + me, "").replace(me + ":", "").replace(me, "");
             String with = without.isEmpty() ? me : without + ":" + me;
-            if (own) {
+            if (own && !viaAdb) {
                 if (listed) {
                     android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, without);
                     try { Thread.sleep(3000); } catch (InterruptedException ignored) { }
                 }
                 android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, with);
                 android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, "1");
-                return;
+                return "written";
             }
-            Updater.adbShell(c, (listed ? "settings put secure enabled_accessibility_services '" + without + "'; sleep 3; " : "")
+            if (!own && !viaAdb && !restart) viaAdb = true;
+            if (!viaAdb) return "no permission";
+            String out = Updater.adbShell(c, "settings put secure accessibility_enabled 0; settings put secure enabled_accessibility_services '" + without + "'; sleep 3; "
                     + "settings put secure enabled_accessibility_services '" + with + "'; settings put secure accessibility_enabled 1; "
-                    + "pm grant " + c.getPackageName() + " android.permission.WRITE_SECURE_SETTINGS");
-        } catch (Throwable ignored) { }
+                    + "pm grant " + c.getPackageName() + " android.permission.WRITE_SECURE_SETTINGS; echo done");
+            return out == null ? "no answer" : out.trim().replace('\n', ' ');
+        } catch (Throwable t) {
+            return "error " + t.getClass().getSimpleName() + (t.getMessage() == null ? "" : ": " + t.getMessage());
+        }
     }
 
     /** Voice apps Air switched off in Settings: the car switches them back on at every start (Air 2026-11-23:

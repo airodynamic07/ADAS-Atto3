@@ -587,12 +587,28 @@ public final class SettingsDialog {
         }).start();
     }
 
+    /** The other accessibility services switched on (package names only): another app may be taking the wheel button. */
+    private static String otherWatchers(Context c) {
+        String cur = android.provider.Settings.Secure.getString(c.getContentResolver(), android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if (cur == null || cur.isEmpty() || "null".equals(cur)) return "none";
+        StringBuilder b = new StringBuilder();
+        for (String x : cur.split(":")) {
+            String pk = x.contains("/") ? x.substring(0, x.indexOf('/')) : x;
+            if (pk.isEmpty() || pk.equals(c.getPackageName())) continue;
+            if (b.length() > 0) b.append(", ");
+            b.append(pk);
+        }
+        return b.length() == 0 ? "none" : b.toString();
+    }
+
     private static void showKeys(Context c, String err) {
         String seen = KeyWatch.store(c).getString("seen", "");
         String after = KeyWatch.store(c).getString("afterPress", "");
         if (!after.isEmpty()) seen = "opened after the press: " + after + (seen.isEmpty() ? "" : "\n" + seen);
         seen = "listed: " + (KeyWatch.isOn(c) ? "yes" : "NO") + " · running: " + (KeyWatch.running() ? "yes" : "NO") + " · can fix itself: "
                 + (c.checkCallingOrSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED ? "yes" : "NO")
+                + "\nother watchers: " + otherWatchers(c)
+                + "\nlast switch: " + KeyWatch.store(c).getString("lastFix", "none")
                 + "\nwatcher started " + KeyWatch.store(c).getString("connAt", "never") + " · now "
                 + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(new java.util.Date()) + (seen.isEmpty() ? "" : "\n" + seen);
         final String[] lines = seen.split("\n");
