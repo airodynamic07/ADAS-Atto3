@@ -127,6 +127,11 @@ public final class AiChat extends Service {
 
     /** Gemini's own voice coming back through the microphone (Air 2026-11-22: "you: ok ค่ะ" five times): a lone
      *  short filler word, or words Gemini itself just said. Only for turns that ended by themselves, never a press. */
+    private static boolean endsSentence(String t) {
+        String e = t.replaceAll("[\\s.,!?…]+$", "");
+        return e.endsWith("ครับ") || e.endsWith("คับ") || e.endsWith("คะ") || e.endsWith("ค่ะ") || e.endsWith("ค๊ะ") || e.endsWith("please");
+    }
+
     private boolean isEcho() {
         String y = you.toString().trim().toLowerCase(java.util.Locale.US).replaceAll("[\\s.,!?]+", " ").trim();
         if (y.isEmpty()) return true;
@@ -305,6 +310,7 @@ public final class AiChat extends Service {
             String alt = w2.equals("quinn") ? ", \"" + w1 + " queen\"" : "";
             String grammar = "[\"" + w1 + " " + w2 + "\", \"hey " + w1 + " " + w2 + "\", \"hi " + w1 + " " + w2 + "\"" + alt + ", \"[unk]\"]";
             wakeWords = new String[]{w1, w2};
+            wakeGrammar = grammar;
             while (alive) {
                 if (chatting) { sleep(300); continue; }
                 Mic mic = null;
@@ -337,6 +343,7 @@ public final class AiChat extends Service {
 
     /** For Settings → AI chat → Wake word check (2026-11-22: "Hey Natee chat, nothing happens"). */
     static volatile String wakeState = "not started (AI chat off?)", lastHeard = "";
+    private volatile String wakeGrammar;
     static volatile int micLevel = -1;
 
     static boolean micAllowed(Context c) {
@@ -532,6 +539,12 @@ public final class AiChat extends Service {
                     boolean close = all.matches("(?s).*\\bclose\\b.{0,20}\\bchat\\b.*") || all.matches("(?s).*ปิด.{0,20}แชท.*")
                             || all.contains("bye natee") || all.contains("ปิดนที") || all.contains("ปิด นที");
                     if (close) main.postDelayed(this::endChat, 1500);
+                    // (Air 2026-11-24) a sentence ending in ครับ / คับ / คะ / ค่ะ, or "please", is finished: answer at once
+                    // (a short moment first, in case more words follow)
+                    if (talking && activityOpen && endsSentence(all)) {
+                        final long at = lastWordsAt;
+                        main.postDelayed(() -> { if (talking && activityOpen && lastWordsAt == at && endsSentence(you.toString().toLowerCase(java.util.Locale.US))) finishTalk(); }, 700);
+                    }
                 });
             }
             JSONObject ot = sc.optJSONObject("outputTranscription");
@@ -610,6 +623,10 @@ public final class AiChat extends Service {
                 short[] b = new short[1600];   // 0.1 s at 16 kHz
                 java.util.ArrayDeque<String> pre = new java.util.ArrayDeque<>();   // the 0.3 s before your voice starts
                 double floor = 4;                                                    // the car's own noise (fan, road)
+                // (Air 2026-11-24) the chat holds the microphone, so the wake word is listened for here too: after an
+                // answer, saying the name starts listening again without pressing the mic
+                org.vosk.Recognizer wakeR = null;
+                try { if (model != null && wakeGrammar != null) wakeR = new org.vosk.Recognizer(model, IN_RATE, wakeGrammar); } catch (Throwable ignored) { }
                 int voiced = 0;
                 while (chatting) {
                     int n = mic.read16k(b);
@@ -628,6 +645,15 @@ public final class AiChat extends Service {
                     WebSocket s = ws;
                     boolean someVoice = lv > Math.max(5, floor * 1.6 + 4);   // loose: for "you've stopped talking"
                     if (someVoice && !speaking) lastSoundAt = System.currentTimeMillis();   // not Gemini's own voice
+                    if (wakeR != null && !talking && !speaking && playQ.isEmpty()) {
+                        try {
+                            boolean fin = wakeR.acceptWaveForm(b, n);
+                            if (isWake(fin ? wakeR.getResult() : wakeR.getPartialResult())) {
+                                wakeR.reset();
+                                main.post(() -> { if (chatting && !talking) { autoEnd = true; byPress = false; startTalk(); } });
+                            }
+                        } catch (Throwable ignored) { }
+                    }
                     if (!talking || muted || s == null) { pre.clear(); continue; }
                     if (!activityOpen) {
                         pre.addLast(msg);
@@ -655,6 +681,7 @@ public final class AiChat extends Service {
                     // 2 s quiet after your voice = finished (or press the mic); never before any voice was heard
                     else if (lastVoiceAt > 0 && System.currentTimeMillis() - lastVoiceAt > 2000) main.post(this::finishTalk);
                 }
+                if (wakeR != null) try { wakeR.close(); } catch (Throwable ignored) { }
             } catch (Throwable ignored) {
             } finally { if (mic != null) mic.close(); }
         }, "natee-mic");
