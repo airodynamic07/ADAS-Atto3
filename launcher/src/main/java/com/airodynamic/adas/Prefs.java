@@ -48,7 +48,12 @@ public final class Prefs {
     public String aiName1() { return p.getString("aiName1", "harley"); }
     public String aiName2() { return p.getString("aiName2", "quinn"); }
     public void setAiName(String a, String b) { p.edit().putString("aiName1", a).putString("aiName2", b).apply(); }
-    public String aiName() { return cap(aiName1()) + " " + cap(aiName2()); }
+    /** the two English words that wake the assistant (the offline listener only knows English words) */
+    public String wakeWord() { return cap(aiName1()) + " " + cap(aiName2()); }
+    /** (Air 2026-11-24: "I can't type a Thai name") the name she uses, in any language; empty = the wake word */
+    public String aiDisplay() { return p.getString("aiDisplay", ""); }
+    public void setAiDisplay(String n) { p.edit().putString("aiDisplay", n).apply(); }
+    public String aiName() { return aiDisplay().isEmpty() ? wakeWord() : aiDisplay(); }
     private static String cap(String w) { return w.isEmpty() ? w : Character.toUpperCase(w.charAt(0)) + w.substring(1); }
 
     public void setSpeedVoice(boolean on) { p.edit().putBoolean("speedVoice", on).apply(); }

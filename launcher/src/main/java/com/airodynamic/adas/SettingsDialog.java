@@ -153,7 +153,7 @@ public final class SettingsDialog {
 
         // "Hey Natee chat": voice chat with Gemini (user, 2026-11-21). Reads the car; changes comfort things only (CarControl).
         String key = prefs.aiKey();
-        section(c, root, th, "AI chat (Gemini) · say \"" + prefs.aiName() + "\" or press the wheel mic: " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
+        section(c, root, th, "AI chat (Gemini) · say \"" + prefs.wakeWord() + "\" or press the wheel mic: " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
         LinearLayout ai = row(c);
         ai.addView(Ui.chip(c, "On", prefs.aiChat(), th, v -> { prefs.setAiChat(true); AiChat.sync(c); redo.run(); }), weight(c));
         ai.addView(Ui.chip(c, "Off", !prefs.aiChat(), th, v -> { prefs.setAiChat(false); AiChat.sync(c); redo.run(); }), weight(c));
@@ -169,24 +169,33 @@ public final class SettingsDialog {
         root.addView(ai);
         // the assistant's name = the wake word: two words (Air 2026-11-23)
         LinearLayout an = row(c);
-        an.addView(Ui.chip(c, "Name / wake word: " + prefs.aiName() + " ›", false, th, v -> {
+        an.addView(Ui.chip(c, (prefs.aiDisplay().isEmpty() ? "Name / wake word: " + prefs.wakeWord() : "Name: " + prefs.aiDisplay() + " · wake word: " + prefs.wakeWord()) + " ›", false, th, v -> {
             LinearLayout box = new LinearLayout(c);
             box.setOrientation(LinearLayout.VERTICAL);
             int pd = Ui.dp(c, 18);
             box.setPadding(pd, pd / 2, pd, 0);
+            android.widget.EditText e0 = new android.widget.EditText(c);
+            e0.setSingleLine(true);
+            e0.setHint("her name, any language (e.g. นที) — empty = the wake word");
+            e0.setText(prefs.aiDisplay());
+            box.addView(Ui.text(c, "Her name (Thai is fine):", 13, th.text, true));
+            box.addView(e0);
+            box.addView(Ui.text(c, "Wake word: two ENGLISH words you say to call her:", 13, th.text, true));
             android.widget.EditText e1 = new android.widget.EditText(c), e2 = new android.widget.EditText(c);
             e1.setSingleLine(true); e2.setSingleLine(true);
             e1.setHint("first word, e.g. Harley"); e2.setHint("second word, e.g. Quinn");
             e1.setText(prefs.aiName1()); e2.setText(prefs.aiName2());
             box.addView(e1); box.addView(e2);
-            TextView hint = Ui.text(c, "Two English words (the offline listener knows English words). Check it with Wake word check.", 12, th.muted, false);
+            TextView hint = Ui.text(c, "The wake word must be English: the offline listener in the car only knows English words. Thai sounds don't work there, but her name can be Thai. Check it with Wake word check.", 12, th.muted, false);
             box.addView(hint);
             new AlertDialog.Builder(c).setTitle("Assistant name (= wake word)").setView(box)
                     .setPositiveButton("Save", (d, i) -> {
                         String a1 = e1.getText().toString().trim().toLowerCase(java.util.Locale.US).replaceAll("[^a-z]", "");
                         String a2 = e2.getText().toString().trim().toLowerCase(java.util.Locale.US).replaceAll("[^a-z]", "");
-                        if (a1.length() < 2 || a2.length() < 2) {
-                            android.widget.Toast.makeText(c, "Please fill in both words (English letters)", android.widget.Toast.LENGTH_LONG).show();
+                        prefs.setAiDisplay(e0.getText().toString().trim());
+                        if (a1.length() < 2 || a2.length() < 2) {   // Thai or empty wake word: keep the old one, the name is still saved
+                            android.widget.Toast.makeText(c, "Name saved. The wake word needs two English words, so it stays \"" + prefs.wakeWord() + "\"", android.widget.Toast.LENGTH_LONG).show();
+                            redo.run();
                             return;
                         }
                         prefs.setAiName(a1, a2);
@@ -278,7 +287,7 @@ public final class SettingsDialog {
         }).start()), weight(c));
         String[] reports = ProblemLog.all(c);
         pb.addView(Ui.chip(c, "Voice reports & ideas (" + reports.length + ")", false, th, v -> {
-            TextView t = Ui.text(c, reports.length == 0 ? "Nothing yet. Say \"" + prefs.aiName() + "\" (or press the wheel mic), then \"report a problem: …\" or \"idea: …\"" : android.text.TextUtils.join("\n\n", reports), 12, th.text, false);
+            TextView t = Ui.text(c, reports.length == 0 ? "Nothing yet. Say \"" + prefs.wakeWord() + "\" (or press the wheel mic), then \"report a problem: …\" or \"idea: …\"" : android.text.TextUtils.join("\n\n", reports), 12, th.text, false);
             t.setTextIsSelectable(true);
             t.setPadding(24, 16, 24, 16);
             ScrollView sv3 = new ScrollView(c);

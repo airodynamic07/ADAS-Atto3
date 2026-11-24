@@ -476,7 +476,7 @@ public final class AiChat extends Service {
             JSONObject gen = new JSONObject().put("responseModalities", new JSONArray().put("AUDIO"))
                     .put("speechConfig", new JSONObject().put("voiceConfig", voice));
             JSONObject sys = new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text",
-                    "You are " + prefs.aiName() + ", a friendly voice assistant in the driver's BYD Atto 3 electric car in Thailand. The driver is"
+                    "You are " + prefs.aiName() + " (the driver calls you by saying \"" + prefs.wakeWord() + "\"), a friendly voice assistant in the driver's BYD Atto 3 electric car in Thailand. The driver is"
                             + " driving: keep answers short and easy to listen to (one to three sentences), no lists or links."
                             + " You cannot see the road. You can read the car's information with get_car_info (use it whenever the"
                             + " driver asks about the car: range, battery, tyres, air, temperatures, trip, doors) and change comfort"
