@@ -19,10 +19,11 @@ import java.util.Locale;
  * NEDC (grey) = 480 km, WLTP (blue) = 420 km, EPA (purple) = WLTP − 12 %, each × battery health × the battery % at the
  * start, then straight down 1 km per km driven (parallel; your driving never changes them). My range (orange) = 100 %
  * your own driving: battery left ÷ your kWh/100 km over the last 10 km; it starts on the WLTP point, slides into your own
- * range over 5 km, and is smoothed over ~2 km (no jitter). This trip shows the last 50 km, zoomed, sliding right and
+ * range over 5 km, and is smoothed over ~2 km (no jitter). This trip shows the last 30 km, zoomed, sliding right and
  * down; Today and Charge to charge show everything from 0, with where each line reaches 0 ahead. Read only.
  */
 final class RangeGraph extends LinearLayout {
+    static final double TRIP_KM = 30;   // This trip: widest window, then it slides (Air 2026-11-24)
     static final int NEDC = 0xFF9AA0A8, WLTP = 0xFF3AA0FF, EPA = 0xFFB388FF, MY = 0xFFFF8A1F;
     /** EPA (US test): no official Atto 3 figure, estimated as WLTP − 12 % (user, 2026-11-21). */
     static final double EPA_OF_WLTP = 0.88;
@@ -345,16 +346,16 @@ final class RangeGraph extends LinearLayout {
             }
             double xc = pts.get(pts.size() - 1)[0];
             boolean trip = mode == 0;
-            // (Air 2026-11-23) all views start 10 km wide. This trip grows to 50 km, then slides with you and can be
+            // (Air 2026-11-23/24) all views start 10 km wide. This trip grows to 30 km (was 50), then slides with you and can be
             // dragged back; Today / C to C grow to show everything from the start to now (no sliding).
-            double maxPan = trip ? Math.max(0, xc - sr.xRef - 50) : 0;
+            double maxPan = trip ? Math.max(0, xc - sr.xRef - TRIP_KM) : 0;
             if (pan > maxPan) pan = maxPan;
             if (trip && pan > 0 && android.os.SystemClock.uptimeMillis() - touchedAt > 20_000) {   // left alone: glide back to now
                 pan = pan < 0.3 ? 0 : pan * 0.8;
                 postInvalidateDelayed(40);
             }
             double xView = trip ? xc - pan : xc;   // the right edge of what is shown
-            double xs = trip ? Math.max(sr.xRef, xView - 50) : sr.xRef;
+            double xs = trip ? Math.max(sr.xRef, xView - TRIP_KM) : sr.xRef;
             double xe = Math.max(xs + 10, xView);
             spanKm = xe - xs; panMax = maxPan;
             // up: just around the lines in the window
