@@ -117,6 +117,7 @@ public final class AiChat extends Service {
     private boolean silentStart;   // listening again after an answer: no beep
 
     private void pressMic() {
+        wakeTurn = false;
         if (!chatting) { byPress = true; startChat(); return; }   // opens, and starts listening as soon as Gemini is connected
         if (talking) { pressedFinish = true; finishTalk(); pressedFinish = false; } else { byPress = true; startTalk(); }
     }
@@ -157,7 +158,12 @@ public final class AiChat extends Service {
         look(C_LISTEN, "listening… speak now");
         if (!silentStart) beep();
         silentStart = false;
+        // (Air 2026-11-25: stuck on "listening… speak now" for ever) every turn has a way out: no words for a while = it closes
+        main.postDelayed(noAnswer, byPress ? 30_000 : 12_000);
     }
+    /** this turn was started by the wake word: everything heard is sent (road noise can hide a voice from the level
+     *  check), and it ends on words, see the mic thread */
+    private volatile boolean wakeTurn;
 
     /** Finished talking: Gemini answers straight away. Nothing heard: say so, nothing is sent. */
     private void finishTalk() {
@@ -334,7 +340,7 @@ public final class AiChat extends Service {
                         boolean fin = r.acceptWaveForm(b, n);
                         String txt = fin ? r.getResult() : r.getPartialResult();
                         if (fin) { String h = heard(txt); if (!h.isEmpty()) lastHeard = h; }
-                        if (fin && isWake(txt)) { r.reset(); main.post(() -> { autoEnd = true; byPress = false; if (chatting) startTalk(); else startChat(); }); break; }
+                        if (fin && isWake(txt)) { r.reset(); main.post(() -> { autoEnd = true; byPress = false; wakeTurn = true; if (chatting) startTalk(); else startChat(); }); break; }
                     }
                 } catch (Throwable e) {
                     wakeState = "error: " + e.getClass().getSimpleName();
@@ -671,12 +677,12 @@ public final class AiChat extends Service {
                     WebSocket s = ws;
                     boolean someVoice = lv > Math.max(5, floor * 1.6 + 4);   // loose: for "you've stopped talking"
                     if (someVoice && !speaking) lastSoundAt = System.currentTimeMillis();   // not Gemini's own voice
-                    if (wakeR != null && !talking && !speaking && playQ.isEmpty()) {
+                    if (wakeR != null && !activityOpen && !speaking && playQ.isEmpty()) {   // also while waiting for a voice
                         try {
                             boolean fin = wakeR.acceptWaveForm(b, n);
                             if (fin && isWake(wakeR.getResult())) {
                                 wakeR.reset();
-                                main.post(() -> { if (chatting && !talking) { autoEnd = true; byPress = false; startTalk(); } });
+                                main.post(() -> { if (chatting && !activityOpen) { autoEnd = true; byPress = false; wakeTurn = true; startTalk(); look(C_HEAR, "I hear you · pause when you've finished"); } });
                             }
                         } catch (Throwable ignored) { }
                     }
@@ -684,7 +690,8 @@ public final class AiChat extends Service {
                     if (!activityOpen) {
                         pre.addLast(msg);
                         if (pre.size() > 3) pre.removeFirst();
-                        if (!voice && !byPress) continue;   // pressed: you said you're talking, everything is sent
+                        if (!voice && !byPress && !wakeTurn) continue;
+                        wakeTurn = false;   // pressed: you said you're talking, everything is sent
                         wordsThisTurn = false;
                         // your voice: tell Gemini you started, with the moment just before
                         activityOpen = true; heard = true; openedAt = System.currentTimeMillis();
