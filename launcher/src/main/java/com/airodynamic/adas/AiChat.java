@@ -212,6 +212,9 @@ public final class AiChat extends Service {
         }
         silentStart = true;
         byPress = false;
+        // (Air 2026-11-25: "if you ask me to confirm, listen at once, no wake word") like a wake-word turn: everything
+        // heard is sent (road noise can't hide the answer) and it ends on words
+        autoEnd = true; wakeTurn = true;
         startTalk();
         look(C_LISTEN, askedQuestion() ? "listening for your answer…" : "listening… (closes in 10 s if you say nothing)");
         main.removeCallbacks(noAnswer);
@@ -223,9 +226,13 @@ public final class AiChat extends Service {
 
     /** Gemini asked something ("Open the sunroof?"): it waits 20 s for the answer instead of 10. */
     private boolean askedQuestion() {
-        String g = gem.toString().trim().toLowerCase(java.util.Locale.US);
-        return g.endsWith("?") || g.endsWith("ไหม") || g.endsWith("มั้ย") || g.endsWith("ไหมคะ") || g.endsWith("มั้ยคะ")
-                || g.endsWith("หรือเปล่าคะ") || g.endsWith("หรือไม่คะ") || g.endsWith("ใช่ไหมคะ") || g.endsWith("คะ?");
+        // (Air 2026-11-25) her questions end with ครับ as well as คะ: take the polite ending off, then look for the question
+        String g = gem.toString().trim().toLowerCase(java.util.Locale.US).replaceAll("[\\s.!…]+$", "");
+        if (g.endsWith("?")) return true;
+        g = g.replaceAll("\\s*(ครับผม|ครับ|คับ|ค่ะ|คะ|ค๊ะ|นะ|จ๊ะ|จ้ะ)\\s*$", "").replaceAll("\\s*(ครับ|คะ|ค่ะ|นะ)\\s*$", "").trim();
+        String[] q = {"ไหม", "มั้ย", "หรือเปล่า", "หรือไม่", "ใช่ไหม", "รึเปล่า", "อะไร", "ไหน", "เท่าไหร่", "เมื่อไหร่", "ยังไง", "อย่างไร", "หรือยัง", "ดีไหม"};
+        for (String w : q) if (g.endsWith(w)) return true;
+        return false;
     }
 
     /** The wheel button watcher: switched on again whenever an update turned it off (checked every minute). */
