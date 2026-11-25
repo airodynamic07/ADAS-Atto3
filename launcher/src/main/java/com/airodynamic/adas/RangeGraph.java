@@ -57,6 +57,9 @@ final class RangeGraph extends LinearLayout {
         void add(double x, double soc, double health, double own) {
             if (Double.isNaN(soc0) && !Double.isNaN(soc)) { soc0 = soc; this.health = health; xRef = x; }
             if (Double.isNaN(soc0)) return;
+            // (Air 2026-11-25: Today showed NEDC 165 / WLTP 141 after a night's charge) the battery is fuller than when this
+            // view started: it was charged, so the official lines start again from the % now
+            if (!Double.isNaN(soc) && soc > soc0 + 2) { soc0 = soc; this.health = health; xRef = x; }
             if (!pts.isEmpty() && x < pts.get(pts.size() - 1)[0]) x = pts.get(pts.size() - 1)[0];   // distance never goes back
             double w = Math.max(0, x - xRef);
             double wl = ref(1, x);

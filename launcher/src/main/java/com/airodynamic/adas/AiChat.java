@@ -320,6 +320,7 @@ public final class AiChat extends Service {
                 if (chatting) { sleep(300); continue; }
                 Mic mic = null;
                 try (org.vosk.Recognizer r = new org.vosk.Recognizer(model, IN_RATE, grammar)) {
+                    r.setWords(true);   // per-word confidence, see isWake
                     if (!micAllowed(this)) { wakeState = "no microphone permission: Settings → AI chat → Fix permissions"; sleep(10_000); continue; }
                     mic = Mic.open(false);
                     if (mic == null) { wakeState = "microphone busy or refused (" + Mic.lastError + ")"; sleep(10_000); continue; }   // try again later
@@ -333,7 +334,7 @@ public final class AiChat extends Service {
                         boolean fin = r.acceptWaveForm(b, n);
                         String txt = fin ? r.getResult() : r.getPartialResult();
                         if (fin) { String h = heard(txt); if (!h.isEmpty()) lastHeard = h; }
-                        if (isWake(txt)) { r.reset(); main.post(() -> { autoEnd = true; byPress = false; if (chatting) startTalk(); else startChat(); }); break; }
+                        if (fin && isWake(txt)) { r.reset(); main.post(() -> { autoEnd = true; byPress = false; if (chatting) startTalk(); else startChat(); }); break; }
                     }
                 } catch (Throwable e) {
                     wakeState = "error: " + e.getClass().getSimpleName();
@@ -382,8 +383,25 @@ public final class AiChat extends Service {
 
     private static volatile String[] wakeWords = {"harley", "quinn"};
 
+    /** (Air 2026-11-25: "it opens when I didn't say it") only a FINISHED phrase counts (not a half-heard one), and the
+     *  listener must be sure of both words: with only a few phrases to choose from, it used to squeeze any noise or
+     *  talk into the name. WAKE_CONF is how sure (0..1). */
+    private static final double WAKE_CONF = 0.85;
     private static boolean isWake(String json) {
         if (json == null) return false;
+        try {
+            org.json.JSONArray w = new org.json.JSONObject(json).optJSONArray("result");
+            if (w != null) {
+                String a = wakeWords[0], b = wakeWords[1];
+                for (int i = 0; i + 1 < w.length(); i++) {
+                    org.json.JSONObject x = w.getJSONObject(i), y = w.getJSONObject(i + 1);
+                    String wx = x.optString("word"), wy = y.optString("word");
+                    boolean names = wx.equals(a) && (wy.equals(b) || (b.equals("quinn") && wy.equals("queen")));
+                    if (names && x.optDouble("conf", 0) >= WAKE_CONF && y.optDouble("conf", 0) >= WAKE_CONF) return true;
+                }
+                return false;
+            }
+        } catch (Throwable ignored) { }
         String t = " " + json.toLowerCase(java.util.Locale.US).replaceAll("[^a-z]+", " ") + " ";
         String a = wakeWords[0], b = wakeWords[1];
         // both words, one right after the other
@@ -634,7 +652,7 @@ public final class AiChat extends Service {
                 // (Air 2026-11-24) the chat holds the microphone, so the wake word is listened for here too: after an
                 // answer, saying the name starts listening again without pressing the mic
                 org.vosk.Recognizer wakeR = null;
-                try { if (model != null && wakeGrammar != null) wakeR = new org.vosk.Recognizer(model, IN_RATE, wakeGrammar); } catch (Throwable ignored) { }
+                try { if (model != null && wakeGrammar != null) { wakeR = new org.vosk.Recognizer(model, IN_RATE, wakeGrammar); wakeR.setWords(true); } } catch (Throwable ignored) { }
                 int voiced = 0;
                 while (chatting) {
                     int n = mic.read16k(b);
@@ -656,7 +674,7 @@ public final class AiChat extends Service {
                     if (wakeR != null && !talking && !speaking && playQ.isEmpty()) {
                         try {
                             boolean fin = wakeR.acceptWaveForm(b, n);
-                            if (isWake(fin ? wakeR.getResult() : wakeR.getPartialResult())) {
+                            if (fin && isWake(wakeR.getResult())) {
                                 wakeR.reset();
                                 main.post(() -> { if (chatting && !talking) { autoEnd = true; byPress = false; startTalk(); } });
                             }
