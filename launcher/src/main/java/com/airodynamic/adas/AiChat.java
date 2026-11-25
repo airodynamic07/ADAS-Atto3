@@ -677,12 +677,19 @@ public final class AiChat extends Service {
                     WebSocket s = ws;
                     boolean someVoice = lv > Math.max(5, floor * 1.6 + 4);   // loose: for "you've stopped talking"
                     if (someVoice && !speaking) lastSoundAt = System.currentTimeMillis();   // not Gemini's own voice
-                    if (wakeR != null && !activityOpen && !speaking && playQ.isEmpty()) {   // also while waiting for a voice
+                    // also while waiting for a voice, and (Air 2026-11-25) while she is answering: the name stops her and she listens
+                    if (wakeR != null && !activityOpen) {
                         try {
                             boolean fin = wakeR.acceptWaveForm(b, n);
                             if (fin && isWake(wakeR.getResult())) {
                                 wakeR.reset();
-                                main.post(() -> { if (chatting && !activityOpen) { autoEnd = true; byPress = false; wakeTurn = true; startTalk(); look(C_HEAR, "I hear you · pause when you've finished"); } });
+                                main.post(() -> {
+                                    if (!chatting || activityOpen) return;
+                                    playQ.clear();
+                                    AudioTrack t = track;   // stop her voice now, not after what's already in the speaker
+                                    if (t != null) try { t.pause(); t.flush(); t.play(); } catch (Throwable ignored) { }
+                                    autoEnd = true; byPress = false; wakeTurn = true; startTalk(); look(C_HEAR, "I hear you · pause when you've finished");
+                                });
                             }
                         } catch (Throwable ignored) { }
                     }

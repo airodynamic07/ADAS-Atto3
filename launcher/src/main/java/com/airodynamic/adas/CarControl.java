@@ -142,10 +142,13 @@ final class CarControl {
         JSONObject o = new JSONObject();
         put(o, "battery_percent", s.socPct);
         double[] r = RangeGraph.Rec.ranges(c, s);
-        put(o, "range_nedc_km_car_display", r[0]);
-        put(o, "range_wltp_km", r[1]);
-        if (!Double.isNaN(r[1])) put(o, "range_epa_estimate_km", r[1] * RangeGraph.EPA_OF_WLTP);
-        put(o, "my_range_km_from_own_driving", r[2]);
+        // the same numbers the range graph shows on screen (Air 2026-11-25); the car's own display figure kept apart
+        double[] g = RangeGraph.Rec.get(c).shown();
+        put(o, "range_nedc_km", Double.isNaN(g[0]) ? r[0] : g[0]);
+        put(o, "range_wltp_km", Double.isNaN(g[1]) ? r[1] : g[1]);
+        put(o, "range_epa_km", Double.isNaN(g[2]) ? (Double.isNaN(r[1]) ? Double.NaN : r[1] * RangeGraph.EPA_OF_WLTP) : g[2]);
+        put(o, "my_range_km_from_own_driving", Double.isNaN(g[3]) ? r[2] : g[3]);
+        put(o, "range_km_on_the_cars_own_dashboard", r[0]);
         put(o, "battery_left_kwh", s.battLeftKwh);
         put(o, "battery_health_percent", TripEnergy.get(c).health());   // calibrated daily from your driving
         put(o, "speed_kmh", s.speedKmh);

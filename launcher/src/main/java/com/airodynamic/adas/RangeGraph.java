@@ -285,6 +285,17 @@ final class RangeGraph extends LinearLayout {
         }
 
         synchronized Series copy(int mode) { return series[mode].copy(); }
+
+        /** (Air 2026-11-25: "the AI says different numbers from the screen") the four numbers at the right end of the
+         *  graph view the driver has chosen: {NEDC, WLTP, EPA, My range}, NaN when not known yet. */
+        synchronized double[] shown() {
+            int m = app.getSharedPreferences("range_graph", Context.MODE_PRIVATE).getInt("mode", 0);
+            Series sr = series[Math.max(0, Math.min(2, m))];
+            if (sr.pts.isEmpty()) sr = series[0];
+            if (sr.pts.isEmpty()) return new double[]{Double.NaN, Double.NaN, Double.NaN, Double.NaN};
+            double x = sr.pts.get(sr.pts.size() - 1)[0];
+            return new double[]{sr.ref(0, x), sr.ref(1, x), sr.ref(2, x), sr.pts.get(sr.pts.size() - 1)[1]};
+        }
     }
 
     /** The drawing: grid, the three straight lines, My range as a smooth curve, a dot and the km of each at your position. */
