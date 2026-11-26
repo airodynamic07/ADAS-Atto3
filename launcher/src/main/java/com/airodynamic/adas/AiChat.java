@@ -346,6 +346,7 @@ public final class AiChat extends Service {
             String grammar = "[\"" + ww + "\", \"hey " + ww + "\", \"hi " + ww + "\"" + alt + ", \"[unk]\"]";
             wakeWords = new String[]{w1, w2};
             wakeGrammar = grammar;
+            WAKE_CONF = prefs.wakeConf() / 100.0 - 0.0005;   // 100 % = the listener's full certainty
             while (alive) {
                 if (chatting) { sleep(300); continue; }
                 Mic mic = null;
@@ -416,7 +417,8 @@ public final class AiChat extends Service {
     /** (Air 2026-11-25: "it opens when I didn't say it") only a FINISHED phrase counts (not a half-heard one), and the
      *  listener must be sure of both words: with only a few phrases to choose from, it used to squeeze any noise or
      *  talk into the name. WAKE_CONF is how sure (0..1). */
-    private static final double WAKE_CONF = 0.95;   // (Air 2026-11-26) was 0.85: still opened by accident
+    /** how sure the listener must be, from Settings (Air 2026-11-26: 85 → 95 → 100 %) */
+    static volatile double WAKE_CONF = 1.0;
     private static boolean isWake(String json) {
         if (json == null) return false;
         try {

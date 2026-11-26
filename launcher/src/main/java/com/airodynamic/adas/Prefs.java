@@ -52,6 +52,9 @@ public final class Prefs {
     public String aiName2() { return p.getString("aiName2", "quinn"); }
     public void setAiName(String a, String b) { p.edit().putString("aiName1", a).putString("aiName2", b).apply(); }
     /** the two English words that wake the assistant (the offline listener only knows English words) */
+    /** wake word strictness in % (85-100) */
+    public int wakeConf() { return p.getInt("wakeConf", 100); }
+    public void setWakeConf(int v) { p.edit().putInt("wakeConf", v).apply(); }
     public String wakeWord() { return aiName2().isEmpty() ? cap(aiName1()) : cap(aiName1()) + " " + cap(aiName2()); }
     /** (Air 2026-11-24: "I can't type a Thai name") the name she uses, in any language; empty = the wake word */
     public String aiDisplay() { return p.getString("aiDisplay", ""); }

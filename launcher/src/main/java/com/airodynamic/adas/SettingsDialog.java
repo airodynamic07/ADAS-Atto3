@@ -239,6 +239,14 @@ public final class SettingsDialog {
         LinearLayout aw3 = row(c);
         android.content.SharedPreferences airDirP = c.getSharedPreferences("air_dir", Context.MODE_PRIVATE);
         aw3.addView(Ui.chip(c, "Air direction test ›" + (airDirP.getAll().isEmpty() ? " (not done yet)" : " (" + airDirP.getAll().size() + " of 5 known)"), false, th, v -> airDirTest(c, 1, -1)), weight(c));
+        // (Air 2026-11-26) how sure the offline listener must be before the wake word opens the chat
+        aw3.addView(Ui.chip(c, "Wake word strictness: " + prefs.wakeConf() + " % ›", false, th, v -> {
+            int[] steps = {85, 90, 95, 100};
+            int i = 0; while (i < steps.length && steps[i] != prefs.wakeConf()) i++;
+            prefs.setWakeConf(steps[(i + 1) % steps.length]);
+            AiChat.WAKE_CONF = prefs.wakeConf() / 100.0 - 0.0005;
+            redo.run();
+        }), weight(c));
         aw3.addView(Ui.chip(c, "Closes by itself: " + (prefs.aiAutoClose() ? "on" : "off (✕, double press or ปิดระบบ)"), false, th,
                 v -> { prefs.setAiAutoClose(!prefs.aiAutoClose()); redo.run(); }), weight(c));
         aw3.addView(Ui.chip(c, "Last voice actions ›", false, th, v -> {
