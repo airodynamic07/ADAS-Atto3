@@ -93,6 +93,7 @@ public final class KeyWatch extends AccessibilityService {
         if (!(" " + ap + " ").contains(" " + p + " ")) s.edit().putString("afterPress", (ap + " " + p).trim()).apply();
         if (!voice) return;
         if (!p.equals(known)) s.edit().putString("bydVoice", p).apply();
+        new Thread(() -> keepOff(this)).start();   // a BYD voice window came up: switch the BYD apps off again now
         performGlobalAction(GLOBAL_ACTION_BACK);
     }
 
@@ -230,7 +231,14 @@ public final class KeyWatch extends AccessibilityService {
                         && st != android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
                 if (on) cmd.append("pm disable-user --user 0 ").append(p).append("; ");
             }
-            if (cmd.length() > 0) Updater.adbShell(c, cmd.toString());
+            String when = new java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(new java.util.Date());
+            if (cmd.length() > 0) {
+                // (Air 2026-11-26: "it switched back ON") what happened, for the wheel button test window
+                String out;
+                try { out = Updater.adbShell(c, cmd.toString()); out = out.isEmpty() ? "switched off again" : out; }
+                catch (Throwable t) { out = "couldn't reach the car's ADB (" + t.getClass().getSimpleName() + ")"; }
+                store(c).edit().putString("keepOff", when + " found ON → " + out).apply();
+            }
         } catch (Throwable ignored) { }
     }
 

@@ -699,6 +699,7 @@ public final class SettingsDialog {
                 + (c.checkCallingOrSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED ? "yes" : "NO")
                 + "\nother watchers: " + otherWatchers(c)
                 + "\nlast switch: " + KeyWatch.store(c).getString("lastFix", "none")
+                + "\nBYD apps check: " + KeyWatch.store(c).getString("keepOff", "never found ON")
                 + "\nwatcher started " + KeyWatch.store(c).getString("connAt", "never") + " · now "
                 + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(new java.util.Date()) + (seen.isEmpty() ? "" : "\n" + seen);
         final String[] lines = seen.split("\n");
