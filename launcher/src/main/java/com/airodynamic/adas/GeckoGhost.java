@@ -76,7 +76,7 @@ final class GeckoGhost {
             }
         });
         session.open(runtime);
-        view = new GeckoView(c);
+        view = new GeckoView(c);   // see relayout()
         view.setSession(session);
         // What the engine is doing, on screen (2026-11-14: black video, map "NetworkError" while Android itself reaches
         // the servers): "Loading…", or the engine's own error name, or "stopped" when its page process ended.
@@ -233,4 +233,11 @@ final class GeckoGhost {
     }
 
     void close() { try { view.releaseSession(); session.close(); } catch (Throwable ignored) { } }
+
+    /** The page lays itself out again at the window's full size (after the keyboard closed, Air 2026-11-26). */
+    void relayout() {
+        view.requestLayout();
+        box.requestLayout();
+        view.invalidate();
+    }
 }

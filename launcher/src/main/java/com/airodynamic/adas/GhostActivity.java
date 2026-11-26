@@ -148,6 +148,8 @@ public class GhostActivity extends Activity {
         super.onNewIntent(in);
         int[] a = in.getIntArrayExtra(AREAS);
         String sh = in.getStringExtra(SHARE);
+        // voice (Air 2026-11-26): Ghost Race small on the left (1), small on the right over Engine Sound (2), or big (0)
+        if ("&ghost_cmd=left".equals(sh) || "&ghost_cmd=right".equals(sh)) { mode = sh.endsWith("left") ? 1 : 2; place(); return; }
         if (sh != null && !sh.isEmpty()) { shareHash = sh; mode = 0; }   // big, so the destination search can be seen
         if (a != null && a.length >= 12) areas = a;
         if ((a != null && a.length >= 12) || shareHash != null) place();
@@ -250,6 +252,15 @@ public class GhostActivity extends Activity {
         rl.topMargin = rl.leftMargin = Ui.dp(this, 8);
         root.addView(rec, rl);
         setContentView(root);
+        // (Air 2026-11-26: after the keyboard closed, Ghost Race stayed squeezed) the keyboard slides the window instead
+        // of shrinking the page, and when the window gets its full height back the page is told to lay out again
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN);
+        final int[] lastH = {0};
+        root.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            int hNow = root.getHeight();
+            if (lastH[0] > 0 && hNow > lastH[0] && gecko != null) root.postDelayed(() -> gecko.relayout(), 250);
+            lastH[0] = hNow;
+        });
         place();
         reloadWhenOnline();
     }

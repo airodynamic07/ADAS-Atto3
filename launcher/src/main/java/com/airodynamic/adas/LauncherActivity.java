@@ -82,6 +82,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         rebuild();
         ensureLocation();
         takeShare(getIntent());
+        takeVoice(getIntent());
     }
 
     /** A place shared to NATEE (ShareActivity): open Ghost Race on it. */
@@ -138,6 +139,19 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         takeShare(intent);
+        takeVoice(intent);
+    }
+
+    /** Voice commands for the middle window (Air 2026-11-26): Engine Sound on/off, Ghost Race big / modes / route options. */
+    static final String VOICE = "natee_voice";
+    private void takeVoice(Intent i) {
+        String v = i == null ? null : i.getStringExtra(VOICE);
+        if (v == null) return;
+        i.removeExtra(VOICE);
+        getWindow().getDecorView().postDelayed(() -> {
+            if (v.equals("engine_on") || v.equals("engine_off")) engineHost().engine(v.equals("engine_on"));
+            else if (v.startsWith("ghost:")) engineHost().shareToGhost("&ghost_cmd=" + android.net.Uri.encode(v.substring(6)));
+        }, 600);
     }
 
     private Theme effectiveTheme() { return sportOn ? Theme.RED : prefs.theme(); }

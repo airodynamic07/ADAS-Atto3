@@ -387,6 +387,11 @@ public final class EngineHost {
     public void setWindowAreas(Area one, Area two) { win1 = one; win2 = two; }
     /** A place shared to NATEE: Ghost Race opens (or comes to the front) with it in its destination search. */
     private String pendingShare;
+    /** Start / stop the engine sound, the same as its Start engine button (voice, Air 2026-11-26). */
+    public void engine(boolean on) {
+        js(engine, "(function(){var b=document.getElementById('start');if(b&&b.dataset.on==='" + (on ? "0" : "1") + "')b.click();})()");
+    }
+
     public void shareToGhost(String share) {
         pendingShare = share;
         if (geckoOpen && act != null) {

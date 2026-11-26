@@ -55,6 +55,11 @@ final class CarControl {
                         .put("left", new JSONObject().put("type", "string").put("description", "app for the left side"))
                         .put("right", new JSONObject().put("type", "string").put("description", "app for the right side")))
                         .put("required", new JSONArray().put("left").put("right"))));
+        f.put(fn("engine_sound", "Start or stop the Engine Sound (the petrol engine sound in the middle window).",
+                props("on", "boolean", "true = start, false = stop")));
+        f.put(fn("ghost_race", "Control Ghost Race (the launcher's map / navigation / race app): full_screen (open it big / enlarge), small_left (minimize, left window), small_right (small, on top of Engine Sound), navigation_mode, map_mode, "
+                + "avoid_tolls (เลี่ยงทางด่วน), allow_tolls (ใช้ทางด่วนได้), fastest (เร็วที่สุด), shortest (สั้นที่สุด).",
+                props("action", "string", "full_screen (enlarge), small_left (minimize to the left window), small_right (small, on top of Engine Sound), navigation_mode, map_mode, avoid_tolls, allow_tolls, fastest or shortest")));
         f.put(fn("set_cabin_light", "Cabin / reading light: this car has no command for it, so say it can't be done from here.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("sunroof", "Open, close or stop the glass SUNROOF (not the sunshade). Ask the driver to confirm open/close first.",
                 props("action", "string", "open, close or stop")));
@@ -122,6 +127,15 @@ final class CarControl {
                 }
                 case "set_screen_brightness": return brightness(a.optString("level", ""));
                 case "split_screen": return split(a.optString("left", ""), a.optString("right", ""));
+                case "engine_sound": return voice(a.optBoolean("on", true) ? "engine_on" : "engine_off", a.optBoolean("on", true) ? "Engine Sound started" : "Engine Sound stopped");
+                case "ghost_race": {
+                    String act = a.optString("action", "").toLowerCase(Locale.US);
+                    String cmd = act.contains("left") || act.startsWith("mini") ? "left" : act.contains("right") ? "right"
+                            : act.startsWith("full") || act.startsWith("enlarge") || act.startsWith("big") ? "full" : act.startsWith("nav") ? "nav" : act.startsWith("map") ? "map"
+                            : act.startsWith("avoid") ? "avoid_tolls" : act.startsWith("allow") ? "allow_tolls" : act.startsWith("fast") ? "fastest" : act.startsWith("short") ? "shortest" : "";
+                    if (cmd.isEmpty()) return res(false, "unknown Ghost Race action " + act);
+                    return voice("ghost:" + cmd, "Ghost Race: " + act.replace('_', ' ') + (cmd.contains("toll") || cmd.endsWith("est") ? " (applies to the next route search)" : ""));
+                }
                 case "set_defrost": return defrost(a.optBoolean("on", true));
                 case "set_air_direction": return airDirection(a.optString("direction", ""));
                 case "set_recirculation": return recirc(a.optBoolean("inside", true));
@@ -426,6 +440,19 @@ final class CarControl {
         }
         boolean video = Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving();
         return res(!video, video ? app.label + " is a video app: it opens only in P" : "opening " + app.label);
+    }
+
+    /** A command for the launcher's middle window, carried out by the launcher (it comes to the front). */
+    private JSONObject voice(String cmd, String said) {
+        final android.content.Intent li = new android.content.Intent(c, LauncherActivity.class).putExtra(LauncherActivity.VOICE, cmd)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        main.post(() -> { try { c.startActivity(li); } catch (Throwable ignored) { } });
+        new Thread(() -> {   // blocked while another app is in front: through the car's ADB
+            try { Thread.sleep(2000); } catch (InterruptedException ignored) { }
+            if (c.getPackageName().equals(KeyWatch.front)) return;
+            try { Updater.adbShell(c, "am start -n " + c.getPackageName() + "/.LauncherActivity -f 0x30000000 --es " + LauncherActivity.VOICE + " '" + cmd + "'"); } catch (Throwable ignored) { }
+        }).start();
+        return res(true, said);
     }
 
     /** The installed app the driver means by this name (same rules as open_app). */
