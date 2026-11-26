@@ -63,6 +63,7 @@ final class CarControl {
                         .put("level", new JSONObject().put("type", "integer").put("description", "0 to 5; leave out when using change"))
                         .put("change", new JSONObject().put("type", "string").put("description", "up or down (one step); leave out when using level")))
                         .put("required", new JSONArray().put("part"))));
+        f.put(fn("swap_sides", "Swap the launcher's left and right windows (สลับซ้ายขวา), the same as Settings → Swap left and right.", null));
         f.put(fn("set_speed_limit", "The driver's own speed limit warning (beeps above it; a warning only).", props("kmh", "integer", "30 to 180 km/h")));
         f.put(fn("set_auto_sport", "Auto Sport: the screen turns black-red above this speed. kmh 60-200, or 0 to switch Auto Sport off.", props("kmh", "integer", "60 to 200, or 0 = off")));
         f.put(fn("set_trip_graph", "The graph along the bottom of the screen (speed and power / consumption): moving average of each line, and zoom. Pass only what the driver asked to change.", gp));
@@ -199,6 +200,7 @@ final class CarControl {
                     String nm = k.equals("vol") ? "engine volume" : k.equals("lvBov") ? "blow-off valve" : k.equals("lvTurbo") ? "turbo" : k.equals("lvShift") ? "shift sound" : "roar";
                     return voice("level:" + k + ":" + lv + ":" + d, nm + (lv >= 0 ? " level " + lv : d > 0 ? " one step up" : " one step down"));
                 }
+                case "swap_sides": return voice("swap", "left and right swapped");
                 case "set_speed_limit": {
                     int v = a.optInt("kmh", -1);
                     if (v < 30 || v > 180) return res(false, "the limit can be 30 to 180 km/h");
