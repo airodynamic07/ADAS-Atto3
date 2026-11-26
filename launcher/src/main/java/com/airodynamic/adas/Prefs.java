@@ -20,7 +20,10 @@ public final class Prefs {
     public Theme theme() {
         try { return Theme.valueOf(p.getString("theme", Theme.BLUE.name())); } catch (Exception e) { return Theme.BLUE; }
     }
-    public void setTheme(Theme t) { p.edit().putString("theme", t.name()).apply(); }
+    public void setTheme(Theme t) { p.edit().putString("theme", t.name()).putBoolean("themeAmbient", false).apply(); }
+    /** "Match ambient light" (Air 2026-11-26): the theme follows the ambient light's colour */
+    public boolean themeAmbient() { return p.getBoolean("themeAmbient", false); }
+    public void setThemeAmbient(boolean on) { p.edit().putBoolean("themeAmbient", on).apply(); }
 
     public boolean autoSport() { return p.getBoolean("autoSport", true); }
     public void setAutoSport(boolean on) { p.edit().putBoolean("autoSport", on).apply(); }

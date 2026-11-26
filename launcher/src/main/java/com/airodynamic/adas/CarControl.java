@@ -53,7 +53,7 @@ final class CarControl {
                         .put("kind", new JSONObject().put("type", "string").put("description", "fastest or best"))
                         .put("km", new JSONObject().put("type", "number").put("description", "1 to 100 km")))
                         .put("required", new JSONArray().put("kind").put("km"))));
-        f.put(fn("set_theme", "The launcher's colour theme: blue, white or red.", props("theme", "string", "blue, white or red")));
+        f.put(fn("set_theme", "The launcher's colour theme: match ambient light (follows the ambient light colour), blue, white, red, green, purple, orange, cyan, pink or yellow.", props("theme", "string", "ambient, blue, white, red, green, purple, orange, cyan, pink or yellow")));
         f.put(fn("engine_sound_choose", "Choose the Engine Sound: rotary, v6, v8, v10, v12, rotary original, v8 original, v10 original, inline 5, inline 4, cinematic ev, vtec.",
                 props("sound", "string", "the sound's name as the driver said it")));
         f.put(fn("engine_sound_level", "Engine Sound loudness of one part: engine (เสียงเครื่องยนต์), blow_off (blow-off valve / BOV), turbo, shift (shift sound), roar. "
@@ -175,8 +175,13 @@ final class CarControl {
                 }
                 case "set_theme": {
                     String t = a.optString("theme", "").toLowerCase(Locale.US);
-                    String th = t.contains("white") || t.contains("ขาว") ? "WHITE" : t.contains("red") || t.contains("แดง") ? "RED" : t.contains("blue") || t.contains("ฟ้า") || t.contains("น้ำเงิน") ? "BLUE" : "";
-                    if (th.isEmpty()) return res(false, "the themes are blue, white and red");
+                    String th = t.contains("ambient") || t.contains("match") || t.contains("rainbow") || t.contains("แอมเบียน") || t.contains("ไฟ") ? "AMBIENT"
+                            : t.contains("white") || t.contains("ขาว") ? "WHITE" : t.contains("red") || t.contains("แดง") ? "RED"
+                            : t.contains("green") || t.contains("เขียว") ? "GREEN" : t.contains("purple") || t.contains("ม่วง") ? "PURPLE"
+                            : t.contains("orange") || t.contains("ส้ม") ? "ORANGE" : t.contains("cyan") || t.contains("ฟ้าอ่อน") || t.contains("turquoise") ? "CYAN"
+                            : t.contains("pink") || t.contains("ชมพู") ? "PINK" : t.contains("yellow") || t.contains("เหลือง") ? "YELLOW"
+                            : t.contains("blue") || t.contains("ฟ้า") || t.contains("น้ำเงิน") ? "BLUE" : "";
+                    if (th.isEmpty()) return res(false, "the themes are: match ambient light, blue, white, red, green, purple, orange, cyan, pink, yellow");
                     return voice("theme:" + th, "theme " + th.toLowerCase(Locale.US));
                 }
                 case "engine_sound_choose": {

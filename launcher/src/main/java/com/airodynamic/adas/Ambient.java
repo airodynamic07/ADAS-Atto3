@@ -159,7 +159,11 @@ public final class Ambient implements CarData.Listener {
     }
 
     /** Also used by the "Try" buttons in Settings. */
+    /** The ambient colour (1–31) shown now, and who wants to know when it changes (the theme can follow it). */
+    static volatile int current;
+    static volatile Runnable onChange;
     public void apply(int colour, int style) {
+        if (colour > 0 && colour != current) { current = colour; Runnable r = onChange; if (r != null) h.post(r); }
         final int my = ++run;
         h.removeCallbacksAndMessages(null);
         h.post(() -> {

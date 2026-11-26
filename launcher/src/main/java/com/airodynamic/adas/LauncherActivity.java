@@ -72,6 +72,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         Ambient.get(this);   // ambient light by gear, keeps working while other apps are open
+        Ambient.onChange = ambientChanged;   // the theme can follow the ambient colour
         prefs = new Prefs(this);
         SpeedAlert.get(this);   // my speed limit warning, also while other apps are open
         TripEnergy.get(this);   // counts this trip's energy even while other apps are open
@@ -151,6 +152,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         getWindow().getDecorView().postDelayed(() -> {
             if (v.equals("engine_on") || v.equals("engine_off")) engineHost().engine(v.equals("engine_on"));
             else if (v.equals("swap")) { prefs.setInfoLeft(!prefs.infoLeft()); rebuild(); }
+            else if (v.equals("theme:AMBIENT")) { prefs.setThemeAmbient(true); rebuild(); }
             else if (v.startsWith("theme:")) { try { prefs.setTheme(Theme.valueOf(v.substring(6))); rebuild(); } catch (Throwable ignored) { } }
             else if (v.startsWith("sound:")) engineHost().chooseSound(v.substring(6));
             else if (v.startsWith("level:")) {   // level:<part>:<0-5 or -1>:<delta>
@@ -161,7 +163,17 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         }, 600);
     }
 
-    private Theme effectiveTheme() { return sportOn ? Theme.RED : prefs.theme(); }
+    private Theme effectiveTheme() {
+        if (prefs.themeAmbient()) {   // follows the ambient light (Auto Sport too: its ambient colour), Air 2026-11-26
+            if (sportOn && !(prefs.ambientOver())) return Theme.RED;
+            int col = Ambient.current;
+            if (col >= 1 && col <= SettingsDialog.BYD_COLOURS.length) return Theme.nearest(SettingsDialog.BYD_COLOURS[col - 1]);
+            return prefs.theme();
+        }
+        return sportOn ? Theme.RED : prefs.theme();
+    }
+    /** the ambient colour changed: rebuild in the new colour when the theme follows it */
+    private final Runnable ambientChanged = () -> { if (prefs.themeAmbient() && effectiveTheme() != theme) rebuild(); };
 
     /**
      * Builds the whole screen for the current theme (user's layout, 2026-11-10):
@@ -302,27 +314,65 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         route = null;
     }
 
-    /** Blue / white / red dots and the Settings button. */
+    /** "Theme ▾" (Air 2026-11-26, was three dots): a menu with Match ambient light on top, then every colour. */
     private LinearLayout themeControls(Theme th) {
         LinearLayout box = new LinearLayout(this);
         box.setGravity(Gravity.CENTER_VERTICAL);
         box.setBackground(Ui.round(th.card, th.line, 14, this));
         box.setPadding(Ui.dp(this, 4), 0, Ui.dp(this, 2), 0);
-        for (Theme t : Theme.values()) {
-            View dot = new View(this);
-            boolean sel = prefs.theme() == t;
-            dot.setBackground(Ui.round(t == Theme.WHITE ? 0xFFFFFFFF : t == Theme.RED ? 0xFFE5202E : 0xFF2E8BFF,
-                    sel ? th.text : th.line, 11, this));
-            FrameLayout hit = new FrameLayout(this);
-            hit.setContentDescription(t.name() + " theme");
-            hit.addView(dot, new FrameLayout.LayoutParams(Ui.dp(this, 22), Ui.dp(this, 22), Gravity.CENTER));
-            hit.setOnClickListener(v -> { prefs.setTheme(t); rebuild(); });
-            box.addView(hit, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1f));   // share the width
-        }
+        LinearLayout tb = new LinearLayout(this);
+        tb.setGravity(Gravity.CENTER);
+        View sw = new View(this);
+        sw.setBackground(prefs.themeAmbient() ? rainbow(11) : Ui.round(th.swatch(), th.line, 11, this));
+        tb.addView(sw, new LinearLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20)));
+        android.widget.TextView tl = Ui.text(this, "  Theme ▾", 15, th.text, true);
+        tb.addView(tl);
+        tb.setOnClickListener(v -> themeMenu(v, th));
+        box.addView(tb, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1f));
         android.widget.Button settings = Ui.chip(this, "⚙", false, th, v -> openSettings());
         settings.setContentDescription("Settings");
         box.addView(settings, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40)));
         return box;
+    }
+
+    private android.graphics.drawable.Drawable rainbow(int radiusDp) {
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR, new int[]{0xFFFF0000, 0xFFFFA500, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF, 0xFF0000FF, 0xFFFF00FF});
+        g.setCornerRadius(Ui.dp(this, radiusDp));
+        return g;
+    }
+
+    private void themeMenu(View anchor, Theme th) {
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setBackground(Ui.round(th.chip, th.line, 14, this));
+        final android.widget.PopupWindow[] pw = new android.widget.PopupWindow[1];
+        java.util.List<Object[]> items = new java.util.ArrayList<>();
+        items.add(new Object[]{null, "Match ambient light", prefs.themeAmbient()});
+        for (Theme t : Theme.values()) items.add(new Object[]{t, t.label(), !prefs.themeAmbient() && prefs.theme() == t});
+        for (Object[] it : items) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(Ui.dp(this, 14), Ui.dp(this, 10), Ui.dp(this, 18), Ui.dp(this, 10));
+            if ((Boolean) it[2]) row.setBackgroundColor(th.line);
+            View d = new View(this);
+            d.setBackground(it[0] == null ? rainbow(9) : Ui.round(((Theme) it[0]).swatch(), th.line, 9, this));
+            row.addView(d, new LinearLayout.LayoutParams(Ui.dp(this, 18), Ui.dp(this, 18)));
+            row.addView(Ui.text(this, "   " + it[1] + ((Boolean) it[2] ? "  ✓" : ""), 16, th.text, false));
+            final Theme t = (Theme) it[0];
+            row.setOnClickListener(v -> {
+                pw[0].dismiss();
+                if (t == null) prefs.setThemeAmbient(true); else prefs.setTheme(t);
+                rebuild();
+            });
+            list.addView(row);
+        }
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        sv.addView(list);
+        pw[0] = new android.widget.PopupWindow(sv, Ui.dp(this, 260), Math.min(Ui.dp(this, 440), getWindow().getDecorView().getHeight() - Ui.dp(this, 40)), true);
+        pw[0].setOutsideTouchable(true);
+        pw[0].setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0));
+        pw[0].showAsDropDown(anchor);
     }
 
     @Override protected void onResume() {

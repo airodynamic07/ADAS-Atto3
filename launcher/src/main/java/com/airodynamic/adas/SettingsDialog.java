@@ -28,11 +28,16 @@ public final class SettingsDialog {
 
         section(c, root, th, "Theme");
         LinearLayout themes = row(c);
-        for (Theme t : Theme.values()) {
+        themes.addView(Ui.chip(c, "🌈 Match ambient light", prefs.themeAmbient(), th, v -> { prefs.setThemeAmbient(true); redo.run(); }), weight(c));
+        for (Theme t : new Theme[]{Theme.BLUE, Theme.WHITE, Theme.RED}) {
             String n = t == Theme.BLUE ? "Black blue" : t == Theme.WHITE ? "White minimal" : "Black red sport";
-            themes.addView(Ui.chip(c, n, prefs.theme() == t, th, v -> { prefs.setTheme(t); redo.run(); }), weight(c));
+            themes.addView(Ui.chip(c, n, !prefs.themeAmbient() && prefs.theme() == t, th, v -> { prefs.setTheme(t); redo.run(); }), weight(c));
         }
         root.addView(themes);
+        LinearLayout themes2 = row(c);
+        for (Theme t : new Theme[]{Theme.GREEN, Theme.PURPLE, Theme.ORANGE, Theme.CYAN, Theme.PINK, Theme.YELLOW})
+            themes2.addView(Ui.chip(c, t.label(), !prefs.themeAmbient() && prefs.theme() == t, th, v -> { prefs.setTheme(t); redo.run(); }), weight(c));
+        root.addView(themes2);
 
         section(c, root, th, "Auto Sport: black-red above " + prefs.autoSportKmh() + " km/h, back 10 km/h below");
         LinearLayout as = row(c);
