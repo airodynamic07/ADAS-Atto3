@@ -517,6 +517,7 @@ public final class DrivePanel implements Panel, TripEnergy.Listener {
     }
 
     @Override public void onCar(CarData.State s) {
+        if (limit != null && !limit.getText().toString().startsWith(String.valueOf(prefs.speedLimit()))) limit.post(this::showLimit);   // changed by voice
         // WLTP range (user, 2026-11-14): the car shows NEDC range; Atto 3 is rated 480 km NEDC and 420 km WLTP → × 0.875
         // My range = battery left ÷ your kWh/100 over your last 50 km × 100; before 10 km of your own driving the car's
         // own "last 50 km" figure is used (user, 2026-11-14)

@@ -60,6 +60,9 @@ public final class Prefs {
 
     /** Graph moving average in metres for the speed / power line: 0 = real time, 100…500; default 200 (user, 2026-11-12). */
     /** bottom graph: false = last 20 km, true = the whole trip ("zoom extend", Air 2026-11-26) */
+    /** bottom graph width in km (Air 2026-11-26: "set the graph to whatever km I want"), default 20 */
+    public int graphKm() { return p.getInt("graphKm", 20); }
+    public void setGraphKm(int km) { p.edit().putInt("graphKm", Math.max(2, Math.min(400, km))).apply(); }
     public boolean graphWhole() { return p.getBoolean("graphWhole", false); }
     public void setGraphWhole(boolean b) { p.edit().putBoolean("graphWhole", b).apply(); }
     /** the AI chat closes by itself when quiet (Air 2026-11-26: "don't auto close") */

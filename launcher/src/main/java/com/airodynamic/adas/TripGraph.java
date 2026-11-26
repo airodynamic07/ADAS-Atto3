@@ -37,7 +37,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         setOnLongClickListener(v -> {
             Prefs pr = new Prefs(getContext());
             pr.setGraphWhole(!pr.graphWhole());
-            android.widget.Toast.makeText(getContext(), pr.graphWhole() ? "Graph: the whole trip" : "Graph: last 20 km", android.widget.Toast.LENGTH_SHORT).show();
+            android.widget.Toast.makeText(getContext(), pr.graphWhole() ? "Graph: the whole trip" : "Graph: last " + pr.graphKm() + " km", android.widget.Toast.LENGTH_SHORT).show();
             invalidate();
             return true;
         });
@@ -105,8 +105,9 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         float rowH = 5 * d, brakeY = bottom - rowH - 1 * d, regenY = brakeY - rowH - 1 * d;
         boolean whole = new Prefs(getContext()).graphWhole();   // "zoom extend": the whole trip (Air 2026-11-26)
         double first = pts != null && !pts.isEmpty() ? Math.max(0, pts.get(0).km - TripEnergy.STEP_KM) : 0;
-        double from = whole ? first : Math.max(0, nowKm - TripEnergy.WINDOW_KM);
-        double to = whole ? Math.max(from + TripEnergy.WINDOW_KM, nowKm) : from + TripEnergy.WINDOW_KM;
+        double win = new Prefs(getContext()).graphKm();   // chosen width, default 20 km
+        double from = whole ? first : Math.max(0, nowKm - win);
+        double to = whole ? Math.max(from + Math.min(win, TripEnergy.WINDOW_KM), nowKm) : from + win;
         spanKm = to - from;
         liveX0 = X(Math.max(from, liveFromKm), from, to, left, right);
         liveX1 = X(nowKm, from, to, left, right);

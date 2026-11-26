@@ -46,7 +46,10 @@ final class CarControl {
         JSONObject gp = new JSONObject().put("type", "object").put("properties", new JSONObject()
                 .put("speed_average_m", new JSONObject().put("type", "integer").put("description", "speed line moving average in metres: 0 = real time, or 100, 200, 300, 500, 1000"))
                 .put("power_average_m", new JSONObject().put("type", "integer").put("description", "power / consumption line moving average in metres: 0 = real time, or 100, 200, 300, 500, 1000"))
-                .put("zoom", new JSONObject().put("type", "string").put("description", "normal (last 20 km) or extended (zoom extend: the whole trip)")));
+                .put("zoom", new JSONObject().put("type", "string").put("description", "normal (the last N km, see window_km) or extended (zoom extend: the whole trip)"))
+                .put("window_km", new JSONObject().put("type", "integer").put("description", "how many km the graph shows in normal zoom, e.g. 5, 10, 20, 50 (sets zoom to normal)")));
+        f.put(fn("set_speed_limit", "The driver's own speed limit warning (beeps above it; a warning only).", props("kmh", "integer", "30 to 180 km/h")));
+        f.put(fn("set_auto_sport", "Auto Sport: the screen turns black-red above this speed. kmh 60-200, or 0 to switch Auto Sport off.", props("kmh", "integer", "60 to 200, or 0 = off")));
         f.put(fn("set_trip_graph", "The graph along the bottom of the screen (speed and power / consumption): moving average of each line, and zoom. Pass only what the driver asked to change.", gp));
         f.put(fn("set_screen_brightness", "Screen brightness: darkest, medium or brightest (or a percent 1-100).",
                 props("level", "string", "darkest, medium, brightest, or a number 1-100")));
@@ -140,8 +143,23 @@ final class CarControl {
                     StringBuilder done = new StringBuilder();
                     if (a.has("speed_average_m")) { int v = Math.max(0, a.optInt("speed_average_m", 200)); pr.setSmoothSpeed(v); done.append("speed ").append(v == 0 ? "real time" : v + " m").append(". "); }
                     if (a.has("power_average_m")) { int v = Math.max(0, a.optInt("power_average_m", 200)); pr.setSmoothPower(v); done.append("power ").append(v == 0 ? "real time" : v + " m").append(". "); }
-                    if (a.has("zoom")) { String z = a.optString("zoom", "").toLowerCase(Locale.US); boolean w = z.startsWith("ext") || z.contains("whole"); pr.setGraphWhole(w); done.append(w ? "whole trip" : "last 20 km").append(". "); }
+                    if (a.has("window_km")) { pr.setGraphKm(a.optInt("window_km", 20)); pr.setGraphWhole(false); done.append("last ").append(pr.graphKm()).append(" km. "); }
+                    else if (a.has("zoom")) { String z = a.optString("zoom", "").toLowerCase(Locale.US); boolean w = z.startsWith("ext") || z.contains("whole"); pr.setGraphWhole(w); done.append(w ? "whole trip" : "last " + pr.graphKm() + " km").append(". "); }
                     return done.length() == 0 ? res(false, "nothing to change") : res(true, done.toString().trim());
+                }
+                case "set_speed_limit": {
+                    int v = a.optInt("kmh", -1);
+                    if (v < 30 || v > 180) return res(false, "the limit can be 30 to 180 km/h");
+                    new Prefs(c).setSpeedLimit(v);
+                    return res(true, "speed limit warning at " + v + " km/h");
+                }
+                case "set_auto_sport": {
+                    int v = a.optInt("kmh", -1);
+                    Prefs pr = new Prefs(c);
+                    if (v == 0) { pr.setAutoSport(false); return res(true, "Auto Sport off"); }
+                    if (v < 60 || v > 200) return res(false, "Auto Sport speed can be 60 to 200 km/h");
+                    pr.setAutoSport(true); pr.setAutoSportKmh(v);
+                    return res(true, "Auto Sport above " + v + " km/h");
                 }
                 case "set_screen_brightness": return brightness(a.optString("level", ""));
                 case "split_screen": return split(a.optString("left", ""), a.optString("right", ""));
