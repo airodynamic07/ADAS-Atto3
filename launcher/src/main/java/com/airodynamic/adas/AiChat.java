@@ -734,8 +734,19 @@ public final class AiChat extends Service {
         setState("connected");
         lastActive = System.currentTimeMillis();
         int ob = Math.max(AudioTrack.getMinBufferSize(OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT), OUT_RATE);
-        track = new AudioTrack(AudioManager.STREAM_MUSIC, OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, ob, AudioTrack.MODE_STREAM);
-        track.play();
+        // (Air 2026-11-26 crash log: the car's sound service had crashed, "play() called on uninitialized AudioTrack" took the
+        // whole launcher down) a speaker that couldn't be opened is said on screen instead, never a crash
+        try {
+            track = new AudioTrack(AudioManager.STREAM_MUSIC, OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, ob, AudioTrack.MODE_STREAM);
+            if (track.getState() != AudioTrack.STATE_INITIALIZED) throw new IllegalStateException("not initialized");
+            track.play();
+        } catch (Throwable e) {
+            try { if (track != null) track.release(); } catch (Throwable ignored) { }
+            track = null;
+            setState("the car's sound system isn't answering: turn the car off and on");
+            main.postDelayed(this::endChat, 6000);
+            return;
+        }
         playThread = new Thread(() -> {
             while (chatting) {
                 try {
