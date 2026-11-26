@@ -150,7 +150,13 @@ public final class AiChat extends Service {
 
     private static boolean endsSentence(String t) {
         String e = t.replaceAll("[\\s.,!?…]+$", "");
-        return e.endsWith("ครับ") || e.endsWith("คับ") || e.endsWith("คะ") || e.endsWith("ค่ะ") || e.endsWith("ค๊ะ") || e.endsWith("please");
+        if (t.trim().endsWith("?")) return true;
+        if (e.endsWith("ครับ") || e.endsWith("คับ") || e.endsWith("คะ") || e.endsWith("ค่ะ") || e.endsWith("ค๊ะ") || e.endsWith("please")) return true;
+        // (Air 2026-11-26) a question from the driver is finished too: Thai question words at the end
+        String[] q = {"ไหม", "มั้ย", "มั๊ย", "หรือเปล่า", "รึเปล่า", "ป่าว", "ปะ", "หรือไม่", "หรือยัง", "อะไร", "อะไรบ้าง", "ที่ไหน", "ตรงไหน",
+                "เท่าไหร่", "เท่าไร", "กี่โมง", "เมื่อไหร่", "ยังไง", "อย่างไร", "ทำไม", "ใคร", "บ้าง", "ได้ไหม"};
+        for (String w : q) if (e.endsWith(w)) return true;
+        return false;
     }
 
     private boolean isEcho() {
