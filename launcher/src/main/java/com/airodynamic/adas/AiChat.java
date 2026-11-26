@@ -341,7 +341,9 @@ public final class AiChat extends Service {
             // wake word = the assistant's two-word name from Settings (Air 2026-11-23, default "Harley Quinn"; "queen" for "Quinn")
             final String w1 = prefs.aiName1(), w2 = prefs.aiName2();
             String alt = w2.equals("quinn") ? ", \"" + w1 + " queen\"" : "";
-            String grammar = "[\"" + w1 + " " + w2 + "\", \"hey " + w1 + " " + w2 + "\", \"hi " + w1 + " " + w2 + "\"" + alt + ", \"[unk]\"]";
+            // (Air 2026-11-26) the wake word may also be ONE word ("susan"): then w2 is empty
+            String ww = w2.isEmpty() ? w1 : w1 + " " + w2;
+            String grammar = "[\"" + ww + "\", \"hey " + ww + "\", \"hi " + ww + "\"" + alt + ", \"[unk]\"]";
             wakeWords = new String[]{w1, w2};
             wakeGrammar = grammar;
             while (alive) {
@@ -414,13 +416,20 @@ public final class AiChat extends Service {
     /** (Air 2026-11-25: "it opens when I didn't say it") only a FINISHED phrase counts (not a half-heard one), and the
      *  listener must be sure of both words: with only a few phrases to choose from, it used to squeeze any noise or
      *  talk into the name. WAKE_CONF is how sure (0..1). */
-    private static final double WAKE_CONF = 0.85;
+    private static final double WAKE_CONF = 0.95;   // (Air 2026-11-26) was 0.85: still opened by accident
     private static boolean isWake(String json) {
         if (json == null) return false;
         try {
             org.json.JSONArray w = new org.json.JSONObject(json).optJSONArray("result");
             if (w != null) {
                 String a = wakeWords[0], b = wakeWords[1];
+                if (b.isEmpty()) {   // one-word wake word
+                    for (int i = 0; i < w.length(); i++) {
+                        org.json.JSONObject x = w.getJSONObject(i);
+                        if (x.optString("word").equals(a) && x.optDouble("conf", 0) >= WAKE_CONF) return true;
+                    }
+                    return false;
+                }
                 for (int i = 0; i + 1 < w.length(); i++) {
                     org.json.JSONObject x = w.getJSONObject(i), y = w.getJSONObject(i + 1);
                     String wx = x.optString("word"), wy = y.optString("word");
@@ -432,6 +441,7 @@ public final class AiChat extends Service {
         } catch (Throwable ignored) { }
         String t = " " + json.toLowerCase(java.util.Locale.US).replaceAll("[^a-z]+", " ") + " ";
         String a = wakeWords[0], b = wakeWords[1];
+        if (b.isEmpty()) return t.contains(" " + a + " ");
         // both words, one right after the other
         return t.contains(" " + a + " " + b + " ") || (b.equals("quinn") && t.contains(" " + a + " queen "));
     }
@@ -521,11 +531,11 @@ public final class AiChat extends Service {
     /** Adds "close_chat": when the driver asks to close / stop / end the chat in any words, Gemini closes it. */
     private static JSONArray withClose(JSONArray tools) throws Exception {
         tools.getJSONObject(0).getJSONArray("functionDeclarations").put(new JSONObject().put("name", "set_assistant")
-                .put("description", "Change your own voice (woman/man: female calm, female bright, male deep, male lively), your name (any language), or the wake word (two English words). Pass only what the driver asked to change.")
+                .put("description", "Change your own voice (woman/man: female calm, female bright, male deep, male lively), your name (any language), or the wake word (one or two English words). Pass only what the driver asked to change.")
                 .put("parameters", new JSONObject().put("type", "object").put("properties", new JSONObject()
                         .put("voice", new JSONObject().put("type", "string").put("description", "female calm, female bright, male deep or male lively"))
                         .put("name", new JSONObject().put("type", "string").put("description", "your new name, any language"))
-                        .put("wake_word", new JSONObject().put("type", "string").put("description", "two English words the driver says to call you")))));
+                        .put("wake_word", new JSONObject().put("type", "string").put("description", "one or two English words the driver says to call you")))));
         tools.getJSONObject(0).getJSONArray("functionDeclarations").put(new JSONObject().put("name", "close_chat")
                 .put("description", "Close this chat when the driver asks to close, stop or end it (e.g. 'close Natee chat', 'ปิดแชท'). Say a short goodbye first."));
         return tools;
@@ -690,9 +700,9 @@ public final class AiChat extends Service {
         String w = a.optString("wake_word", "").trim().toLowerCase(java.util.Locale.US).replaceAll("[^a-z ]", " ").trim();
         if (!w.isEmpty()) {
             String[] ws2 = w.split("\\s+");
-            if (ws2.length != 2 || ws2[0].length() < 2 || ws2[1].length() < 2)
-                return new JSONObject().put("ok", false).put("result", "the wake word must be two English words, e.g. James Bond");
-            prefs.setAiName(ws2[0], ws2[1]); restart = true; done.append("wake word ").append(prefs.wakeWord()).append(" (the chat closes to learn it). ");
+            if (ws2.length > 2 || ws2[0].length() < 2 || (ws2.length == 2 && ws2[1].length() < 2))
+                return new JSONObject().put("ok", false).put("result", "the wake word must be one or two English words, e.g. Susan or James Bond");
+            prefs.setAiName(ws2[0], ws2.length == 2 ? ws2[1] : ""); restart = true; done.append("wake word ").append(prefs.wakeWord()).append(" (the chat closes to learn it). ");
         }
         if (done.length() == 0) return new JSONObject().put("ok", false).put("result", "nothing to change");
         if (restart) main.postDelayed(() -> { endChat(); stopSelf(); sync(this); }, 5000);

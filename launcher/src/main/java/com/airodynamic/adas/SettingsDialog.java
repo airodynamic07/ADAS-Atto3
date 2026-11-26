@@ -185,10 +185,10 @@ public final class SettingsDialog {
             e0.setText(prefs.aiDisplay());
             box.addView(Ui.text(c, "Her name (Thai is fine):", 13, th.text, true));
             box.addView(e0);
-            box.addView(Ui.text(c, "Wake word: two ENGLISH words you say to call her:", 13, th.text, true));
+            box.addView(Ui.text(c, "Wake word: one or two ENGLISH words you say to call her (second box can stay empty):", 13, th.text, true));
             android.widget.EditText e1 = new android.widget.EditText(c), e2 = new android.widget.EditText(c);
             e1.setSingleLine(true); e2.setSingleLine(true);
-            e1.setHint("first word, e.g. Harley"); e2.setHint("second word, e.g. Quinn");
+            e1.setHint("first word, e.g. Harley"); e2.setHint("second word (optional), e.g. Quinn");
             e1.setText(prefs.aiName1()); e2.setText(prefs.aiName2());
             box.addView(e1); box.addView(e2);
             TextView hint = Ui.text(c, "The wake word must be English: the offline listener in the car only knows English words. Thai sounds don't work there, but her name can be Thai. Check it with Wake word check.", 12, th.muted, false);
@@ -198,8 +198,9 @@ public final class SettingsDialog {
                         String a1 = e1.getText().toString().trim().toLowerCase(java.util.Locale.US).replaceAll("[^a-z]", "");
                         String a2 = e2.getText().toString().trim().toLowerCase(java.util.Locale.US).replaceAll("[^a-z]", "");
                         prefs.setAiDisplay(e0.getText().toString().trim());
-                        if (a1.length() < 2 || a2.length() < 2) {   // Thai or empty wake word: keep the old one, the name is still saved
-                            android.widget.Toast.makeText(c, "Name saved. The wake word needs two English words, so it stays \"" + prefs.wakeWord() + "\"", android.widget.Toast.LENGTH_LONG).show();
+                        if (a1.length() < 2 && a2.length() >= 2) { a1 = a2; a2 = ""; }   // one word typed in the second box
+                        if (a1.length() < 2 || (a2.length() > 0 && a2.length() < 2)) {   // Thai or empty wake word: keep the old one, the name is still saved
+                            android.widget.Toast.makeText(c, "Name saved. The wake word needs one or two English words, so it stays \"" + prefs.wakeWord() + "\"", android.widget.Toast.LENGTH_LONG).show();
                             redo.run();
                             return;
                         }
