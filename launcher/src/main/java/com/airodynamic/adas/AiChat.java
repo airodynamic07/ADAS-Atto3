@@ -465,6 +465,7 @@ public final class AiChat extends Service {
         if (key.isEmpty()) { status("Natee chat: add your Gemini API key in Settings → AI chat"); return; }
         chatting = true; muted = false; ready = false; retries = 0;
         talking = false; activityOpen = false; pendingTalk = true;
+        duckOn();
         lastActive = System.currentTimeMillis();
         you.setLength(0); gem.setLength(0); newTurn = true; lastAction = "";
         showBubble();
@@ -729,7 +730,7 @@ public final class AiChat extends Service {
                     if (a == null) { if (speaking) { speaking = false; lastActive = System.currentTimeMillis(); main.post(this::answerDone); } continue; }
                     if (!speaking) { speaking = true; main.post(() -> { main.removeCallbacks(hideLater); if (!talking) look(C_ANSWER, "answering…"); }); }
                     AudioTrack t = track;
-                    if (t != null) t.write(a, 0, a.length);
+                    if (t != null) { if (voiceGain > 1.01f) louder(a, voiceGain); t.write(a, 0, a.length); }
                 } catch (InterruptedException e) { return; } catch (Throwable ignored) { }
             }
         }, "natee-play");
@@ -817,9 +818,51 @@ public final class AiChat extends Service {
         if (pendingTalk) { pendingTalk = false; startTalk(); }
     }
 
+    // ---- music at half volume while the chat is open (Air 2026-11-26). Her voice shares the music volume, so it is
+    // made louder by the same amount: the music is quieter, she is as loud as before.
+    private int savedVol = -1, duckedVol = -1;
+    private volatile float voiceGain = 1f;
+    private void duckOn() {
+        try {
+            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+            int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+            if (cur <= 1) return;
+            int half = Math.max(1, Math.round(cur * 0.5f));
+            float g = 2f;   // about 6 dB if the car can't say
+            try {
+                android.media.AudioDeviceInfo[] outs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+                int dev = outs.length > 0 ? outs[0].getType() : android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
+                float db = am.getStreamVolumeDb(AudioManager.STREAM_MUSIC, cur, dev) - am.getStreamVolumeDb(AudioManager.STREAM_MUSIC, half, dev);
+                if (!Float.isNaN(db) && !Float.isInfinite(db) && db > 0) g = (float) Math.pow(10, db / 20);
+            } catch (Throwable ignored) { }
+            voiceGain = Math.max(1f, Math.min(4f, g));
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, half, 0);
+            savedVol = cur; duckedVol = half;
+        } catch (Throwable ignored) { }
+    }
+    private void duckOff() {
+        try {
+            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+            // put it back, unless the driver changed the volume meanwhile
+            if (savedVol > 0 && am.getStreamVolume(AudioManager.STREAM_MUSIC) == duckedVol) am.setStreamVolume(AudioManager.STREAM_MUSIC, savedVol, 0);
+        } catch (Throwable ignored) { }
+        savedVol = -1; duckedVol = -1; voiceGain = 1f;
+    }
+    /** 16-bit little-endian PCM made louder, gently limited so it never crackles */
+    private static void louder(byte[] a, float g) {
+        for (int i = 0; i + 1 < a.length; i += 2) {
+            int v = (short) ((a[i] & 0xFF) | (a[i + 1] << 8));
+            float x = v * g / 32768f;
+            x = x > 0.8f ? 0.8f + 0.2f * (float) Math.tanh((x - 0.8f) / 0.2f) : x < -0.8f ? -0.8f + 0.2f * (float) Math.tanh((x + 0.8f) / 0.2f) : x;
+            int o = Math.round(x * 32767f);
+            a[i] = (byte) o; a[i + 1] = (byte) (o >> 8);
+        }
+    }
+
     private void endChat() {
         if (!chatting) return;
         chatting = false; ready = false; speaking = false; talking = false; activityOpen = false; pendingTalk = false; autoEnd = false;
+        duckOff();
         main.removeCallbacks(hideLater);
         if (ws != null) { try { ws.close(1000, "bye"); } catch (Throwable ignored) { } ws = null; }
         playQ.clear();
