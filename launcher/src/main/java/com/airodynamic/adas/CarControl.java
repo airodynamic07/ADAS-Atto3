@@ -64,6 +64,7 @@ final class CarControl {
                         .put("change", new JSONObject().put("type", "string").put("description", "up or down (one step); leave out when using level")))
                         .put("required", new JSONArray().put("part"))));
         f.put(fn("swap_sides", "Swap the launcher's left and right windows (สลับซ้ายขวา), the same as Settings → Swap left and right.", null));
+        f.put(fn("engine_gauge", "Engine Sound's gauge style (เกจ): classic, race, retro, digital, supercar or minimal.", props("style", "string", "classic, race, retro, digital, supercar or minimal")));
         f.put(fn("set_speed_limit", "The driver's own speed limit warning (beeps above it; a warning only).", props("kmh", "integer", "30 to 180 km/h")));
         f.put(fn("set_auto_sport", "Auto Sport: the screen turns black-red above this speed. kmh 60-200, or 0 to switch Auto Sport off.", props("kmh", "integer", "60 to 200, or 0 = off")));
         f.put(fn("set_trip_graph", "The graph along the bottom of the screen (speed and power / consumption): moving average of each line, and zoom. Pass only what the driver asked to change.", gp));
@@ -207,6 +208,14 @@ final class CarControl {
                     return voice("level:" + k + ":" + lv + ":" + d, nm + (lv >= 0 ? " level " + lv : d > 0 ? " one step up" : " one step down"));
                 }
                 case "swap_sides": return voice("swap", "left and right swapped");
+                case "engine_gauge": {
+                    String n = a.optString("style", "").toLowerCase(Locale.US);
+                    String id = n.contains("retro") || n.contains("เรโทร") || n.contains("classic car") ? "retro" : n.contains("race") || n.contains("เรซ") ? "race"
+                            : n.contains("digi") || n.contains("ดิจิ") ? "digital" : n.contains("super") || n.contains("ซุปเปอร์") ? "supercar"
+                            : n.contains("mini") || n.contains("มินิ") ? "minimal" : n.contains("classic") || n.contains("คลาสสิ") ? "classic" : "";
+                    if (id.isEmpty()) return res(false, "the gauges are classic, race, retro, digital, supercar and minimal");
+                    return voice("gauge:" + id, "gauge " + id);
+                }
                 case "set_speed_limit": {
                     int v = a.optInt("kmh", -1);
                     if (v < 30 || v > 180) return res(false, "the limit can be 30 to 180 km/h");

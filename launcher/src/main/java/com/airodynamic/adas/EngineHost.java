@@ -236,11 +236,13 @@ public final class EngineHost {
 
     public void setTheme(Theme t) {
         theme = t == Theme.RED ? "red" : t == Theme.WHITE ? "white" : "blue";
+        // (Air 2026-11-26) the newer colours (green, purple ...): Engine Sound's dark style in that colour
+        accent = t == Theme.RED || t == Theme.WHITE || t == Theme.BLUE ? null : String.format("#%06X", t.accent & 0xFFFFFF);
         applyTheme();
     }
 
     private void applyTheme() {
-        js(engine, "window.setLauncherTheme && window.setLauncherTheme(" + q(theme) + ")");
+        js(engine, "window.setLauncherTheme && window.setLauncherTheme(" + q(theme) + (accent != null ? "," + q(accent) : "") + ")");
         js(ghost, "window.__attoTheme && window.__attoTheme(" + q(theme) + ")");
         if (geckoOpen) ctx.sendBroadcast(new android.content.Intent(GhostActivity.ACTION_THEME)
                 .setPackage(ctx.getPackageName()).putExtra(GhostActivity.THEME, theme));   // Ghost Race window follows
@@ -393,6 +395,14 @@ public final class EngineHost {
     }
 
     /** Picks an Engine Sound by its id, the same as tapping it in the list (voice, Air 2026-11-26). */
+    private String accent;
+
+    /** Engine Sound's gauge style (voice, Air 2026-11-26): classic, race, retro, digital, supercar, minimal. */
+    public void chooseGauge(String id) {
+        if (!id.matches("[a-z]+")) return;
+        js(engine, "window.setGauge && window.setGauge(" + q(id) + ")");
+    }
+
     public void chooseSound(String id) {
         if (!id.matches("[a-z0-9]+")) return;
         js(engine, "(function(){var r=document.querySelector('#sounds input[value=\\'" + id + "\\']');if(r&&!r.checked){r.checked=true;r.dispatchEvent(new Event('change',{bubbles:true}));}})()");
