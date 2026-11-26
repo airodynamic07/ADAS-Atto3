@@ -177,7 +177,6 @@ public final class AiChat extends Service {
         heard = false; activityOpen = false; lastVoiceAt = 0;
         talking = true;
         look(C_LISTEN, "listening… speak now");
-        new Thread(() -> control.pauseForListening()).start();   // she hears only you, not the music
         if (!silentStart) beep();
         silentStart = false;
         // (Air 2026-11-25: stuck on "listening… speak now" for ever) every turn has a way out: no words for a while = it closes
