@@ -56,6 +56,13 @@ final class CarControl {
         f.put(fn("set_theme", "The launcher's colour theme: blue, white or red.", props("theme", "string", "blue, white or red")));
         f.put(fn("engine_sound_choose", "Choose the Engine Sound: rotary, v6, v8, v10, v12, rotary original, v8 original, v10 original, inline 5, inline 4, cinematic ev, vtec.",
                 props("sound", "string", "the sound's name as the driver said it")));
+        f.put(fn("engine_sound_level", "Engine Sound loudness of one part: engine (เสียงเครื่องยนต์), blow_off (blow-off valve / BOV), turbo, shift (shift sound), roar. "
+                + "Either a level 0-5 (0 = off, 5 = loudest) or change up / down one step.",
+                new JSONObject().put("type", "object").put("properties", new JSONObject()
+                        .put("part", new JSONObject().put("type", "string").put("description", "engine, blow_off, turbo, shift or roar"))
+                        .put("level", new JSONObject().put("type", "integer").put("description", "0 to 5; leave out when using change"))
+                        .put("change", new JSONObject().put("type", "string").put("description", "up or down (one step); leave out when using level")))
+                        .put("required", new JSONArray().put("part"))));
         f.put(fn("set_speed_limit", "The driver's own speed limit warning (beeps above it; a warning only).", props("kmh", "integer", "30 to 180 km/h")));
         f.put(fn("set_auto_sport", "Auto Sport: the screen turns black-red above this speed. kmh 60-200, or 0 to switch Auto Sport off.", props("kmh", "integer", "60 to 200, or 0 = off")));
         f.put(fn("set_trip_graph", "The graph along the bottom of the screen (speed and power / consumption): moving average of each line, and zoom. Pass only what the driver asked to change.", gp));
@@ -180,6 +187,17 @@ final class CarControl {
                             : n.contains("inline4") || n.contains("i4") || n.contains("4สูบ") ? "inline4" : "";
                     if (id.isEmpty()) return res(false, "the sounds are rotary, v6, v8, v10, v12, rotary / v8 / v10 original, inline 5, inline 4, cinematic EV, VTEC");
                     return voice("sound:" + id, "Engine Sound: " + id);
+                }
+                case "engine_sound_level": {
+                    String part = a.optString("part", "").toLowerCase(Locale.US);
+                    String k = part.contains("blow") || part.contains("bov") || part.contains("valve") ? "lvBov" : part.contains("turbo") ? "lvTurbo"
+                            : part.contains("shift") || part.contains("เกียร์") ? "lvShift" : part.contains("roar") ? "lvRoar" : "vol";
+                    int lv = a.has("level") ? Math.max(0, Math.min(5, a.optInt("level", 3))) : -1;
+                    String ch = a.optString("change", "").toLowerCase(Locale.US);
+                    int d = ch.startsWith("up") || ch.contains("เพิ่ม") || ch.contains("louder") ? 1 : ch.startsWith("down") || ch.contains("ลด") || ch.contains("quiet") ? -1 : 0;
+                    if (lv < 0 && d == 0) return res(false, "say a level 0-5, or up / down");
+                    String nm = k.equals("vol") ? "engine volume" : k.equals("lvBov") ? "blow-off valve" : k.equals("lvTurbo") ? "turbo" : k.equals("lvShift") ? "shift sound" : "roar";
+                    return voice("level:" + k + ":" + lv + ":" + d, nm + (lv >= 0 ? " level " + lv : d > 0 ? " one step up" : " one step down"));
                 }
                 case "set_speed_limit": {
                     int v = a.optInt("kmh", -1);

@@ -152,6 +152,10 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             if (v.equals("engine_on") || v.equals("engine_off")) engineHost().engine(v.equals("engine_on"));
             else if (v.startsWith("theme:")) { try { prefs.setTheme(Theme.valueOf(v.substring(6))); rebuild(); } catch (Throwable ignored) { } }
             else if (v.startsWith("sound:")) engineHost().chooseSound(v.substring(6));
+            else if (v.startsWith("level:")) {   // level:<part>:<0-5 or -1>:<delta>
+                String[] p = v.split(":");
+                try { engineHost().soundLevel(p[1], Integer.parseInt(p[2]), Integer.parseInt(p[3])); } catch (Throwable ignored) { }
+            }
             else if (v.startsWith("ghost:")) engineHost().shareToGhost("&ghost_cmd=" + android.net.Uri.encode(v.substring(6)));
         }, 600);
     }

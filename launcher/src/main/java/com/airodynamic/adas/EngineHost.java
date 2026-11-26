@@ -398,6 +398,16 @@ public final class EngineHost {
         js(engine, "(function(){var r=document.querySelector('#sounds input[value=\\'" + id + "\\']');if(r&&!r.checked){r.checked=true;r.dispatchEvent(new Event('change',{bubbles:true}));}})()");
     }
 
+    /** An Engine Sound level 0-5, or one step up (+1) / down (-1), the same as tapping its buttons (voice, Air 2026-11-26).
+     *  part: vol (engine volume), lvBov (blow-off valve), lvTurbo, lvShift, lvRoar. */
+    public void soundLevel(String part, int level, int delta) {
+        if (!part.matches("[a-zA-Z]+")) return;
+        String sel = part.startsWith("lv") ? ".lvl[data-k=\\'" + part + "\\']" : ".tlvl[data-t=\\'" + part + "\\']";
+        js(engine, "(function(){var g=document.querySelector('" + sel + "');if(!g)return;var c=g.querySelector('button[aria-pressed=\\'true\\']');"
+                + "var v=" + level + ">=0?" + level + ":Math.max(0,Math.min(5,(c?+c.dataset.v:3)+(" + delta + ")));"
+                + "var b=g.querySelector('button[data-v=\\''+v+'\\']');if(b)b.click();})()");
+    }
+
     public void shareToGhost(String share) {
         pendingShare = share;
         if (geckoOpen && act != null) {
