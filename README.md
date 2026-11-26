@@ -11,7 +11,7 @@ Full-screen video only in P. Updates never reset your settings.
 | Phase | What | State |
 |---|---|---|
 | 0 | Probe app: cameras, car data, unknowns report | **ready to test** |
-| 1 | Front camera + YOLO boxes + FPS | waiting for Phase 0 |
+| 1 | Front camera + AI detection | removed (2026-11-26) |
 | 2 | 4 cameras, Map view, turn-signal camera, Top view | |
 | 3 | Warnings + my-speed-limit voice | |
 | 4 | Launcher shell, windows, themes | |
