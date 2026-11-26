@@ -43,6 +43,17 @@ public final class Updater {
         return c;
     }
 
+    /** (Air 2026-11-26) the newest build number on GitHub, or 0 when it can't be reached; for the "update available" badge */
+    public static int latestBuild() {
+        try (InputStream in = open(LATEST).getInputStream()) {
+            ByteArrayOutputStream b = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) b.write(buf, 0, n);
+            return Integer.parseInt(new JSONObject(b.toString("UTF-8")).optString("tag_name", "").replaceAll("\\D", ""));
+        } catch (Throwable e) { return 0; }
+    }
+
     public static void update(Context ctx, Log log) {
         try {
             PackageInfo pi = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);

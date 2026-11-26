@@ -73,6 +73,7 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         super.onCreate(b);
         Ambient.get(this);   // ambient light by gear, keeps working while other apps are open
         Ambient.onChange = ambientChanged;   // the theme can follow the ambient colour
+        checkUpdates.run();
         prefs = new Prefs(this);
         SpeedAlert.get(this);   // my speed limit warning, also while other apps are open
         TripEnergy.get(this);   // counts this trip's energy even while other apps are open
@@ -162,6 +163,22 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             else if (v.startsWith("ghost:")) engineHost().shareToGhost("&ghost_cmd=" + android.net.Uri.encode(v.substring(6)));
         }, 600);
     }
+
+    /** newest build on GitHub when it is newer than this one (else 0); checked at start and every 6 hours */
+    static volatile int updateAvailable;
+    private final android.os.Handler updH = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable checkUpdates = new Runnable() {
+        @Override public void run() {
+            new Thread(() -> {
+                int latest = Updater.latestBuild();
+                int mine = 0;
+                try { mine = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; } catch (Exception ignored) { }
+                int avail = latest > mine ? latest : 0;
+                if (avail != updateAvailable) { updateAvailable = avail; runOnUiThread(() -> rebuild()); }
+            }).start();
+            updH.postDelayed(this, 6 * 3600_000L);
+        }
+    };
 
     private Theme effectiveTheme() {
         if (prefs.themeAmbient()) {   // follows the ambient light (Auto Sport too: its ambient colour), Air 2026-11-26
@@ -329,7 +346,8 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         tb.addView(tl);
         tb.setOnClickListener(v -> themeMenu(v, th));
         box.addView(tb, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1f));
-        android.widget.Button settings = Ui.chip(this, "⚙", false, th, v -> openSettings());
+        // (Air 2026-11-26) a newer version on GitHub: the ⚙ button shows ⬆ (Settings → About installs it)
+        android.widget.Button settings = Ui.chip(this, updateAvailable > 0 ? "⚙⬆" : "⚙", updateAvailable > 0, th, v -> openSettings());
         settings.setContentDescription("Settings");
         box.addView(settings, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40)));
         return box;

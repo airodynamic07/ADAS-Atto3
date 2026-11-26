@@ -331,10 +331,11 @@ public final class SettingsDialog {
         String ver = "?";
         try { ver = c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName; } catch (Exception ignored) {}
         TextView about = Ui.text(c, "NATEE Launcher v" + ver + " · github.com/airodynamic07/ADAS-Atto3\n"
-                + "Camera and car-data methods from OverDrive (MIT). AI model YOLO26n (AGPL-3.0).", 13, th.muted, false);
+                + "Camera and car-data methods from OverDrive (MIT).", 13, th.muted, false);
         root.addView(about);
         LinearLayout up = row(c);
-        up.addView(Ui.chip(c, "⟳ Check for updates", false, th, v -> {
+        int avail = LauncherActivity.updateAvailable;
+        up.addView(Ui.chip(c, avail > 0 ? "⬆ Update available: build " + avail + " · install ›" : "⟳ Check for updates", avail > 0, th, v -> {
             host.log("Checking for updates…");
             new Thread(() -> Updater.update(c, new Updater.Log() {
                 @Override public void line(String s) { host.log(s); }
