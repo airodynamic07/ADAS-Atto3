@@ -48,6 +48,11 @@ final class CarControl {
                 .put("power_average_m", new JSONObject().put("type", "integer").put("description", "power / consumption line moving average in metres: 0 = real time, or 100, 200, 300, 500, 1000"))
                 .put("zoom", new JSONObject().put("type", "string").put("description", "normal (the last N km, see window_km) or extended (zoom extend: the whole trip)"))
                 .put("window_km", new JSONObject().put("type", "integer").put("description", "how many km the graph shows in normal zoom, e.g. 5, 10, 20, 50 (sets zoom to normal)")));
+        f.put(fn("set_stretch_km", "The distance of the 'Fastest X km' tile (kind fastest) or of the 'Best X km stretches' list (kind best), any km 1-100.",
+                new JSONObject().put("type", "object").put("properties", new JSONObject()
+                        .put("kind", new JSONObject().put("type", "string").put("description", "fastest or best"))
+                        .put("km", new JSONObject().put("type", "number").put("description", "1 to 100 km")))
+                        .put("required", new JSONArray().put("kind").put("km"))));
         f.put(fn("set_speed_limit", "The driver's own speed limit warning (beeps above it; a warning only).", props("kmh", "integer", "30 to 180 km/h")));
         f.put(fn("set_auto_sport", "Auto Sport: the screen turns black-red above this speed. kmh 60-200, or 0 to switch Auto Sport off.", props("kmh", "integer", "60 to 200, or 0 = off")));
         f.put(fn("set_trip_graph", "The graph along the bottom of the screen (speed and power / consumption): moving average of each line, and zoom. Pass only what the driver asked to change.", gp));
@@ -146,6 +151,15 @@ final class CarControl {
                     if (a.has("window_km")) { pr.setGraphKm(a.optInt("window_km", 20)); pr.setGraphWhole(false); done.append("last ").append(pr.graphKm()).append(" km. "); }
                     else if (a.has("zoom")) { String z = a.optString("zoom", "").toLowerCase(Locale.US); boolean w = z.startsWith("ext") || z.contains("whole"); pr.setGraphWhole(w); done.append(w ? "whole trip" : "last " + pr.graphKm() + " km").append(". "); }
                     return done.length() == 0 ? res(false, "nothing to change") : res(true, done.toString().trim());
+                }
+                case "set_stretch_km": {
+                    float km = (float) a.optDouble("km", -1);
+                    if (km < 1 || km > 100) return res(false, "it can be 1 to 100 km");
+                    boolean fast = a.optString("kind", "").toLowerCase(Locale.US).startsWith("fast");
+                    if (fast) { new Prefs(c).setFastKm(km); TripEnergy.get(c).setFastKm(km); }
+                    else { new Prefs(c).setBestKm(km); TripEnergy.get(c).setBestKm(km); }
+                    String k = km == Math.floor(km) ? String.valueOf((int) km) : String.valueOf(km);
+                    return res(true, fast ? "Fastest " + k + " km" : "Best " + k + " km stretches");
                 }
                 case "set_speed_limit": {
                     int v = a.optInt("kmh", -1);
