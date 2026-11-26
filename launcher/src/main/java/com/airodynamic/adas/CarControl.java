@@ -60,6 +60,8 @@ final class CarControl {
         f.put(fn("ghost_race", "Control Ghost Race (the launcher's map / navigation / race app): full_screen (open it big / enlarge), small_left (minimize, left window), small_right (small, on top of Engine Sound), navigation_mode, map_mode, "
                 + "avoid_tolls (เลี่ยงทางด่วน), allow_tolls (ใช้ทางด่วนได้), fastest (เร็วที่สุด), shortest (สั้นที่สุด).",
                 props("action", "string", "full_screen (enlarge), small_left (minimize to the left window), small_right (small, on top of Engine Sound), favorites (open the favourites list), navigation_mode, map_mode, avoid_tolls, allow_tolls, fastest or shortest")));
+        f.put(fn("youtube_music_list", "Open the driver's own list in YouTube Music: liked (liked songs / favourites / เพลงที่ชอบ) or library (คลังเพลง).",
+                props("which", "string", "liked or library")));
         f.put(fn("set_cabin_light", "Cabin / reading light: this car has no command for it, so say it can't be done from here.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("sunroof", "Open, close or stop the glass SUNROOF (not the sunshade). Ask the driver to confirm open/close first.",
                 props("action", "string", "open, close or stop")));
@@ -152,6 +154,7 @@ final class CarControl {
                     if (cmd.isEmpty()) return res(false, "unknown Ghost Race action " + act);
                     return voice("ghost:" + cmd, "Ghost Race: " + act.replace('_', ' ') + (cmd.contains("toll") || cmd.endsWith("est") ? " (applies to the next route search)" : ""));
                 }
+                case "youtube_music_list": return ytmList(a.optString("which", "liked"));
                 case "set_defrost": return defrost(a.optBoolean("on", true));
                 case "set_air_direction": return airDirection(a.optString("direction", ""));
                 case "set_recirculation": return recirc(a.optBoolean("inside", true));
@@ -448,7 +451,7 @@ final class CarControl {
             }
         }
         Apps.App best = findApp(name);
-        if (best == null) return res(false, "no app called " + name + " on this car");
+        if (best == null) return notFound(name);
         final Apps.App app = best;
         if (!(Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving())) {
             android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(app.pkg);
@@ -469,6 +472,30 @@ final class CarControl {
             try { Updater.adbShell(c, "am start -n " + c.getPackageName() + "/.LauncherActivity -f 0x30000000 --es " + LauncherActivity.VOICE + " '" + cmd + "'"); } catch (Throwable ignored) { }
         }).start();
         return res(true, said);
+    }
+
+    /** (Air 2026-11-26: "it says not installed, but it is") the name didn't match (said in Thai, or a nickname): Gemini
+     *  gets the car's real app names and is told to try again with the right one, so it never says "not installed". */
+    private JSONObject notFound(String name) {
+        StringBuilder names = new StringBuilder();
+        for (Apps.App a : Apps.all(c)) { if (names.length() > 0) names.append(", "); names.append(a.label); }
+        return res(false, "no app matched '" + name + "'. These are ALL the apps on this car: " + names
+                + ". If one of them is what the driver meant (other language, short name, spelling), call open_app again"
+                + " with that exact name right away; only if none fits, say it isn't on the car.");
+    }
+
+    /** YouTube Music's liked songs or library (Air 2026-11-26: "open my favourite list in YouTube Music in GBox"). */
+    private JSONObject ytmList(String what) {
+        String w = what.toLowerCase(Locale.US);
+        String url = w.contains("lib") || w.contains("คลัง") ? "https://music.youtube.com/library" : "https://music.youtube.com/playlist?list=LM";
+        for (String y : MusicCard.YTM) if (Apps.installed(c, y)) {
+            android.content.Intent v = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).setPackage(y);
+            if (v.resolveActivity(c.getPackageManager()) != null) { launch(v, y); return res(true, "opening " + (url.contains("LM") ? "your liked songs" : "your library") + " in YouTube Music"); }
+            android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y);
+            if (li != null) launch(li, y);
+            return res(false, "YouTube Music is opening, but it can't be sent straight to that list: tap Library there");
+        }
+        return res(false, "YouTube Music isn't installed");
     }
 
     /** The installed app the driver means by this name (same rules as open_app). */
@@ -516,7 +543,7 @@ final class CarControl {
      *  split-screen is tried through the car's ADB, and the result says what happened. Video apps follow the P rule. */
     private JSONObject split(String leftName, String rightName) {
         Apps.App l = findApp(leftName), r = findApp(rightName);
-        if (l == null || r == null) return res(false, "no app called " + (l == null ? leftName : rightName) + " on this car");
+        if (l == null || r == null) return notFound(l == null ? leftName : rightName);
         boolean moving = !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving();
         if (moving && (Apps.VIDEO.contains(l.pkg) || Apps.VIDEO.contains(r.pkg))) return res(false, "a video app opens only in P");
         android.content.ComponentName lc = comp(l.pkg), rc = comp(r.pkg);
