@@ -848,6 +848,27 @@ final class CarControl {
         } catch (Throwable e) { return null; }
     }
 
+    // (Air 2026-11-26: "she should only hear my voice, not the music") the music pauses while she listens to you and
+    // plays on when you've finished; music you paused yourself stays paused
+    private android.media.session.MediaController pausedByChat;
+    synchronized void pauseForListening() {
+        if (pausedByChat != null) return;
+        try {
+            android.media.session.MediaController mc = musicSession();
+            android.media.session.PlaybackState st = mc == null ? null : mc.getPlaybackState();
+            if (st != null && st.getState() == android.media.session.PlaybackState.STATE_PLAYING) { mc.getTransportControls().pause(); pausedByChat = mc; }
+        } catch (Throwable ignored) { }
+    }
+    synchronized void resumeAfterListening() {
+        android.media.session.MediaController mc = pausedByChat;
+        pausedByChat = null;
+        if (mc == null) return;
+        try {
+            android.media.session.PlaybackState st = mc.getPlaybackState();
+            if (st == null || st.getState() == android.media.session.PlaybackState.STATE_PAUSED) mc.getTransportControls().play();
+        } catch (Throwable ignored) { }
+    }
+
     private android.media.session.MediaController musicSession() {
         try {
             android.media.session.MediaSessionManager m = (android.media.session.MediaSessionManager) c.getSystemService(Context.MEDIA_SESSION_SERVICE);

@@ -126,6 +126,7 @@ public final class AiChat extends Service {
             if (s != null && manual) s.send("{\"realtimeInput\":{\"activityEnd\":{}}}");
         }
         talking = false; wakeTurn = false;
+        main.post(resumeMusic);
         look(C_ANSWER, "waiting · say \"" + prefs.wakeWord() + "\" or press the mic · ✕ or \"ปิดระบบ\" closes");
     }
     private boolean silentStart;   // listening again after an answer: no beep
@@ -170,6 +171,7 @@ public final class AiChat extends Service {
         heard = false; activityOpen = false; lastVoiceAt = 0;
         talking = true;
         look(C_LISTEN, "listening… speak now");
+        new Thread(() -> control.pauseForListening()).start();   // she hears only you, not the music
         if (!silentStart) beep();
         silentStart = false;
         // (Air 2026-11-25: stuck on "listening… speak now" for ever) every turn has a way out: no words for a while = it closes
@@ -180,9 +182,13 @@ public final class AiChat extends Service {
     private volatile boolean wakeTurn;
 
     /** Finished talking: Gemini answers straight away. Nothing heard: say so, nothing is sent. */
+    private final Runnable resumeMusic = this::resumeMusicNow;
+    private void resumeMusicNow() { final CarControl cc = control; if (!talking && cc != null) new Thread(cc::resumeAfterListening).start(); }
+
     private void finishTalk() {
         if (!talking) return;
         talking = false;
+        main.postDelayed(resumeMusic, 400);
         autoEnd = false;
         if (activityOpen) {
             activityOpen = false;
@@ -354,6 +360,11 @@ public final class AiChat extends Service {
                     r.setWords(true);   // per-word confidence, see isWake
                     if (!micAllowed(this)) { wakeState = "no microphone permission: Settings → AI chat → Fix permissions"; sleep(10_000); continue; }
                     mic = Mic.open(false);
+                    if (mic != null) try {   // the car's echo canceller / noise suppressor, where it has one: less music, more you
+                        int sid = mic.rec.getAudioSessionId();
+                        if (android.media.audiofx.AcousticEchoCanceler.isAvailable()) android.media.audiofx.AcousticEchoCanceler.create(sid).setEnabled(true);
+                        if (android.media.audiofx.NoiseSuppressor.isAvailable()) android.media.audiofx.NoiseSuppressor.create(sid).setEnabled(true);
+                    } catch (Throwable ignored) { }
                     if (mic == null) { wakeState = "microphone busy or refused (" + Mic.lastError + ")"; sleep(10_000); continue; }   // try again later
                     wakeState = "listening · " + mic.desc;
                     short[] b = new short[1600];   // 0.1 s at 16 kHz
@@ -743,6 +754,7 @@ public final class AiChat extends Service {
                 mic = Mic.open(true);
                 if (mic == null) { main.post(() -> setState("microphone busy (" + Mic.lastError + ")")); return; }
                 try { if (android.media.audiofx.AcousticEchoCanceler.isAvailable()) android.media.audiofx.AcousticEchoCanceler.create(mic.rec.getAudioSessionId()).setEnabled(true); } catch (Throwable ignored) { }
+                try { if (android.media.audiofx.NoiseSuppressor.isAvailable()) android.media.audiofx.NoiseSuppressor.create(mic.rec.getAudioSessionId()).setEnabled(true); } catch (Throwable ignored) { }
                 short[] b = new short[1600];   // 0.1 s at 16 kHz
                 java.util.ArrayDeque<String> pre = new java.util.ArrayDeque<>();   // the 0.3 s before your voice starts
                 double floor = 4;                                                    // the car's own noise (fan, road)
@@ -865,6 +877,7 @@ public final class AiChat extends Service {
         if (!chatting) return;
         chatting = false; ready = false; speaking = false; talking = false; activityOpen = false; pendingTalk = false; autoEnd = false;
         duckOff();
+        if (control != null) new Thread(() -> control.resumeAfterListening()).start();
         main.removeCallbacks(hideLater);
         if (ws != null) { try { ws.close(1000, "bye"); } catch (Throwable ignored) { } ws = null; }
         playQ.clear();
