@@ -14,7 +14,7 @@ import java.util.List;
  */
 public final class TripEnergy implements CarData.Listener {
 
-    public static final double STEP_KM = 0.1, WINDOW_KM = 20;
+    public static final double STEP_KM = 0.1, WINDOW_KM = 20, KEEP_KM = 400;
     private static final long NEW_TRIP_GAP_MS = 10 * 60_000L;
 
     public static final class Point {
@@ -575,7 +575,7 @@ public final class TripEnergy implements CarData.Listener {
                 segDecel = 0;
                 segKm = segKwh = segSpeedSum = segPedalSum = segPowerSum = 0;
                 segN = segPedalN = segPowerN = 0;
-                while (!points.isEmpty() && points.get(0).km < km - WINDOW_KM - 1) points.remove(0);
+                while (!points.isEmpty() && points.get(0).km < km - KEEP_KM) points.remove(0);   // whole trip for "zoom extend"
             }
         }
         for (Listener l : listeners) l.onTrip(this);

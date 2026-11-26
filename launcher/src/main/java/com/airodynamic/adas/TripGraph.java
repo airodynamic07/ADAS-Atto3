@@ -31,7 +31,17 @@ public final class TripGraph extends View implements TripEnergy.Listener {
     private static final int POWER_COL = 0xFFFFB020, PEDAL_COL = 0xFFB8A4FF, REGEN_COL = 0x553DD9C1;
    // average with 2 points each side
 
-    public TripGraph(Context c, Theme th) { super(c); this.th = th; }
+    public TripGraph(Context c, Theme th) {
+        super(c); this.th = th;
+        // hold the graph: last 20 km ↔ the whole trip ("zoom extend", Air 2026-11-26; also by voice)
+        setOnLongClickListener(v -> {
+            Prefs pr = new Prefs(getContext());
+            pr.setGraphWhole(!pr.graphWhole());
+            android.widget.Toast.makeText(getContext(), pr.graphWhole() ? "Graph: the whole trip" : "Graph: last 20 km", android.widget.Toast.LENGTH_SHORT).show();
+            invalidate();
+            return true;
+        });
+    }
 
     @Override public void onTrip(TripEnergy t) {
         pts = t.points();
@@ -83,6 +93,8 @@ public final class TripGraph extends View implements TripEnergy.Listener {
 
     private double live(int which) { return which == 0 ? liveSpeed : which == 1 ? livePower : livePedal; }
 
+    private double spanKm = TripEnergy.WINDOW_KM;
+
     @Override protected void onDraw(Canvas c) {
         float d = getResources().getDisplayMetrics().density;
         float w = getWidth(), h = getHeight();
@@ -91,7 +103,11 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         float legW = 15 * d + p.measureText("Power kW (real time)") + 6 * d;
         float left = 46 * d, right = w - 40 * d - legW, top = 8 * d, bottom = h - 16 * d;
         float rowH = 5 * d, brakeY = bottom - rowH - 1 * d, regenY = brakeY - rowH - 1 * d;
-        double from = Math.max(0, nowKm - TripEnergy.WINDOW_KM), to = from + TripEnergy.WINDOW_KM;
+        boolean whole = new Prefs(getContext()).graphWhole();   // "zoom extend": the whole trip (Air 2026-11-26)
+        double first = pts != null && !pts.isEmpty() ? Math.max(0, pts.get(0).km - TripEnergy.STEP_KM) : 0;
+        double from = whole ? first : Math.max(0, nowKm - TripEnergy.WINDOW_KM);
+        double to = whole ? Math.max(from + TripEnergy.WINDOW_KM, nowKm) : from + TripEnergy.WINDOW_KM;
+        spanKm = to - from;
         liveX0 = X(Math.max(from, liveFromKm), from, to, left, right);
         liveX1 = X(nowKm, from, to, left, right);
 
@@ -142,7 +158,8 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         // "now" sits under the live point
         p.setTextAlign(Paint.Align.CENTER);
         float nowX = X(nowKm, from, to, left, right);
-        for (int km = (int) Math.ceil(from / 5.0) * 5; km <= to + 0.001; km += 5) {
+        int tick = spanKm <= 25 ? 5 : spanKm <= 60 ? 10 : spanKm <= 150 ? 25 : 50;
+        for (int km = (int) Math.ceil(from / tick) * tick; km <= to + 0.001; km += tick) {
             float x = X(km, from, to, left, right);
             if (Math.abs(x - nowX) < 34 * d) continue;   // keep "now" readable
             c.drawText(km + " km", x, h - 3 * d, p);
@@ -189,7 +206,7 @@ public final class TripGraph extends View implements TripEnergy.Listener {
         line(c, 0, from, to, 0, sMax, left, right, top, bottom, speedCol(), 3.75f * d, 6 * d);   // 1.5x thicker
         // stamp rows (live): regen green; braking orange (mild ≥0.15 g) / red (hard ≥0.4 g)
 
-        float stepPx = (float) (TripEnergy.STEP_KM / TripEnergy.WINDOW_KM * (right - left));
+        float stepPx = (float) (TripEnergy.STEP_KM / spanKm * (right - left));
         for (int i = 0; i < n; i++) {
             TripEnergy.Point q = pts.get(i);
             if (q.km < from) continue;

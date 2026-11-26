@@ -41,6 +41,20 @@ final class CarControl {
                 props("inside", "boolean", "true = inside air (recirculation), false = outside air")));
         f.put(fn("set_purifier", "The A/C air purifier / clean air (ฟอกอากาศ) on or off.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("set_ac_auto", "A/C AUTO mode (แอร์ออโต้) on or off.", props("on", "boolean", "true = on, false = off")));
+        f.put(fn("set_range_view", "Which view the range graph (and its numbers) shows: trip (this trip), today, or charge (charge to charge).",
+                props("view", "string", "trip, today or charge")));
+        JSONObject gp = new JSONObject().put("type", "object").put("properties", new JSONObject()
+                .put("speed_average_m", new JSONObject().put("type", "integer").put("description", "speed line moving average in metres: 0 = real time, or 100, 200, 300, 500, 1000"))
+                .put("power_average_m", new JSONObject().put("type", "integer").put("description", "power / consumption line moving average in metres: 0 = real time, or 100, 200, 300, 500, 1000"))
+                .put("zoom", new JSONObject().put("type", "string").put("description", "normal (last 20 km) or extended (zoom extend: the whole trip)")));
+        f.put(fn("set_trip_graph", "The graph along the bottom of the screen (speed and power / consumption): moving average of each line, and zoom. Pass only what the driver asked to change.", gp));
+        f.put(fn("set_screen_brightness", "Screen brightness: darkest, medium or brightest (or a percent 1-100).",
+                props("level", "string", "darkest, medium, brightest, or a number 1-100")));
+        f.put(fn("split_screen", "Try to show two apps side by side (e.g. Google Maps on the right, YouTube on the left). This car may not allow it: say what the result says.",
+                new JSONObject().put("type", "object").put("properties", new JSONObject()
+                        .put("left", new JSONObject().put("type", "string").put("description", "app for the left side"))
+                        .put("right", new JSONObject().put("type", "string").put("description", "app for the right side")))
+                        .put("required", new JSONArray().put("left").put("right"))));
         f.put(fn("set_cabin_light", "Cabin / reading light: this car has no command for it, so say it can't be done from here.", props("on", "boolean", "true = on, false = off")));
         f.put(fn("sunroof", "Open, close or stop the glass SUNROOF (not the sunshade). Ask the driver to confirm open/close first.",
                 props("action", "string", "open, close or stop")));
@@ -91,6 +105,23 @@ final class CarControl {
                 case "set_temperature": return temp(a.optDouble("celsius", Double.NaN));
                 case "set_ac": return ac(a.optBoolean("on", true));
                 case "set_cabin_light": return light(a.optBoolean("on", true));
+                case "set_range_view": {
+                    String v = a.optString("view", "").toLowerCase(Locale.US);
+                    int m = v.startsWith("tod") || v.contains("วันนี้") ? 1 : v.startsWith("char") || v.contains("c to c") || v.contains("ชาร์จ") ? 2 : v.startsWith("trip") || v.contains("ทริป") ? 0 : -1;
+                    if (m < 0) return res(false, "say trip, today or charge to charge");
+                    c.getSharedPreferences("range_graph", Context.MODE_PRIVATE).edit().putInt("mode", m).apply();
+                    return res(true, "range graph shows " + (m == 0 ? "this trip" : m == 1 ? "today" : "charge to charge"));
+                }
+                case "set_trip_graph": {
+                    Prefs pr = new Prefs(c);
+                    StringBuilder done = new StringBuilder();
+                    if (a.has("speed_average_m")) { int v = Math.max(0, a.optInt("speed_average_m", 200)); pr.setSmoothSpeed(v); done.append("speed ").append(v == 0 ? "real time" : v + " m").append(". "); }
+                    if (a.has("power_average_m")) { int v = Math.max(0, a.optInt("power_average_m", 200)); pr.setSmoothPower(v); done.append("power ").append(v == 0 ? "real time" : v + " m").append(". "); }
+                    if (a.has("zoom")) { String z = a.optString("zoom", "").toLowerCase(Locale.US); boolean w = z.startsWith("ext") || z.contains("whole"); pr.setGraphWhole(w); done.append(w ? "whole trip" : "last 20 km").append(". "); }
+                    return done.length() == 0 ? res(false, "nothing to change") : res(true, done.toString().trim());
+                }
+                case "set_screen_brightness": return brightness(a.optString("level", ""));
+                case "split_screen": return split(a.optString("left", ""), a.optString("right", ""));
                 case "set_defrost": return defrost(a.optBoolean("on", true));
                 case "set_air_direction": return airDirection(a.optString("direction", ""));
                 case "set_recirculation": return recirc(a.optBoolean("inside", true));
@@ -386,6 +417,24 @@ final class CarControl {
                 return res(true, "opening YouTube Music");
             }
         }
+        Apps.App best = findApp(name);
+        if (best == null) return res(false, "no app called " + name + " on this car");
+        final Apps.App app = best;
+        if (!(Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving())) {
+            android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(app.pkg);
+            if (li != null) launch(li, app.pkg);
+        }
+        boolean video = Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving();
+        return res(!video, video ? app.label + " is a video app: it opens only in P" : "opening " + app.label);
+    }
+
+    /** The installed app the driver means by this name (same rules as open_app). */
+    private Apps.App findApp(String name) {
+        String want = norm(name).replace("ingbox", "").replace("gbox", "");
+        if (want.isEmpty()) return null;
+        final String wantG = want.startsWith("google") && want.length() > 6 ? want.substring(6) : want;
+        if (want.contains("music") && (want.contains("youtube") || want.contains("yt")))
+            for (Apps.App a : Apps.all(c)) for (String y : MusicCard.YTM) if (a.pkg.equals(y)) return a;
         // (Air 2026-11-22) maps apps: the car's own Google Maps (outside GBox) wins; other apps: the GBox copy wins
         boolean mapsApp = want.contains("map") || want.contains("waze") || want.contains("นำทาง");
         Apps.App best = null; int bestScore = 0;
@@ -402,14 +451,48 @@ final class CarControl {
             sc = sc * 2 + (mapsApp ? (gbox ? 0 : 1) : (gbox ? 1 : 0));
             if (sc > bestScore) { bestScore = sc; best = a; }
         }
-        if (best == null) return res(false, "no app called " + name + " on this car");
-        final Apps.App app = best;
-        if (!(Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving())) {
-            android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(app.pkg);
-            if (li != null) launch(li, app.pkg);
-        }
-        boolean video = Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving();
-        return res(!video, video ? app.label + " is a video app: it opens only in P" : "opening " + app.label);
+        return best;
+    }
+
+    /** Darkest / medium / brightest (Air 2026-11-26): Android's screen brightness, through the car's ADB. */
+    private JSONObject brightness(String level) {
+        String l = level.toLowerCase(Locale.US);
+        int v;
+        if (l.contains("dark") || l.contains("มืด") || l.contains("min") || l.contains("low")) v = 10;
+        else if (l.contains("bright") || l.contains("สว่างสุด") || l.contains("max") || l.contains("high")) v = 255;
+        else if (l.contains("med") || l.contains("กลาง") || l.contains("mid")) v = 128;
+        else { try { v = Math.round(Math.max(1, Math.min(100, Float.parseFloat(l.replaceAll("[^0-9.]", "")))) * 2.55f); } catch (Exception e) { return res(false, "say darkest, medium or brightest"); } }
+        try {
+            String out = Updater.adbShell(c, "settings put system screen_brightness_mode 0; settings put system screen_brightness " + v + "; settings get system screen_brightness");
+            boolean ok = out.trim().startsWith(String.valueOf(v));
+            return res(ok, ok ? "brightness set (" + Math.round(v / 2.55) + " %)" : "the car answered: " + out);
+        } catch (Exception e) { return res(false, "couldn't reach the car's ADB to change the brightness"); }
+    }
+
+    /** Two apps side by side (Air 2026-11-26). This car opened other apps full screen in the probe tests; Android's
+     *  split-screen is tried through the car's ADB, and the result says what happened. Video apps follow the P rule. */
+    private JSONObject split(String leftName, String rightName) {
+        Apps.App l = findApp(leftName), r = findApp(rightName);
+        if (l == null || r == null) return res(false, "no app called " + (l == null ? leftName : rightName) + " on this car");
+        boolean moving = !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving();
+        if (moving && (Apps.VIDEO.contains(l.pkg) || Apps.VIDEO.contains(r.pkg))) return res(false, "a video app opens only in P");
+        android.content.ComponentName lc = comp(l.pkg), rc = comp(r.pkg);
+        if (lc == null || rc == null) return res(false, "couldn't find how to open those apps");
+        try {
+            // Android 10: split-screen primary (3) goes left in landscape, the next app fills the other side (4)
+            String out = Updater.adbShell(c, "am start --windowingMode 3 -n " + lc.flattenToShortString() + " 2>&1; sleep 1; "
+                    + "am start --windowingMode 4 -n " + rc.flattenToShortString() + " 2>&1; sleep 1; dumpsys activity activities | grep -c -i 'mode=split'");
+            String[] ls = out.trim().split("\n");
+            String last = ls[ls.length - 1].trim();
+            boolean ok = last.matches("[0-9]+") && !last.equals("0");
+            return res(ok, ok ? "split screen: " + l.label + " left, " + r.label + " right"
+                    : "this car doesn't allow split screen: both apps opened full screen (" + r.label + " in front)");
+        } catch (Exception e) { return res(false, "couldn't reach the car's ADB"); }
+    }
+
+    private android.content.ComponentName comp(String pkg) {
+        android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(pkg);
+        return li == null ? null : li.getComponent();
     }
 
     /** Google Maps (outside GBox first) turn-by-turn to the place; "home" / "work" are Maps' own saved places. */

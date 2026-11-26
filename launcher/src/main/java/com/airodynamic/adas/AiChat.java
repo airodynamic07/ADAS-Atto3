@@ -112,7 +112,21 @@ public final class AiChat extends Service {
     /** Never close while someone is still talking (Air 2026-11-22: "I'm still talking and it closes"). */
     private void closeWhenQuiet() {
         if (System.currentTimeMillis() - lastWordsAt < 3000) { main.postDelayed(this::closeWhenQuiet, 1000); return; }
+        if (!prefs.aiAutoClose()) { goIdle(); return; }   // (Air 2026-11-26) stays open: closed only by ✕, double press or "ปิดระบบ"
         endChat();
+    }
+
+    /** Open but not listening: waits for the name or the mic button. */
+    private void goIdle() {
+        if (!chatting) return;
+        main.removeCallbacks(noAnswer);
+        if (activityOpen) {
+            activityOpen = false; dropReply = true;
+            WebSocket s = ws;
+            if (s != null && manual) s.send("{\"realtimeInput\":{\"activityEnd\":{}}}");
+        }
+        talking = false; wakeTurn = false;
+        look(C_ANSWER, "waiting · say \"" + prefs.wakeWord() + "\" or press the mic · ✕ or \"ปิดระบบ\" closes");
     }
     private boolean silentStart;   // listening again after an answer: no beep
 
@@ -205,7 +219,8 @@ public final class AiChat extends Service {
         // (Air 2026-11-22: "ค่ะ ค่ะ ค่ะ" — its own voice came back through the microphone) after a plain answer it only
         // listens again when Settings says so; after a question it does (to hear the answer)
         if (!askedQuestion()) {   // the old "keep listening after every answer" is gone for good (Air 2026-11-22)
-            look(C_ANSWER, "done · press the mic to talk again · closes in 10 s");
+            look(C_ANSWER, prefs.aiAutoClose() ? "done · press the mic to talk again · closes in 10 s"
+                    : "done · say \"" + prefs.wakeWord() + "\" or press the mic · ✕ or \"ปิดระบบ\" closes");
             main.removeCallbacks(hideLater);
             main.postDelayed(hideLater, 10_000);
             return;
@@ -510,6 +525,27 @@ public final class AiChat extends Service {
         return tools;
     }
 
+    // ---- memory (Air 2026-11-26: "remember everything we talk about"): today's conversation is kept on the head unit
+    // and given to Gemini again whenever it connects (it ends a voice session after some minutes, or the chat closes)
+    private void remember(String said, String answer) {
+        said = said.trim(); answer = answer.trim();
+        if (said.isEmpty() && answer.isEmpty()) return;
+        android.content.SharedPreferences m = getSharedPreferences("ai_memory", MODE_PRIVATE);
+        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
+        String log = today.equals(m.getString("day", "")) ? m.getString("log", "") : "";
+        log += "Driver: " + cut(said) + "\nYou: " + cut(answer) + "\n";
+        String[] lines = log.split("\n");
+        if (lines.length > 80) log = android.text.TextUtils.join("\n", java.util.Arrays.copyOfRange(lines, lines.length - 80, lines.length)) + "\n";
+        m.edit().putString("day", today).putString("log", log).apply();
+    }
+    private static String cut(String t) { t = t.replace('\n', ' '); return t.length() > 400 ? t.substring(0, 400) + "…" : t; }
+    private String memory() {
+        android.content.SharedPreferences m = getSharedPreferences("ai_memory", MODE_PRIVATE);
+        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
+        String log = today.equals(m.getString("day", "")) ? m.getString("log", "") : "";
+        return log.isEmpty() ? "" : " Today's conversation so far (continue it naturally, remember what was said, don't repeat it):\n" + log;
+    }
+
     private String setupJson(String model, boolean quickEnd) {
         try {
             String lang = prefs.aiLang();
@@ -524,7 +560,7 @@ public final class AiChat extends Service {
                             + " You cannot see the road. You can read the car's information with get_car_info (use it whenever the"
                             + " driver asks about the car: range, battery, tyres, air, temperatures, trip, doors) and change comfort"
                             + " things only: fan, temperature, A/C on/off, A/C auto, front defrost, air direction, inside/outside air, air purifier, sunshade, sunroof. You can also open apps (open_app), start navigation in Google Maps (navigate, e.g. home) or in Ghost Race when the driver says so (navigate_ghost_race), open YouTube videos (youtube_video), control"
-                            + " the music (music), and save notes for the developer (report_problem) when the driver"
+                            + " the music (music), change the launcher's own screen (range graph view: set_range_view; bottom graph averages and zoom: set_trip_graph; screen brightness: set_screen_brightness; two apps side by side: split_screen), and save notes for the developer (report_problem) when the driver"
                             + " reports something not working or has an idea for a new function. Never anything about driving."
                             + " Understand casual requests (\"too hot\" = temperature down 1-2 degrees or fan up). After a change,"
                             + " say in a few words what you did (\"Fan 4.\"); if the result says it failed, say so plainly."
@@ -539,7 +575,7 @@ public final class AiChat extends Service {
                             + " car's state and the driver's settings, and tells you if something can't open."
                             + " If what you hear is only noise, music, silence or no clear words, do not answer at all: stay silent."
                             + " Don't ask \"anything else?\" after every answer."
-                            + " Before opening or closing the sunshade or the sunroof, ask the driver to confirm, and only call it after a yes. The sunshade is the cloth under the glass; the sunroof is the glass itself: never mix them up. " + li)));
+                            + " Before opening or closing the sunshade or the sunroof, ask the driver to confirm, and only call it after a yes. The sunshade is the cloth under the glass; the sunroof is the glass itself: never mix them up. " + li + memory())));
             JSONObject setup = new JSONObject().put("model", model).put("generationConfig", gen).put("systemInstruction", sys)
                     .put("inputAudioTranscription", new JSONObject()).put("outputAudioTranscription", new JSONObject())
                     .put("tools", quickEnd ? withSearch(withClose(CarControl.tools())) : withClose(CarControl.tools()));
@@ -601,7 +637,7 @@ public final class AiChat extends Service {
             }
             if (sc.optBoolean("interrupted")) playQ.clear();
             if (sc.optBoolean("turnComplete") && dropReply) { dropReply = false; return; }
-            if (sc.optBoolean("turnComplete")) main.post(() -> { lastAnswer = gem.toString(); newTurn = true; lastActive = System.currentTimeMillis(); if (playQ.isEmpty() && !speaking) answerDone(); });
+            if (sc.optBoolean("turnComplete")) main.post(() -> { remember(you.toString(), gem.toString()); lastAnswer = gem.toString(); newTurn = true; lastActive = System.currentTimeMillis(); if (playQ.isEmpty() && !speaking) answerDone(); });
         } catch (Exception ignored) { }
     }
 

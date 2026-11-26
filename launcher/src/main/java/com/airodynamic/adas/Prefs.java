@@ -59,6 +59,12 @@ public final class Prefs {
     public void setSpeedVoice(boolean on) { p.edit().putBoolean("speedVoice", on).apply(); }
 
     /** Graph moving average in metres for the speed / power line: 0 = real time, 100…500; default 200 (user, 2026-11-12). */
+    /** bottom graph: false = last 20 km, true = the whole trip ("zoom extend", Air 2026-11-26) */
+    public boolean graphWhole() { return p.getBoolean("graphWhole", false); }
+    public void setGraphWhole(boolean b) { p.edit().putBoolean("graphWhole", b).apply(); }
+    /** the AI chat closes by itself when quiet (Air 2026-11-26: "don't auto close") */
+    public boolean aiAutoClose() { return p.getBoolean("aiAutoClose", false); }
+    public void setAiAutoClose(boolean b) { p.edit().putBoolean("aiAutoClose", b).apply(); }
     public int smoothSpeed() { return p.getInt("smoothSpeed", 200); }
     public void setSmoothSpeed(int m) { p.edit().putInt("smoothSpeed", m).apply(); }
     public int smoothPower() { return p.getInt("smoothPower", 200); }

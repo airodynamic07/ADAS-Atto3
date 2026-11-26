@@ -233,6 +233,8 @@ public final class SettingsDialog {
         LinearLayout aw3 = row(c);
         android.content.SharedPreferences airDirP = c.getSharedPreferences("air_dir", Context.MODE_PRIVATE);
         aw3.addView(Ui.chip(c, "Air direction test ›" + (airDirP.getAll().isEmpty() ? " (not done yet)" : " (" + airDirP.getAll().size() + " of 5 known)"), false, th, v -> airDirTest(c, 1, -1)), weight(c));
+        aw3.addView(Ui.chip(c, "Closes by itself: " + (prefs.aiAutoClose() ? "on" : "off (✕, double press or ปิดระบบ)"), false, th,
+                v -> { prefs.setAiAutoClose(!prefs.aiAutoClose()); redo.run(); }), weight(c));
         root.addView(aw3);
 
         section(c, root, th, "Tyre pressure unit");

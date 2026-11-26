@@ -188,7 +188,12 @@ final class RangeGraph extends LinearLayout {
     }
 
     /** Redraw with the newest readings (the recording itself runs all the time in {@link Rec}). */
-    void refresh() { plot.postInvalidate(); }
+    void refresh() {
+        // the view can be changed by voice (Air 2026-11-26): follow what's saved
+        int m = store.getInt("mode", 0);
+        if (m != mode) post(() -> { mode = m; showMode(); });
+        plot.postInvalidate();
+    }
 
     /**
      * The recording (user, 2026-11-21: "this trip 3 km already but the graph didn't develop"): it used to record only
