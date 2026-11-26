@@ -365,11 +365,6 @@ public final class AiChat extends Service {
                     r.setWords(true);   // per-word confidence, see isWake
                     if (!micAllowed(this)) { wakeState = "no microphone permission: Settings → AI chat → Fix permissions"; sleep(10_000); continue; }
                     mic = Mic.open(false);
-                    if (mic != null) try {   // the car's echo canceller / noise suppressor, where it has one: less music, more you
-                        int sid = mic.rec.getAudioSessionId();
-                        if (android.media.audiofx.AcousticEchoCanceler.isAvailable()) android.media.audiofx.AcousticEchoCanceler.create(sid).setEnabled(true);
-                        if (android.media.audiofx.NoiseSuppressor.isAvailable()) android.media.audiofx.NoiseSuppressor.create(sid).setEnabled(true);
-                    } catch (Throwable ignored) { }
                     if (mic == null) { wakeState = "microphone busy or refused (" + Mic.lastError + ")"; sleep(10_000); continue; }   // try again later
                     wakeState = "listening · " + mic.desc;
                     short[] b = new short[1600];   // 0.1 s at 16 kHz
@@ -434,7 +429,7 @@ public final class AiChat extends Service {
      *  listener must be sure of both words: with only a few phrases to choose from, it used to squeeze any noise or
      *  talk into the name. WAKE_CONF is how sure (0..1). */
     /** how sure the listener must be, from Settings (Air 2026-11-26: 85 → 95 → 100 %) */
-    static volatile double WAKE_CONF = 1.0;
+    static volatile double WAKE_CONF = 0.95;
     private static boolean isWake(String json) {
         if (json == null) return false;
         try {
@@ -759,7 +754,6 @@ public final class AiChat extends Service {
                 mic = Mic.open(true);
                 if (mic == null) { main.post(() -> setState("microphone busy (" + Mic.lastError + ")")); return; }
                 try { if (android.media.audiofx.AcousticEchoCanceler.isAvailable()) android.media.audiofx.AcousticEchoCanceler.create(mic.rec.getAudioSessionId()).setEnabled(true); } catch (Throwable ignored) { }
-                try { if (android.media.audiofx.NoiseSuppressor.isAvailable()) android.media.audiofx.NoiseSuppressor.create(mic.rec.getAudioSessionId()).setEnabled(true); } catch (Throwable ignored) { }
                 short[] b = new short[1600];   // 0.1 s at 16 kHz
                 java.util.ArrayDeque<String> pre = new java.util.ArrayDeque<>();   // the 0.3 s before your voice starts
                 double floor = 4;                                                    // the car's own noise (fan, road)
