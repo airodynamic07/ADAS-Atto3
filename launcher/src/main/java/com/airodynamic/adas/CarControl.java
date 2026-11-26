@@ -103,6 +103,22 @@ final class CarControl {
 
     /** Runs one tool; the answer goes back to Gemini, which tells the driver. */
     JSONObject run(String name, JSONObject a) {
+        JSONObject r = run0(name, a);
+        // (Air 2026-11-26: "it still can't open the equalizer in GBox") every action and its result is kept, so a photo of
+        // Settings → AI chat → Last voice actions shows what happened
+        try {
+            android.content.SharedPreferences sp = c.getSharedPreferences("ai_actions", Context.MODE_PRIVATE);
+            String line = new java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(new java.util.Date()) + "  " + name + " " + a + " → " + r
+                    + "  [front: " + KeyWatch.front + "]";
+            String all = line + "\n" + sp.getString("log", "");
+            String[] ls = all.split("\n");
+            if (ls.length > 25) all = android.text.TextUtils.join("\n", java.util.Arrays.copyOf(ls, 25));
+            sp.edit().putString("log", all).apply();
+        } catch (Throwable ignored) { }
+        return r;
+    }
+
+    private JSONObject run0(String name, JSONObject a) {
         try {
             switch (name) {
                 case "get_car_info": return info();
@@ -658,7 +674,10 @@ final class CarControl {
         new Thread(() -> {
             if (!alreadyFront) for (int k = 0; k < 8; k++) {
                 try { Thread.sleep(250); } catch (InterruptedException ignored) { }
-                if (pkg.equals(KeyWatch.front) && KeyWatch.frontAt > t0) return;   // it really came up after the request
+                String fr = KeyWatch.front;
+                // a GBox app shows up as GBox itself or as its own com.gbox.* name: either way it opened
+                boolean up = pkg.equals(fr) || (pkg.startsWith("com.gbox.") && fr != null && fr.startsWith("com.gbox."));
+                if (up && KeyWatch.frontAt > t0) return;   // it really came up after the request
             }
             try {
                 String cmd;

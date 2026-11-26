@@ -235,6 +235,15 @@ public final class SettingsDialog {
         aw3.addView(Ui.chip(c, "Air direction test ›" + (airDirP.getAll().isEmpty() ? " (not done yet)" : " (" + airDirP.getAll().size() + " of 5 known)"), false, th, v -> airDirTest(c, 1, -1)), weight(c));
         aw3.addView(Ui.chip(c, "Closes by itself: " + (prefs.aiAutoClose() ? "on" : "off (✕, double press or ปิดระบบ)"), false, th,
                 v -> { prefs.setAiAutoClose(!prefs.aiAutoClose()); redo.run(); }), weight(c));
+        aw3.addView(Ui.chip(c, "Last voice actions ›", false, th, v -> {
+            String log = c.getSharedPreferences("ai_actions", Context.MODE_PRIVATE).getString("log", "");
+            TextView t = Ui.text(c, log.isEmpty() ? "Nothing yet." : log, 11, th.text, false);
+            t.setTextIsSelectable(true);
+            t.setPadding(24, 16, 24, 16);
+            ScrollView sv2 = new ScrollView(c);
+            sv2.addView(t);
+            new AlertDialog.Builder(c).setTitle("Last voice actions (send a photo to Claude)").setView(sv2).setPositiveButton("Close", null).show();
+        }), weight(c));
         root.addView(aw3);
 
         section(c, root, th, "Tyre pressure unit");
