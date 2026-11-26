@@ -520,6 +520,12 @@ public final class AiChat extends Service {
 
     /** Adds "close_chat": when the driver asks to close / stop / end the chat in any words, Gemini closes it. */
     private static JSONArray withClose(JSONArray tools) throws Exception {
+        tools.getJSONObject(0).getJSONArray("functionDeclarations").put(new JSONObject().put("name", "set_assistant")
+                .put("description", "Change your own voice (woman/man: female calm, female bright, male deep, male lively), your name (any language), or the wake word (two English words). Pass only what the driver asked to change.")
+                .put("parameters", new JSONObject().put("type", "object").put("properties", new JSONObject()
+                        .put("voice", new JSONObject().put("type", "string").put("description", "female calm, female bright, male deep or male lively"))
+                        .put("name", new JSONObject().put("type", "string").put("description", "your new name, any language"))
+                        .put("wake_word", new JSONObject().put("type", "string").put("description", "two English words the driver says to call you")))));
         tools.getJSONObject(0).getJSONArray("functionDeclarations").put(new JSONObject().put("name", "close_chat")
                 .put("description", "Close this chat when the driver asks to close, stop or end it (e.g. 'close Natee chat', 'ปิดแชท'). Say a short goodbye first."));
         return tools;
@@ -653,6 +659,7 @@ public final class AiChat extends Service {
                 control.chatSoFar = (you.length() > 0 ? "you: " + you.toString().trim() : "") + (lastAction.length() > 0 ? " · last: " + lastAction : "");
                 JSONObject r;
                 if ("close_chat".equals(name)) { r = new JSONObject().put("ok", true).put("result", "closing"); main.postDelayed(this::endChat, 2500); }
+                else if ("set_assistant".equals(name)) r = setAssistant(args == null ? new JSONObject() : args);
                 else r = control.run(name, args == null ? new JSONObject() : args);
                 if (!"get_car_info".equals(name)) main.post(() -> { lastAction = name.replace('_', ' ') + ": " + r.optString("result"); showText(); });
                 out.put(new JSONObject().put("id", fc.optString("id")).put("name", name).put("response", r));
@@ -664,6 +671,34 @@ public final class AiChat extends Service {
     }
     private CarControl control;
     private String lastAction = "";
+
+    /** (Air 2026-11-26) her voice (woman / man), her name, and the wake word, by voice. A new voice or name needs a fresh
+     *  connection (today's talk is remembered); a new wake word restarts the listener, so the chat closes. */
+    private JSONObject setAssistant(JSONObject a) throws Exception {
+        StringBuilder done = new StringBuilder();
+        boolean reconnect = false, restart = false;
+        String v = a.optString("voice", "").toLowerCase(java.util.Locale.US);
+        if (!v.isEmpty()) {
+            String id = v.contains("deep") || v.contains("ทุ้ม") ? "Charon" : v.contains("lively") || v.contains("สดใส") && (v.contains("man") || v.contains("ชาย")) ? "Puck"
+                    : v.contains("male") && !v.contains("female") || v.contains("man") && !v.contains("woman") || v.contains("ชาย") ? "Charon"
+                    : v.contains("bright") || v.contains("สดใส") ? "Kore" : "Aoede";
+            if (!id.equals(prefs.aiVoice())) { prefs.setAiVoice(id); reconnect = true; }
+            done.append("voice ").append(id.equals("Aoede") ? "female, calm" : id.equals("Kore") ? "female, bright" : id.equals("Charon") ? "male, deep" : "male, lively").append(". ");
+        }
+        String n = a.optString("name", "").trim();
+        if (!n.isEmpty()) { prefs.setAiDisplay(n); reconnect = true; done.append("name ").append(n).append(". "); }
+        String w = a.optString("wake_word", "").trim().toLowerCase(java.util.Locale.US).replaceAll("[^a-z ]", " ").trim();
+        if (!w.isEmpty()) {
+            String[] ws2 = w.split("\\s+");
+            if (ws2.length != 2 || ws2[0].length() < 2 || ws2[1].length() < 2)
+                return new JSONObject().put("ok", false).put("result", "the wake word must be two English words, e.g. James Bond");
+            prefs.setAiName(ws2[0], ws2[1]); restart = true; done.append("wake word ").append(prefs.wakeWord()).append(" (the chat closes to learn it). ");
+        }
+        if (done.length() == 0) return new JSONObject().put("ok", false).put("result", "nothing to change");
+        if (restart) main.postDelayed(() -> { endChat(); stopSelf(); sync(this); }, 5000);
+        else if (reconnect) main.postDelayed(() -> { WebSocket s = ws; if (s != null && chatting) { retries = 0; s.close(1000, "new voice"); } }, 5000);
+        return new JSONObject().put("ok", true).put("result", done.toString().trim() + (reconnect && !restart ? " The new voice / name starts in a few seconds." : ""));
+    }
 
     private int retries;
 
