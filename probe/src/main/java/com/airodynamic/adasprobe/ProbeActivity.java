@@ -82,6 +82,11 @@ public class ProbeActivity extends Activity {
         r2b.setTextColor(ACCENT);
         Button inst = button(left, "⬇  Install / update NATEE Launcher", v -> runTask("app_install_launcher", rep -> Updater.installLauncher(this, rep)));
         button(left, "⬇  Install / update Engine Sound", v -> runTask("app_install_engine", rep -> Updater.installEngineSound(this, rep)));
+        // (Air 2026-11-26: the launcher kept closing and "Select a Home app" kept coming) its crash, readable from here
+        button(left, "NATEE Launcher crash log (photo for Claude)", v -> runTask("launcher_crash", rep -> {
+            String out = HelperLauncher.shell(this, "logcat -d -b crash -t 200 | grep -A25 -i 'com.airodynamic.adas' | grep -v -i -E 'token|email' | tail -n 60", rep);
+            rep.info(out == null || out.trim().isEmpty() ? "No launcher crash recorded." : out);
+        }));
         inst.setTextColor(ACCENT);
         inst.setTypeface(Typeface.DEFAULT_BOLD);
         Button usbInst = button(left, "⬇  Install an APK from the USB stick", v -> pickUsbApk());
