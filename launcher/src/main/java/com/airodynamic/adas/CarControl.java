@@ -89,7 +89,8 @@ final class CarControl {
         f.put(fn("open_app", "Open an app on the car screen by its name, including the apps inside GBox (e.g. Google Maps, YouTube Music, Spotify, Waze).",
                 props("name", "string", "the app's name as the driver said it")));
         JSONObject mp = new JSONObject().put("type", "object").put("properties", new JSONObject()
-                .put("action", new JSONObject().put("type", "string").put("description", "play, pause, next, previous, like (thumbs up the song playing: ถูกใจ / ชอบเพลงนี้), or search (play a song / artist / playlist)"))
+                .put("action", new JSONObject().put("type", "string").put("description", "play, pause, next, previous, forward / rewind (skip ahead or back by seconds; also YouTube videos), like (thumbs up the song playing: ถูกใจ / ชอบเพลงนี้), or search (play a song / artist / playlist)"))
+                .put("seconds", new JSONObject().put("type", "integer").put("description", "for forward / rewind: how many seconds (e.g. 20, 60 for a minute)"))
                 .put("query", new JSONObject().put("type", "string").put("description", "for search: what to play")))
                 .put("required", new JSONArray().put("action"));
         JSONObject rp = new JSONObject().put("type", "object").put("properties", new JSONObject()
@@ -263,7 +264,7 @@ final class CarControl {
                 }
                 case "youtube_video": return youtube(a.optString("query", ""));
                 case "open_app": return openApp(a.optString("name", ""));
-                case "music": return music(a.optString("action", ""), a.optString("query", ""));
+                case "music": { musicSeconds = a.optInt("seconds", 10); return music(a.optString("action", ""), a.optString("query", "")); }
                 default: return res(false, "unknown tool " + name);
             }
         } catch (Throwable e) {
@@ -695,6 +696,7 @@ final class CarControl {
 
     private static String norm(String s) { return s == null ? "" : s.toLowerCase(Locale.US).replaceAll("[^a-z0-9ก-๙]", ""); }
 
+    private int musicSeconds = 10;
     private JSONObject music(String action, String query) throws Exception {
         String a = action.toLowerCase(Locale.US);
         // "play Radiohead" (Air 2026-11-22): inside GBox, YouTube Music's player is registered under GBox's own name, so
@@ -750,6 +752,20 @@ final class CarControl {
             case "pause": case "stop": t.pause(); return res(true, "paused");
             case "next": t.skipToNext(); return res(true, "next song");
             case "previous": case "back": t.skipToPrevious(); return res(true, "previous song");
+            case "forward": case "rewind": case "skip": case "seek": {   // (Air 2026-11-26) "skip 20 seconds", music or YouTube
+                android.media.session.PlaybackState st = mc.getPlaybackState();
+                if (st == null || (st.getActions() & android.media.session.PlaybackState.ACTION_SEEK_TO) == 0) return res(false, "this app doesn't allow skipping by seconds");
+                long pos = st.getPosition();
+                if (st.getState() == android.media.session.PlaybackState.STATE_PLAYING)
+                    pos += (long) ((android.os.SystemClock.elapsedRealtime() - st.getLastPositionUpdateTime()) * st.getPlaybackSpeed());
+                long step = Math.max(1, musicSeconds) * 1000L * (a.equals("rewind") ? -1 : 1);
+                long to = Math.max(0, pos + step);
+                android.media.MediaMetadata md = mc.getMetadata();
+                long dur = md == null ? -1 : md.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION);
+                if (dur > 0) to = Math.min(to, dur - 1000);
+                t.seekTo(to);
+                return res(true, (step > 0 ? "skipped ahead " : "went back ") + Math.abs(step / 1000) + " s");
+            }
             case "like": case "thumbs_up": case "thumbsup": {   // same as the 👍 on the Now playing card (Air 2026-11-26)
                 android.media.session.PlaybackState st = mc.getPlaybackState();
                 if (st != null) for (android.media.session.PlaybackState.CustomAction ca : st.getCustomActions()) {
