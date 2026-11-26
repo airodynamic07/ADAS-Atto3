@@ -874,7 +874,8 @@ public final class AiChat extends Service {
             android.content.SharedPreferences r = getSharedPreferences("chat_box", MODE_PRIVATE);
             int w = r.getInt("w", Ui.dp(this, 520)), h = r.getInt("h", Ui.dp(this, 360));
             WindowManager.LayoutParams lp = new WindowManager.LayoutParams(w, h, type,
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT);
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                            | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);   // screen coordinates, like the Engine Sound window it covers (Air 2026-11-26: it sat lower, over the graph)
             if (r.contains("x")) { lp.gravity = Gravity.TOP | Gravity.START; lp.x = r.getInt("x", 0); lp.y = r.getInt("y", 0); }
             else { lp.gravity = Gravity.CENTER; }
             wm.addView(box, lp);

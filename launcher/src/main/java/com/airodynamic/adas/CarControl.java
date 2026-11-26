@@ -434,7 +434,7 @@ final class CarControl {
         String want = norm(name).replace("ingbox", "").replace("gbox", "");
         if (want.isEmpty() && norm(name).contains("gbox")) {   // "open GBox" (Air 2026-11-22)
             if (!Apps.installed(c, "com.gbox.android")) return res(false, "GBox isn't installed");
-            android.content.Intent gl = c.getPackageManager().getLaunchIntentForPackage("com.gbox.android");
+            android.content.Intent gl = Apps.launchIntent(c, "com.gbox.android");
             if (gl != null) launch(gl, "com.gbox.android");
             return res(true, "opening GBox");
         }
@@ -444,8 +444,8 @@ final class CarControl {
         final String wantG = want.startsWith("google") && want.length() > 6 ? want.substring(6) : want;
         // (Air 2026-11-23: "open YouTube Music" opened YouTube) YouTube Music always means the music app itself
         if (want.contains("music") && (want.contains("youtube") || want.contains("yt"))) {
-            for (String y : MusicCard.YTM) if (Apps.installed(c, y)) {
-                android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y);
+            for (String y : ytmPkgs()) if (Apps.installed(c, y)) {
+                android.content.Intent li = Apps.launchIntent(c, y);
                 if (li != null) launch(li, y);
                 return res(true, "opening YouTube Music");
             }
@@ -454,7 +454,7 @@ final class CarControl {
         if (best == null) return notFound(name);
         final Apps.App app = best;
         if (!(Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving())) {
-            android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(app.pkg);
+            android.content.Intent li = Apps.launchIntent(c, app.pkg);
             if (li != null) launch(li, app.pkg);
         }
         boolean video = Apps.VIDEO.contains(app.pkg) && !CarData.get(c).last().parked() && !new Prefs(c).videoWhileDriving();
@@ -488,15 +488,18 @@ final class CarControl {
     private JSONObject ytmList(String what) {
         String w = what.toLowerCase(Locale.US);
         String url = w.contains("lib") || w.contains("คลัง") ? "https://music.youtube.com/library" : "https://music.youtube.com/playlist?list=LM";
-        for (String y : MusicCard.YTM) if (Apps.installed(c, y)) {
+        for (String y : ytmPkgs()) if (Apps.installed(c, y)) {
             android.content.Intent v = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).setPackage(y);
             if (v.resolveActivity(c.getPackageManager()) != null) { launch(v, y); return res(true, "opening " + (url.contains("LM") ? "your liked songs" : "your library") + " in YouTube Music"); }
-            android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y);
+            android.content.Intent li = Apps.launchIntent(c, y);
             if (li != null) launch(li, y);
             return res(false, "YouTube Music is opening, but it can't be sent straight to that list: tap Library there");
         }
         return res(false, "YouTube Music isn't installed");
     }
+
+    /** YouTube Music on this car (GBox or not), found by name too. */
+    private String[] ytmPkgs() { String y = Apps.youtubeMusic(c); return y == null ? new String[0] : new String[]{y}; }
 
     /** The installed app the driver means by this name (same rules as open_app). */
     private Apps.App findApp(String name) {
@@ -504,7 +507,7 @@ final class CarControl {
         if (want.isEmpty()) return null;
         final String wantG = want.startsWith("google") && want.length() > 6 ? want.substring(6) : want;
         if (want.contains("music") && (want.contains("youtube") || want.contains("yt")))
-            for (Apps.App a : Apps.all(c)) for (String y : MusicCard.YTM) if (a.pkg.equals(y)) return a;
+            for (Apps.App a : Apps.all(c)) for (String y : ytmPkgs()) if (a.pkg.equals(y)) return a;
         // (Air 2026-11-22) maps apps: the car's own Google Maps (outside GBox) wins; other apps: the GBox copy wins
         boolean mapsApp = want.contains("map") || want.contains("waze") || want.contains("นำทาง");
         Apps.App best = null; int bestScore = 0;
@@ -561,7 +564,7 @@ final class CarControl {
     }
 
     private android.content.ComponentName comp(String pkg) {
-        android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(pkg);
+        android.content.Intent li = Apps.launchIntent(c, pkg);
         return li == null ? null : li.getComponent();
     }
 
@@ -627,9 +630,9 @@ final class CarControl {
         if (!query.trim().isEmpty() && !a.equals("pause") && !a.equals("next") && !a.equals("previous")) {   // "play" + a name = search too
             android.media.session.MediaController p = searchablePlayer();
             if (p == null) {   // nothing playing yet: open YouTube Music first and give it a few seconds
-                for (String y : MusicCard.YTM) {
+                for (String y : ytmPkgs()) {
                     if (!Apps.installed(c, y)) continue;
-                    android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y);
+                    android.content.Intent li = Apps.launchIntent(c, y);
                     if (li != null) launch(li, y);
                     for (int i = 0; i < 10 && p == null; i++) { try { Thread.sleep(600); } catch (InterruptedException ignored) { } p = searchablePlayer(); }
                     break;
@@ -648,13 +651,13 @@ final class CarControl {
                 }
             }
             // it ignored the request: open its search page for it, one tap to play
-            for (String y : MusicCard.YTM) {
+            for (String y : ytmPkgs()) {
                 if (!Apps.installed(c, y)) continue;
                 final android.content.Intent v = new android.content.Intent(android.content.Intent.ACTION_VIEW,
                         android.net.Uri.parse("https://music.youtube.com/search?q=" + android.net.Uri.encode(query)))
                         .setPackage(y).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                 if (c.getPackageManager().resolveActivity(v, 0) != null) launch(v, y);
-                else { android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y); if (li != null) launch(li, y); }
+                else { android.content.Intent li = Apps.launchIntent(c, y); if (li != null) launch(li, y); }
                 return res(false, "YouTube Music didn't start it by itself; its search for \"" + query
                         + "\" is open (or YouTube Music itself): tap the song to play. Tell the driver exactly this.");
             }
@@ -662,8 +665,8 @@ final class CarControl {
         }
         android.media.session.MediaController mc = musicSession();
         if (mc == null) {
-            for (String y : MusicCard.YTM) if (Apps.installed(c, y)) {
-                android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(y);
+            for (String y : ytmPkgs()) if (Apps.installed(c, y)) {
+                android.content.Intent li = Apps.launchIntent(c, y);
                 if (li != null) launch(li, y);
                 return res(false, "no music was playing: opened YouTube Music, ask again in a few seconds");
             }
@@ -711,7 +714,7 @@ final class CarControl {
                 if (i.getData() != null)
                     cmd = "am start -a " + i.getAction() + " -d '" + i.getData().toString().replace("'", "") + "' -p " + pkg + " -f 0x14000000";
                 else {
-                    android.content.Intent li = c.getPackageManager().getLaunchIntentForPackage(pkg);
+                    android.content.Intent li = Apps.launchIntent(c, pkg);
                     cmd = li != null && li.getComponent() != null ? "am start -n " + li.getComponent().flattenToShortString() + " -f 0x10200000"
                             : "monkey -p " + pkg + " -c android.intent.category.LAUNCHER 1";
                 }

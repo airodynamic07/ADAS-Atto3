@@ -61,8 +61,34 @@ public final class Apps {
         }
     }
 
+    /** How to open an app. (Air 2026-11-26: "YouTube Music isn't installed" — it is, inside GBox) Android's usual
+     *  answer can be empty for GBox's apps although they're on the home list, so their home-list entry is used then. */
+    public static Intent launchIntent(Context c, String pkg) {
+        PackageManager pm = c.getPackageManager();
+        Intent i = null;
+        try { i = pm.getLaunchIntentForPackage(pkg); } catch (Throwable ignored) { }
+        if (i != null) return i;
+        try {
+            Intent q = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(pkg);
+            List<ResolveInfo> rs = pm.queryIntentActivities(q, 0);
+            if (rs != null && !rs.isEmpty()) {
+                ResolveInfo r = rs.get(0);
+                return new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                        .setClassName(r.activityInfo.packageName, r.activityInfo.name);
+            }
+        } catch (Throwable ignored) { }
+        return null;
+    }
+
+    /** YouTube Music's package on this car (inside GBox or not), found by name if it isn't one of the usual ones. */
+    public static String youtubeMusic(Context c) {
+        for (String y : MusicCard.YTM) if (installed(c, y)) return y;
+        for (App a : all(c)) if (a.pkg.contains("youtube.music") || a.label.toLowerCase(java.util.Locale.US).replace(" ", "").contains("youtubemusic")) return a.pkg;
+        return null;
+    }
+
     public static boolean installed(Context c, String pkg) {
-        return c.getPackageManager().getLaunchIntentForPackage(pkg) != null;
+        return launchIntent(c, pkg) != null;
     }
 
     /** Opens an app full screen. Returns false (and says why) if it can't. */
@@ -72,7 +98,7 @@ public final class Apps {
             Toast.makeText(c, "Video apps open only in P", Toast.LENGTH_SHORT).show();
             return false;
         }
-        Intent i = c.getPackageManager().getLaunchIntentForPackage(pkg);
+        Intent i = launchIntent(c, pkg);
         if (i == null) {
             Toast.makeText(c, label(c, pkg) + " is not installed", Toast.LENGTH_SHORT).show();
             return false;
