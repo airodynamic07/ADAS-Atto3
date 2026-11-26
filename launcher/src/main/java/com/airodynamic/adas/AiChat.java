@@ -841,7 +841,7 @@ public final class AiChat extends Service {
             AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
             int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
             if (cur <= 1) return;
-            int half = Math.max(1, Math.round(cur * 0.5f));
+            int half = Math.max(1, Math.round(cur * 0.25f));   // (Air 2026-11-26) music down by 75 %, was 50 %
             float g = 2f;   // about 6 dB if the car can't say
             try {
                 android.media.AudioDeviceInfo[] outs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
@@ -849,7 +849,7 @@ public final class AiChat extends Service {
                 float db = am.getStreamVolumeDb(AudioManager.STREAM_MUSIC, cur, dev) - am.getStreamVolumeDb(AudioManager.STREAM_MUSIC, half, dev);
                 if (!Float.isNaN(db) && !Float.isInfinite(db) && db > 0) g = (float) Math.pow(10, db / 20);
             } catch (Throwable ignored) { }
-            voiceGain = Math.max(1f, Math.min(4f, g));
+            voiceGain = Math.max(1f, Math.min(6f, g));
             am.setStreamVolume(AudioManager.STREAM_MUSIC, half, 0);
             savedVol = cur; duckedVol = half;
         } catch (Throwable ignored) { }

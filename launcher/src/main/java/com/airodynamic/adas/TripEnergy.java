@@ -452,6 +452,10 @@ public final class TripEnergy implements CarData.Listener {
             }
             if (!Double.isNaN(s.socPct)) {
                 if (!Double.isNaN(lastSocSeen) && s.socPct < lastSocSeen) { socUsedPct += lastSocSeen - s.socPct; rollDay(); daySocUsed += lastSocSeen - s.socPct; }
+                // (Air 2026-11-26: health showed 77 %) a battery % won back by regen while driving was counted again when it
+                // dropped, but the kWh are counted net (regen taken off): the health check now takes regen % off too.
+                // Charging (parked) never counts.
+                else if (!Double.isNaN(lastSocSeen) && s.socPct > lastSocSeen && !Double.isNaN(s.speedKmh) && s.speedKmh > 3) { rollDay(); daySocUsed = Math.max(0, daySocUsed - (s.socPct - lastSocSeen)); }
                 lastSocSeen = s.socPct;
             }
             double dt = lastAt == 0 ? 0 : Math.min(2.0, (s.at - lastAt) / 1000.0);   // seconds; gaps don't count
