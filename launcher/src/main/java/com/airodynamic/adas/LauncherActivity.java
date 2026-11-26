@@ -150,6 +150,8 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         i.removeExtra(VOICE);
         getWindow().getDecorView().postDelayed(() -> {
             if (v.equals("engine_on") || v.equals("engine_off")) engineHost().engine(v.equals("engine_on"));
+            else if (v.startsWith("theme:")) { try { prefs.setTheme(Theme.valueOf(v.substring(6))); rebuild(); } catch (Throwable ignored) { } }
+            else if (v.startsWith("sound:")) engineHost().chooseSound(v.substring(6));
             else if (v.startsWith("ghost:")) engineHost().shareToGhost("&ghost_cmd=" + android.net.Uri.encode(v.substring(6)));
         }, 600);
     }

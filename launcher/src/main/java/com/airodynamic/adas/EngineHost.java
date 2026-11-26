@@ -392,6 +392,12 @@ public final class EngineHost {
         js(engine, "(function(){var b=document.getElementById('start');if(b&&b.dataset.on==='" + (on ? "0" : "1") + "')b.click();})()");
     }
 
+    /** Picks an Engine Sound by its id, the same as tapping it in the list (voice, Air 2026-11-26). */
+    public void chooseSound(String id) {
+        if (!id.matches("[a-z0-9]+")) return;
+        js(engine, "(function(){var r=document.querySelector('#sounds input[value=\\'" + id + "\\']');if(r&&!r.checked){r.checked=true;r.dispatchEvent(new Event('change',{bubbles:true}));}})()");
+    }
+
     public void shareToGhost(String share) {
         pendingShare = share;
         if (geckoOpen && act != null) {

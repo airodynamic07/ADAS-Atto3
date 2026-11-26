@@ -53,6 +53,9 @@ final class CarControl {
                         .put("kind", new JSONObject().put("type", "string").put("description", "fastest or best"))
                         .put("km", new JSONObject().put("type", "number").put("description", "1 to 100 km")))
                         .put("required", new JSONArray().put("kind").put("km"))));
+        f.put(fn("set_theme", "The launcher's colour theme: blue, white or red.", props("theme", "string", "blue, white or red")));
+        f.put(fn("engine_sound_choose", "Choose the Engine Sound: rotary, v6, v8, v10, v12, rotary original, v8 original, v10 original, inline 5, inline 4, cinematic ev, vtec.",
+                props("sound", "string", "the sound's name as the driver said it")));
         f.put(fn("set_speed_limit", "The driver's own speed limit warning (beeps above it; a warning only).", props("kmh", "integer", "30 to 180 km/h")));
         f.put(fn("set_auto_sport", "Auto Sport: the screen turns black-red above this speed. kmh 60-200, or 0 to switch Auto Sport off.", props("kmh", "integer", "60 to 200, or 0 = off")));
         f.put(fn("set_trip_graph", "The graph along the bottom of the screen (speed and power / consumption): moving average of each line, and zoom. Pass only what the driver asked to change.", gp));
@@ -78,7 +81,7 @@ final class CarControl {
         f.put(fn("open_app", "Open an app on the car screen by its name, including the apps inside GBox (e.g. Google Maps, YouTube Music, Spotify, Waze).",
                 props("name", "string", "the app's name as the driver said it")));
         JSONObject mp = new JSONObject().put("type", "object").put("properties", new JSONObject()
-                .put("action", new JSONObject().put("type", "string").put("description", "play, pause, next, previous, or search (play a song / artist / playlist)"))
+                .put("action", new JSONObject().put("type", "string").put("description", "play, pause, next, previous, like (thumbs up the song playing: ถูกใจ / ชอบเพลงนี้), or search (play a song / artist / playlist)"))
                 .put("query", new JSONObject().put("type", "string").put("description", "for search: what to play")))
                 .put("required", new JSONArray().put("action"));
         JSONObject rp = new JSONObject().put("type", "object").put("properties", new JSONObject()
@@ -160,6 +163,23 @@ final class CarControl {
                     else { new Prefs(c).setBestKm(km); TripEnergy.get(c).setBestKm(km); }
                     String k = km == Math.floor(km) ? String.valueOf((int) km) : String.valueOf(km);
                     return res(true, fast ? "Fastest " + k + " km" : "Best " + k + " km stretches");
+                }
+                case "set_theme": {
+                    String t = a.optString("theme", "").toLowerCase(Locale.US);
+                    String th = t.contains("white") || t.contains("ขาว") ? "WHITE" : t.contains("red") || t.contains("แดง") ? "RED" : t.contains("blue") || t.contains("ฟ้า") || t.contains("น้ำเงิน") ? "BLUE" : "";
+                    if (th.isEmpty()) return res(false, "the themes are blue, white and red");
+                    return voice("theme:" + th, "theme " + th.toLowerCase(Locale.US));
+                }
+                case "engine_sound_choose": {
+                    String n = a.optString("sound", "").toLowerCase(Locale.US).replaceAll("[^a-z0-9ก-๙]", "");
+                    boolean orig = n.contains("orig") || n.contains("เดิม") || n.contains("แรก");
+                    String id = n.contains("vtec") ? "vtec" : n.contains("ev") || n.contains("cinema") || n.contains("organ") ? "evorgan"
+                            : n.contains("rotary") || n.contains("โรตารี") ? (orig ? "rotary0" : "rotary")
+                            : n.contains("v12") ? "v12" : n.contains("v10") ? (orig ? "v10orig" : "v10") : n.contains("v8") ? (orig ? "v8orig" : "v8")
+                            : n.contains("v6") ? "v6" : n.contains("inline5") || n.contains("i5") || n.contains("5สูบ") ? "inline5"
+                            : n.contains("inline4") || n.contains("i4") || n.contains("4สูบ") ? "inline4" : "";
+                    if (id.isEmpty()) return res(false, "the sounds are rotary, v6, v8, v10, v12, rotary / v8 / v10 original, inline 5, inline 4, cinematic EV, VTEC");
+                    return voice("sound:" + id, "Engine Sound: " + id);
                 }
                 case "set_speed_limit": {
                     int v = a.optInt("kmh", -1);
@@ -710,6 +730,15 @@ final class CarControl {
             case "pause": case "stop": t.pause(); return res(true, "paused");
             case "next": t.skipToNext(); return res(true, "next song");
             case "previous": case "back": t.skipToPrevious(); return res(true, "previous song");
+            case "like": case "thumbs_up": case "thumbsup": {   // same as the 👍 on the Now playing card (Air 2026-11-26)
+                android.media.session.PlaybackState st = mc.getPlaybackState();
+                if (st != null) for (android.media.session.PlaybackState.CustomAction ca : st.getCustomActions()) {
+                    String id = (ca.getAction() + " " + ca.getName()).toLowerCase(Locale.US);
+                    if ((id.contains("like") || id.contains("thumb")) && !id.contains("dislike") && !id.contains("down")) { t.sendCustomAction(ca, null); return res(true, "liked"); }
+                }
+                t.setRating(android.media.Rating.newThumbRating(true));
+                return res(true, "sent a thumbs up");
+            }
             default:
                 if (query.isEmpty()) return res(false, "what should I play?");
                 boolean ytm = false;
