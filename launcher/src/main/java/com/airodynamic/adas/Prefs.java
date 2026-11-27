@@ -72,8 +72,9 @@ public final class Prefs {
     public boolean graphWhole() { return p.getBoolean("graphWhole", false); }
     public void setGraphWhole(boolean b) { p.edit().putBoolean("graphWhole", b).apply(); }
     /** the AI chat closes by itself when quiet (Air 2026-11-26: "don't auto close") */
-    public boolean aiAutoClose() { return p.getBoolean("aiAutoClose", false); }
-    public void setAiAutoClose(boolean b) { p.edit().putBoolean("aiAutoClose", b).apply(); }
+    // (Air 2026-11-27) back to closing by itself 10 s after the answer: today's talk is remembered anyway
+    public boolean aiAutoClose() { return p.getBoolean("aiAutoClose2", true); }
+    public void setAiAutoClose(boolean b) { p.edit().putBoolean("aiAutoClose2", b).apply(); }
     public int smoothSpeed() { return p.getInt("smoothSpeed", 200); }
     public void setSmoothSpeed(int m) { p.edit().putInt("smoothSpeed", m).apply(); }
     public int smoothPower() { return p.getInt("smoothPower", 200); }

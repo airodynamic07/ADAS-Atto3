@@ -127,6 +127,7 @@ public final class AiChat extends Service {
         }
         talking = false; wakeTurn = false;
         main.post(resumeMusic);
+        duckOff();
         look(C_ANSWER, "waiting · say \"" + prefs.wakeWord() + "\" or press the mic · ✕ or \"ปิดระบบ\" closes");
     }
     private boolean silentStart;   // listening again after an answer: no beep
@@ -177,6 +178,7 @@ public final class AiChat extends Service {
         heard = false; activityOpen = false; lastVoiceAt = 0;
         talking = true;
         look(C_LISTEN, "listening… speak now");
+        duckOn();   // (Air 2026-11-27) music down only while you talk and she answers
         if (!silentStart) beep();
         silentStart = false;
         // (Air 2026-11-25: stuck on "listening… speak now" for ever) every turn has a way out: no words for a while = it closes
@@ -230,6 +232,7 @@ public final class AiChat extends Service {
         // (Air 2026-11-22: "ค่ะ ค่ะ ค่ะ" — its own voice came back through the microphone) after a plain answer it only
         // listens again when Settings says so; after a question it does (to hear the answer)
         if (!askedQuestion()) {   // the old "keep listening after every answer" is gone for good (Air 2026-11-22)
+            duckOff();   // (Air 2026-11-27) she has finished: music back to normal until the name is said again
             look(C_ANSWER, prefs.aiAutoClose() ? "done · press the mic to talk again · closes in 10 s"
                     : "done · say \"" + prefs.wakeWord() + "\" or press the mic · ✕ or \"ปิดระบบ\" closes");
             main.removeCallbacks(hideLater);
@@ -847,6 +850,7 @@ public final class AiChat extends Service {
     private int savedVol = -1, duckedVol = -1;
     private volatile float voiceGain = 1f;
     private void duckOn() {
+        if (savedVol > 0) return;   // already down
         try {
             AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
             int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
