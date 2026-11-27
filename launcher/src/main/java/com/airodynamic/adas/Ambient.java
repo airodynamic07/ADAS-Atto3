@@ -43,7 +43,7 @@ public final class Ambient implements CarData.Listener {
     }
 
     /** 0 P, 1 R, 2 N, 3 D, -1 unknown */
-    private static int slot(int gear) {
+    static int slot(int gear) {
         switch (gear) { case 0: case 1: return 0; case 2: return 1; case 3: return 2; case 4: return 3; default: return -1; }
     }
 

@@ -28,7 +28,6 @@ public final class SettingsDialog {
 
         section(c, root, th, "Theme");
         LinearLayout themes = row(c);
-        themes.addView(Ui.chip(c, "🌈 Match ambient light", prefs.themeAmbient(), th, v -> { prefs.setThemeAmbient(true); redo.run(); }), weight(c));
         for (Theme t : new Theme[]{Theme.BLUE, Theme.WHITE, Theme.RED}) {
             String n = t == Theme.BLUE ? "Black blue" : t == Theme.WHITE ? "White minimal" : "Black red sport";
             themes.addView(Ui.chip(c, n, !prefs.themeAmbient() && prefs.theme() == t, th, v -> { prefs.setTheme(t); redo.run(); }), weight(c));
@@ -38,6 +37,30 @@ public final class SettingsDialog {
         for (Theme t : new Theme[]{Theme.GREEN, Theme.PURPLE, Theme.ORANGE, Theme.CYAN, Theme.PINK, Theme.YELLOW})
             themes2.addView(Ui.chip(c, t.label(), !prefs.themeAmbient() && prefs.theme() == t, th, v -> { prefs.setTheme(t); redo.run(); }), weight(c));
         root.addView(themes2);
+        // (Air 2026-11-27) your own screen colour for each gear, Auto Sport and an open door
+        section(c, root, th, "Screen colour by gear, Auto Sport and door: " + (prefs.screenByState() ? "on" : "off"));
+        LinearLayout sb = row(c);
+        sb.addView(Ui.chip(c, "On", prefs.screenByState(), th, v -> { prefs.setScreenByState(true); redo.run(); }), weight(c));
+        sb.addView(Ui.chip(c, "Off", !prefs.screenByState(), th, v -> { prefs.setScreenByState(false); redo.run(); }), weight(c));
+        root.addView(sb);
+        if (prefs.screenByState()) {
+            String[] names = {"P", "R", "N", "D", "Auto Sport", "Door open"};
+            LinearLayout sr = row(c);
+            for (int k = 0; k < Prefs.SCREEN_STATES.length; k++) {
+                final String st = Prefs.SCREEN_STATES[k];
+                String cur = prefs.screenTheme(st);
+                String lab = cur.isEmpty() ? "normal" : cur.charAt(0) + cur.substring(1).toLowerCase(java.util.Locale.US);
+                sr.addView(Ui.chip(c, names[k] + ": " + lab + " ›", false, th, v -> {
+                    String[] opts = new String[Theme.values().length + 1];
+                    opts[0] = "Normal (my theme)";
+                    for (int i = 0; i < Theme.values().length; i++) opts[i + 1] = Theme.values()[i].label();
+                    new AlertDialog.Builder(c).setTitle("Screen colour for " + names[java.util.Arrays.asList(Prefs.SCREEN_STATES).indexOf(st)])
+                            .setItems(opts, (d, i) -> { prefs.setScreenTheme(st, i == 0 ? "" : Theme.values()[i - 1].name()); redo.run(); })
+                            .setNegativeButton("Cancel", null).show();
+                }), weight(c));
+            }
+            root.addView(sr);
+        }
 
         section(c, root, th, "Auto Sport: black-red above " + prefs.autoSportKmh() + " km/h, back 10 km/h below");
         LinearLayout as = row(c);

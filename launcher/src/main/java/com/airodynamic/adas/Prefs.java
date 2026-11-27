@@ -22,7 +22,13 @@ public final class Prefs {
     }
     public void setTheme(Theme t) { p.edit().putString("theme", t.name()).putBoolean("themeAmbient", false).apply(); }
     /** "Match ambient light" (Air 2026-11-26): the theme follows the ambient light's colour */
-    public boolean themeAmbient() { return p.getBoolean("themeAmbient", false); }
+    public boolean themeAmbient() { return false; }   // (Air 2026-11-27) "match ambient light" removed
+    /** (Air 2026-11-27) the screen colour for P / R / N / D, Auto Sport and a door open; "" = the normal theme */
+    public static final String[] SCREEN_STATES = {"P", "R", "N", "D", "SPORT", "DOOR"};
+    public boolean screenByState() { return p.getBoolean("screenByState", false); }
+    public void setScreenByState(boolean b) { p.edit().putBoolean("screenByState", b).apply(); }
+    public String screenTheme(String state) { return p.getString("screenTh_" + state, state.equals("SPORT") ? "RED" : ""); }
+    public void setScreenTheme(String state, String theme) { p.edit().putString("screenTh_" + state, theme).apply(); }
     public void setThemeAmbient(boolean on) { p.edit().putBoolean("themeAmbient", on).apply(); }
 
     public boolean autoSport() { return p.getBoolean("autoSport", true); }

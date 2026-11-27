@@ -182,14 +182,17 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
     };
 
     private Theme effectiveTheme() {
-        if (prefs.themeAmbient()) {   // follows the ambient light (Auto Sport too: its ambient colour), Air 2026-11-26
-            if (sportOn && !(prefs.ambientOver())) return Theme.RED;
-            int col = Ambient.current;
-            if (col >= 1 && col <= SettingsDialog.BYD_COLOURS.length) return Theme.nearest(SettingsDialog.BYD_COLOURS[col - 1]);
-            return prefs.theme();
+        // (Air 2026-11-27) your own screen colour for each gear, Auto Sport and a door open (replaces "match ambient light")
+        if (prefs.screenByState()) {
+            String st = doorOpenNow ? "DOOR" : sportOn ? "SPORT" : stateGear >= 0 ? Prefs.SCREEN_STATES[stateGear] : "";
+            String t = st.isEmpty() ? "" : prefs.screenTheme(st);
+            if (!t.isEmpty()) try { return Theme.valueOf(t); } catch (Exception ignored) { }
+            return sportOn ? Theme.RED : prefs.theme();
         }
         return sportOn ? Theme.RED : prefs.theme();
     }
+    private int stateGear = -1;
+    private boolean doorOpenNow;
     /** the ambient colour changed: rebuild in the new colour when the theme follows it */
     // (Air 2026-11-27 crash: the ambient light's own thread rebuilt the screen) always on the screen's thread
     private final Runnable ambientChanged = () -> runOnUiThread(() -> { if (prefs.themeAmbient() && effectiveTheme() != theme) rebuild(); });
@@ -368,7 +371,6 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         list.setBackground(Ui.round(th.chip, th.line, 14, this));
         final android.widget.PopupWindow[] pw = new android.widget.PopupWindow[1];
         java.util.List<Object[]> items = new java.util.ArrayList<>();
-        items.add(new Object[]{null, "Match ambient light", prefs.themeAmbient()});
         for (Theme t : Theme.values()) items.add(new Object[]{t, t.label(), !prefs.themeAmbient() && prefs.theme() == t});
         for (Object[] it : items) {
             LinearLayout row = new LinearLayout(this);
@@ -428,6 +430,15 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
             if (loc != null) prefs.setParked(loc.getLatitude(), loc.getLongitude(), System.currentTimeMillis());
         }
         if (s.gear >= 0) lastGear = s.gear;
+        if (prefs.screenByState()) {   // gear or door changed: new screen colour
+            int g = Ambient.slot(s.gear);
+            boolean door = false;
+            for (int d = 1; d < s.doorOpen.length; d++) door |= s.doorOpen[d];
+            boolean changed = (g >= 0 && g != stateGear) || door != doorOpenNow;
+            if (g >= 0) stateGear = g;
+            doorOpenNow = door;
+            if (changed && effectiveTheme() != theme) { rebuild(); return; }
+        }
         // Auto Sport: black-red above the set speed, back 10 km/h below it
         if (prefs.autoSport() && !Double.isNaN(s.speedKmh)) {
             boolean want = sportOn ? s.speedKmh > prefs.autoSportKmh() - 10 : s.speedKmh > prefs.autoSportKmh();
