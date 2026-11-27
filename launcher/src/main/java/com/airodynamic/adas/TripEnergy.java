@@ -81,7 +81,8 @@ public final class TripEnergy implements CarData.Listener {
     public synchronized java.util.List<double[]> fine() { return new java.util.ArrayList<>(fine); }
 
     public interface Listener { void onTrip(TripEnergy t); }
-    private final List<Listener> listeners = new ArrayList<>();
+    // (Air 2026-11-27 crash: a window added itself while the list was being gone through) a copy-on-write list
+    private final List<Listener> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     public void addListener(Listener l) { if (!listeners.contains(l)) listeners.add(l); l.onTrip(this); }
     public void removeListener(Listener l) { listeners.remove(l); }
 

@@ -191,7 +191,8 @@ public class LauncherActivity extends Activity implements CarData.Listener, Sett
         return sportOn ? Theme.RED : prefs.theme();
     }
     /** the ambient colour changed: rebuild in the new colour when the theme follows it */
-    private final Runnable ambientChanged = () -> { if (prefs.themeAmbient() && effectiveTheme() != theme) rebuild(); };
+    // (Air 2026-11-27 crash: the ambient light's own thread rebuilt the screen) always on the screen's thread
+    private final Runnable ambientChanged = () -> runOnUiThread(() -> { if (prefs.themeAmbient() && effectiveTheme() != theme) rebuild(); });
 
     /**
      * Builds the whole screen for the current theme (user's layout, 2026-11-10):
