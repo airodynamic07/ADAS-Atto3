@@ -748,7 +748,21 @@ public final class AiChat extends Service {
         // (Air 2026-11-26 crash log: the car's sound service had crashed, "play() called on uninitialized AudioTrack" took the
         // whole launcher down) a speaker that couldn't be opened is said on screen instead, never a crash
         try {
-            track = new AudioTrack(AudioManager.STREAM_MUSIC, OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, ob, AudioTrack.MODE_STREAM);
+            // (Air 2026-11-28: "the music goes down, but her voice goes down too") her voice plays like the navigation voice,
+            // on its own volume, so turning the music down doesn't make her quieter; the music volume as before if the car refuses
+            try {
+                track = new AudioTrack(new android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build(),
+                        new AudioFormat.Builder().setSampleRate(OUT_RATE).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build(),
+                        ob, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE);
+                if (track.getState() != AudioTrack.STATE_INITIALIZED) throw new IllegalStateException("nav");
+                ownVoiceStream = true;
+            } catch (Throwable navFail) {
+                try { if (track != null) track.release(); } catch (Throwable ignored) { }
+                track = new AudioTrack(AudioManager.STREAM_MUSIC, OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, ob, AudioTrack.MODE_STREAM);
+                ownVoiceStream = false;
+            }
             if (track.getState() != AudioTrack.STATE_INITIALIZED) throw new IllegalStateException("not initialized");
             track.play();
         } catch (Throwable e) {
@@ -765,7 +779,7 @@ public final class AiChat extends Service {
                     if (a == null) { if (speaking) { speaking = false; lastActive = System.currentTimeMillis(); main.post(this::answerDone); } continue; }
                     if (!speaking) { speaking = true; main.post(() -> { main.removeCallbacks(hideLater); if (!talking) look(C_ANSWER, "answering…"); }); }
                     AudioTrack t = track;
-                    if (t != null) { if (voiceGain > 1.01f) louder(a, voiceGain); t.write(a, 0, a.length); }
+                    if (t != null) { if (!ownVoiceStream && voiceGain > 1.01f) louder(a, voiceGain); t.write(a, 0, a.length); }
                 } catch (InterruptedException e) { return; } catch (Throwable ignored) { }
             }
         }, "natee-play");
@@ -857,6 +871,7 @@ public final class AiChat extends Service {
     // made louder by the same amount: the music is quieter, she is as loud as before.
     private int savedVol = -1, duckedVol = -1;
     private volatile float voiceGain = 1f;
+    private volatile boolean ownVoiceStream;
     private void duckOn() {
         if (savedVol > 0) return;   // already down
         try {
