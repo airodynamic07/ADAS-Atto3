@@ -757,21 +757,8 @@ public final class AiChat extends Service {
         // (Air 2026-11-26 crash log: the car's sound service had crashed, "play() called on uninitialized AudioTrack" took the
         // whole launcher down) a speaker that couldn't be opened is said on screen instead, never a crash
         try {
-            // (Air 2026-11-28: "the music goes down, but her voice goes down too") her voice plays like the navigation voice,
-            // on its own volume, so turning the music down doesn't make her quieter; the music volume as before if the car refuses
-            try {
-                track = new AudioTrack(new android.media.AudioAttributes.Builder()
-                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
-                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build(),
-                        new AudioFormat.Builder().setSampleRate(OUT_RATE).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build(),
-                        ob, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE);
-                if (track.getState() != AudioTrack.STATE_INITIALIZED) throw new IllegalStateException("nav");
-                ownVoiceStream = true;
-            } catch (Throwable navFail) {
-                try { if (track != null) track.release(); } catch (Throwable ignored) { }
-                track = new AudioTrack(AudioManager.STREAM_MUSIC, OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, ob, AudioTrack.MODE_STREAM);
-                ownVoiceStream = false;
-            }
+            track = new AudioTrack(AudioManager.STREAM_MUSIC, OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, ob, AudioTrack.MODE_STREAM);
+            ownVoiceStream = true;   // normal media volume, never boosted (the music is ducked instead)
             if (track.getState() != AudioTrack.STATE_INITIALIZED) throw new IllegalStateException("not initialized");
             track.play();
         } catch (Throwable e) {
@@ -881,34 +868,27 @@ public final class AiChat extends Service {
     private int savedVol = -1, duckedVol = -1;
     private volatile float voiceGain = 1f;
     private volatile boolean ownVoiceStream;
+    // (Air 2026-11-28: "keep her voice at its normal volume, only the music lower") the car's volume is left alone;
+    // the launcher asks Android to "duck" the other apps (music, YouTube) while she listens and talks. Her voice plays at
+    // the normal media volume, as before.
+    private android.media.AudioFocusRequest duckReq;
     private void duckOn() {
-        if (savedVol > 0) return;   // already down
+        if (duckReq != null) return;
         try {
             AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
-            int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
-            if (cur <= 1) return;
-            int half = Math.max(1, Math.round(cur * 0.25f));   // (Air 2026-11-26) music down by 75 %, was 50 %
-            float g = 2f;   // about 6 dB if the car can't say
-            try {
-                android.media.AudioDeviceInfo[] outs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
-                int dev = outs.length > 0 ? outs[0].getType() : android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
-                float db = am.getStreamVolumeDb(AudioManager.STREAM_MUSIC, cur, dev) - am.getStreamVolumeDb(AudioManager.STREAM_MUSIC, half, dev);
-                if (!Float.isNaN(db) && !Float.isInfinite(db) && db > 0) g = (float) Math.pow(10, db / 20);
-            } catch (Throwable ignored) { }
-            voiceGain = Math.max(1f, Math.min(6f, g));
-            am.setStreamVolume(AudioManager.STREAM_MUSIC, half, 0);
-            savedVol = cur; duckedVol = half;
-            // kept on disk too: if the launcher closes while the music is down, it goes back up at the next start
-            getSharedPreferences("ai_duck", MODE_PRIVATE).edit().putInt("saved", cur).putInt("ducked", half).commit();
-        } catch (Throwable ignored) { }
+            duckReq = new android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(new android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_ASSISTANT)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                    .setOnAudioFocusChangeListener(f -> { }).build();
+            am.requestAudioFocus(duckReq);
+        } catch (Throwable ignored) { duckReq = null; }
     }
     private void duckOff() {
         try {
-            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
-            // put it back, unless the driver changed the volume meanwhile
-            if (savedVol > 0 && am.getStreamVolume(AudioManager.STREAM_MUSIC) == duckedVol) am.setStreamVolume(AudioManager.STREAM_MUSIC, savedVol, 0);
+            if (duckReq != null) ((AudioManager) getSystemService(AUDIO_SERVICE)).abandonAudioFocusRequest(duckReq);
         } catch (Throwable ignored) { }
-        savedVol = -1; duckedVol = -1; voiceGain = 1f;
+        duckReq = null; savedVol = -1; duckedVol = -1; voiceGain = 1f;
         getSharedPreferences("ai_duck", MODE_PRIVATE).edit().clear().apply();
     }
     /** 16-bit little-endian PCM made louder, gently limited so it never crackles */
