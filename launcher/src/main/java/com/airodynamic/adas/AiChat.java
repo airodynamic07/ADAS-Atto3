@@ -565,18 +565,26 @@ public final class AiChat extends Service {
         if (said.isEmpty() && answer.isEmpty()) return;
         android.content.SharedPreferences m = getSharedPreferences("ai_memory", MODE_PRIVATE);
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
-        String log = today.equals(m.getString("day", "")) ? m.getString("log", "") : "";
-        log += "Driver: " + cut(said) + "\nYou: " + cut(answer) + "\n";
+        String log = keptLog(m.getString("log2", "")) + "[" + today + "] Driver: " + cut(said) + "\n[" + today + "] You: " + cut(answer) + "\n";
         String[] lines = log.split("\n");
-        if (lines.length > 80) log = android.text.TextUtils.join("\n", java.util.Arrays.copyOfRange(lines, lines.length - 80, lines.length)) + "\n";
-        m.edit().putString("day", today).putString("log", log).apply();
+        if (lines.length > 300) log = android.text.TextUtils.join("\n", java.util.Arrays.copyOfRange(lines, lines.length - 300, lines.length)) + "\n";
+        m.edit().putString("log2", log).apply();
+    }
+    /** (Air 2026-11-28) what is kept: the last 1 / 3 / 7 / 30 days (Settings), at most the last 150 exchanges */
+    private String keptLog(String log) {
+        if (log.isEmpty()) return "";
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.add(java.util.Calendar.DAY_OF_YEAR, -(prefs.aiMemoryDays() - 1));
+        String from = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(cal.getTime());
+        StringBuilder b = new StringBuilder();
+        for (String l : log.split("\n")) if (l.length() > 12 && l.charAt(0) == '[' && l.substring(1, 11).compareTo(from) >= 0) b.append(l).append('\n');
+        return b.toString();
     }
     private static String cut(String t) { t = t.replace('\n', ' '); return t.length() > 400 ? t.substring(0, 400) + "…" : t; }
     private String memory() {
-        android.content.SharedPreferences m = getSharedPreferences("ai_memory", MODE_PRIVATE);
+        String log = keptLog(getSharedPreferences("ai_memory", MODE_PRIVATE).getString("log2", ""));
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
-        String log = today.equals(m.getString("day", "")) ? m.getString("log", "") : "";
-        return log.isEmpty() ? "" : " Today's conversation so far (continue it naturally, remember what was said, don't repeat it):\n" + log;
+        return log.isEmpty() ? "" : " Today is " + today + ". Your earlier conversations with the driver, oldest first (remember them, continue naturally, don't repeat them):\n" + log;
     }
 
     private String setupJson(String model, boolean quickEnd) {

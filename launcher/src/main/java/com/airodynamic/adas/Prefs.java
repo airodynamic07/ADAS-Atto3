@@ -25,6 +25,8 @@ public final class Prefs {
     public boolean themeAmbient() { return false; }   // (Air 2026-11-27) "match ambient light" removed
     /** (Air 2026-11-27) the screen colour for P / R / N / D, Auto Sport and a door open; "" = the normal theme */
     public static final String[] SCREEN_STATES = {"P", "R", "N", "D", "SPORT", "DOOR"};
+    public int aiMemoryDays() { return p.getInt("aiMemoryDays", 1); }
+    public void setAiMemoryDays(int d) { p.edit().putInt("aiMemoryDays", d).apply(); }
     public boolean screenByState() { return p.getBoolean("screenByState", false); }
     public void setScreenByState(boolean b) { p.edit().putBoolean("screenByState", b).apply(); }
     public String screenTheme(String state) { return p.getString("screenTh_" + state, state.equals("SPORT") ? "RED" : ""); }

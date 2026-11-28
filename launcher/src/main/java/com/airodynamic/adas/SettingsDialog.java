@@ -188,16 +188,28 @@ public final class SettingsDialog {
         LinearLayout ai = row(c);
         ai.addView(Ui.chip(c, "On", prefs.aiChat(), th, v -> { prefs.setAiChat(true); AiChat.sync(c); redo.run(); }), weight(c));
         ai.addView(Ui.chip(c, "Off", !prefs.aiChat(), th, v -> { prefs.setAiChat(false); AiChat.sync(c); redo.run(); }), weight(c));
-        ai.addView(Ui.chip(c, key.isEmpty() ? "API key: add ›" : "API key: " + key.substring(0, Math.min(4, key.length())) + "•••• ›", false, th, v -> {
+        // (Air 2026-11-28) the key is never shown: only "xxxxxxx"; paste a new one to replace it
+        ai.addView(Ui.chip(c, key.isEmpty() ? "API key: add ›" : "API key: xxxxxxx ›", false, th, v -> {
             android.widget.EditText e = new android.widget.EditText(c);
             e.setSingleLine(true);
-            e.setHint("paste your key from aistudio.google.com");
-            e.setText(prefs.aiKey());
+            e.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            e.setHint(prefs.aiKey().isEmpty() ? "paste your key from aistudio.google.com" : "xxxxxxx (saved) · paste a new key to replace it");
             new AlertDialog.Builder(c).setTitle("Gemini API key").setView(e)
-                    .setPositiveButton("Save", (d, i) -> { prefs.setAiKey(e.getText().toString()); redo.run(); })
+                    .setPositiveButton("Save", (d, i) -> { String k = e.getText().toString().trim(); if (!k.isEmpty()) prefs.setAiKey(k); redo.run(); })
                     .setNegativeButton("Cancel", null).show();
         }), weight(c));
         gVoice.addView(ai);
+        // (Air 2026-11-28) how long she remembers what you talked about
+        LinearLayout mem = row(c);
+        for (int dd : new int[]{1, 3, 7, 30}) {
+            final int d2 = dd;
+            mem.addView(Ui.chip(c, "Remember " + (dd == 1 ? "today" : dd + " days"), prefs.aiMemoryDays() == dd, th, v -> { prefs.setAiMemoryDays(d2); redo.run(); }), weight(c));
+        }
+        mem.addView(Ui.chip(c, "Forget all", false, th, v -> {
+            c.getSharedPreferences("ai_memory", Context.MODE_PRIVATE).edit().clear().apply();
+            android.widget.Toast.makeText(c, "Forgotten", android.widget.Toast.LENGTH_SHORT).show();
+        }), weight(c));
+        gVoice.addView(mem);
         // the assistant's name = the wake word: two words (Air 2026-11-23)
         LinearLayout an = row(c);
         an.addView(Ui.chip(c, (prefs.aiDisplay().isEmpty() ? "Name / wake word: " + prefs.wakeWord() : "Name: " + prefs.aiDisplay() + " · wake word: " + prefs.wakeWord()) + " ›", false, th, v -> {
