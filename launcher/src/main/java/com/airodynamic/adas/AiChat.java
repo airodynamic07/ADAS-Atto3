@@ -365,7 +365,17 @@ public final class AiChat extends Service {
             String alt = w2.equals("quinn") ? ", \"" + w1 + " queen\"" : "";
             // (Air 2026-11-26) the wake word may also be ONE word ("susan"): then w2 is empty
             String ww = w2.isEmpty() ? w1 : w1 + " " + w2;
-            String grammar = "[\"" + ww + "\", \"hey " + ww + "\", \"hi " + ww + "\"" + alt + ", \"[unk]\"]";
+            // (Air 2026-11-28: "named her Alicia, 'Ali' opens it") the listener must pick from a list, so near-sounds were
+            // squeezed into the name: common short words and parts of the name are in the list too, so "ali" stays "ali"
+            StringBuilder decoys = new StringBuilder();
+            java.util.Set<String> dd = new java.util.LinkedHashSet<>(java.util.Arrays.asList("a", "i", "the", "and", "is", "it", "to", "ok", "okay", "yes", "no",
+                    "hello", "hey", "hi", "oh", "ah", "um", "so", "all", "ali", "alley", "ally", "alice", "allison", "lee", "lisa", "leisure", "alright",
+                    "ella", "elle", "anna", "ann", "maria", "media", "really", "liar", "lia", "sure", "see", "she", "sir", "car", "call", "play", "stop",
+                    "go", "music", "please", "thank", "you", "what", "where", "when", "how", "can", "turn", "open", "close", "one", "two", "three"));
+            for (String w : new String[]{w1, w2}) for (int k = 2; k < w.length() - 1; k++) dd.add(w.substring(0, k));   // "al", "ali", "alic"
+            dd.remove(w1); dd.remove(w2);
+            for (String w : dd) decoys.append(", \"").append(w).append("\"");
+            String grammar = "[\"" + ww + "\", \"hey " + ww + "\", \"hi " + ww + "\"" + alt + decoys + ", \"[unk]\"]";
             wakeWords = new String[]{w1, w2};
             wakeGrammar = grammar;
             WAKE_CONF = prefs.wakeConf() / 100.0 - 0.0005;   // 100 % = the listener's full certainty
@@ -775,7 +785,7 @@ public final class AiChat extends Service {
                     if (a == null) { if (speaking) { speaking = false; lastActive = System.currentTimeMillis(); main.post(this::answerDone); } continue; }
                     if (!speaking) { speaking = true; main.post(() -> { main.removeCallbacks(hideLater); if (!talking) look(C_ANSWER, "answering…"); }); }
                     AudioTrack t = track;
-                    if (t != null) { if (!ownVoiceStream && voiceGain > 1.01f) louder(a, Math.min(1.6f, voiceGain)); t.write(a, 0, a.length); }   // (2026-11-28) the big boost made her voice crackle
+                    if (t != null) { if (voiceGain > 1.01f) louder(a, voiceGain); t.write(a, 0, a.length); }   // (2026-11-28) the big boost made her voice crackle
                 } catch (InterruptedException e) { return; } catch (Throwable ignored) { }
             }
         }, "natee-play");
@@ -873,31 +883,56 @@ public final class AiChat extends Service {
     // the normal media volume, as before.
     private android.media.AudioFocusRequest duckReq;
     private void duckOn() {
-        if (duckReq != null) return;
+        if (duckReq != null || savedVol > 0) return;
         try {
             AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
-            duckReq = new android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-                    .setAudioAttributes(new android.media.AudioAttributes.Builder()
-                            .setUsage(android.media.AudioAttributes.USAGE_ASSISTANT)
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
-                    .setOnAudioFocusChangeListener(f -> { }).build();
-            am.requestAudioFocus(duckReq);
-        } catch (Throwable ignored) { duckReq = null; }
+            try {   // apps that listen to Android's ducking go down by themselves
+                duckReq = new android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                        .setAudioAttributes(new android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_ASSISTANT)
+                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                        .setOnAudioFocusChangeListener(f -> { }).build();
+                am.requestAudioFocus(duckReq);
+            } catch (Throwable ignored) { duckReq = null; }
+            // (Air 2026-11-28: the music didn't go down) the media volume goes down about 10 dB, and her voice is made
+            // louder by the same amount, with a smooth limiter, so she stays as loud as before
+            int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+            if (cur <= 2) return;
+            int dev = android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
+            try { android.media.AudioDeviceInfo[] outs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS); if (outs.length > 0) dev = outs[0].getType(); } catch (Throwable ignored) { }
+            int to = cur; float db = 0;
+            try {
+                float d0 = am.getStreamVolumeDb(AudioManager.STREAM_MUSIC, cur, dev);
+                for (int v = cur - 1; v >= 1; v--) {
+                    float d = d0 - am.getStreamVolumeDb(AudioManager.STREAM_MUSIC, v, dev);
+                    if (Float.isNaN(d) || Float.isInfinite(d)) break;
+                    to = v; db = d;
+                    if (d >= 10) break;
+                }
+            } catch (Throwable ignored) { }
+            if (db <= 0) { to = Math.max(1, Math.round(cur * 0.7f)); db = 6; }   // the car can't say: a gentler step
+            voiceGain = (float) Math.min(3.2, Math.pow(10, db / 20));
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, to, 0);
+            savedVol = cur; duckedVol = to;
+            getSharedPreferences("ai_duck", MODE_PRIVATE).edit().putInt("saved", cur).putInt("ducked", to).commit();
+        } catch (Throwable ignored) { }
     }
     private void duckOff() {
         try {
-            if (duckReq != null) ((AudioManager) getSystemService(AUDIO_SERVICE)).abandonAudioFocusRequest(duckReq);
+            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+            if (duckReq != null) am.abandonAudioFocusRequest(duckReq);
+            if (savedVol > 0 && am.getStreamVolume(AudioManager.STREAM_MUSIC) == duckedVol) am.setStreamVolume(AudioManager.STREAM_MUSIC, savedVol, 0);
         } catch (Throwable ignored) { }
         duckReq = null; savedVol = -1; duckedVol = -1; voiceGain = 1f;
         getSharedPreferences("ai_duck", MODE_PRIVATE).edit().clear().apply();
     }
     /** 16-bit little-endian PCM made louder, gently limited so it never crackles */
-    private static void louder(byte[] a, float g) {
+    private float limEnv = 1f;   // smooth limiter gain (no hard clipping, no crackle)
+    private void louder(byte[] a, float g) {
         for (int i = 0; i + 1 < a.length; i += 2) {
             int v = (short) ((a[i] & 0xFF) | (a[i + 1] << 8));
-            float x = v * g / 32768f;
-            x = x > 0.8f ? 0.8f + 0.2f * (float) Math.tanh((x - 0.8f) / 0.2f) : x < -0.8f ? -0.8f + 0.2f * (float) Math.tanh((x + 0.8f) / 0.2f) : x;
-            int o = Math.round(x * 32767f);
+            float x = v / 32768f, want = Math.abs(x) * g > 0.9f ? 0.9f / Math.abs(x) : g;
+            limEnv = want < limEnv ? want : limEnv + (g - limEnv) * 0.0004f;   // instant down, slow back up
+            int o = Math.round(Math.max(-1f, Math.min(1f, x * Math.min(limEnv, g))) * 32767f);
             a[i] = (byte) o; a[i + 1] = (byte) (o >> 8);
         }
     }
