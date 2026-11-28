@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.provider.Settings;
+import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -25,24 +26,26 @@ public final class SettingsDialog {
         final AlertDialog[] dlg = new AlertDialog[1];
         final boolean[] redoing = {false};
         Runnable redo = () -> { redoing[0] = true; dlg[0].dismiss(); host.rebuild(); show(c, prefs.theme(), prefs, host); };
+        // (Air 2026-11-28) grouped settings: one group open at a time, the last one used opens again
+        final LinearLayout gScreen = grp(c), gVoice = grp(c), gCam = grp(c), gGraph = grp(c), gMusic = grp(c), gLauncher = grp(c), gAbout = grp(c), gDev = grp(c);
 
-        section(c, root, th, "Theme");
+        section(c, gScreen, th, "Theme");
         LinearLayout themes = row(c);
         for (Theme t : new Theme[]{Theme.BLUE, Theme.WHITE, Theme.RED}) {
             String n = t == Theme.BLUE ? "Black blue" : t == Theme.WHITE ? "White minimal" : "Black red sport";
             themes.addView(Ui.chip(c, n, !prefs.themeAmbient() && prefs.theme() == t, th, v -> { prefs.setTheme(t); redo.run(); }), weight(c));
         }
-        root.addView(themes);
+        gScreen.addView(themes);
         LinearLayout themes2 = row(c);
         for (Theme t : new Theme[]{Theme.GREEN, Theme.PURPLE, Theme.ORANGE, Theme.CYAN, Theme.PINK, Theme.YELLOW})
             themes2.addView(Ui.chip(c, t.label(), !prefs.themeAmbient() && prefs.theme() == t, th, v -> { prefs.setTheme(t); redo.run(); }), weight(c));
-        root.addView(themes2);
+        gScreen.addView(themes2);
         // (Air 2026-11-27) your own screen colour for each gear, Auto Sport and an open door
-        section(c, root, th, "Screen colour by gear, Auto Sport and door: " + (prefs.screenByState() ? "on" : "off"));
+        section(c, gScreen, th, "Screen colour by gear, Auto Sport and door: " + (prefs.screenByState() ? "on" : "off"));
         LinearLayout sb = row(c);
         sb.addView(Ui.chip(c, "On", prefs.screenByState(), th, v -> { prefs.setScreenByState(true); redo.run(); }), weight(c));
         sb.addView(Ui.chip(c, "Off", !prefs.screenByState(), th, v -> { prefs.setScreenByState(false); redo.run(); }), weight(c));
-        root.addView(sb);
+        gScreen.addView(sb);
         if (prefs.screenByState()) {
             String[] names = {"P", "R", "N", "D", "Auto Sport", "Door open"};
             LinearLayout sr = row(c);
@@ -59,24 +62,24 @@ public final class SettingsDialog {
                             .setNegativeButton("Cancel", null).show();
                 }), weight(c));
             }
-            root.addView(sr);
+            gScreen.addView(sr);
         }
 
-        section(c, root, th, "Auto Sport: black-red above " + prefs.autoSportKmh() + " km/h, back 10 km/h below");
+        section(c, gScreen, th, "Auto Sport: black-red above " + prefs.autoSportKmh() + " km/h, back 10 km/h below");
         LinearLayout as = row(c);
         as.addView(Ui.chip(c, prefs.autoSport() ? "On" : "Off", prefs.autoSport(), th, v -> { prefs.setAutoSport(!prefs.autoSport()); redo.run(); }), weight(c));
         as.addView(Ui.chip(c, "− 10 km/h", false, th, v -> { prefs.setAutoSportKmh(Math.max(60, prefs.autoSportKmh() - 10)); redo.run(); }), weight(c));
         as.addView(Ui.chip(c, "+ 10 km/h", false, th, v -> { prefs.setAutoSportKmh(Math.min(200, prefs.autoSportKmh() + 10)); redo.run(); }), weight(c));
-        root.addView(as);
+        gScreen.addView(as);
 
-        section(c, root, th, "Turn-signal camera: back to Map " + prefs.turnCameraReturnSec() + " s after the signal stops");
+        section(c, gCam, th, "Turn-signal camera: back to Map " + prefs.turnCameraReturnSec() + " s after the signal stops");
         LinearLayout tc = row(c);
         tc.addView(Ui.chip(c, prefs.turnCamera() ? "On" : "Off", prefs.turnCamera(), th, v -> { prefs.setTurnCamera(!prefs.turnCamera()); redo.run(); }), weight(c));
         tc.addView(Ui.chip(c, "− 1 s", false, th, v -> { prefs.setTurnCameraReturnSec(Math.max(1, prefs.turnCameraReturnSec() - 1)); redo.run(); }), weight(c));
         tc.addView(Ui.chip(c, "+ 1 s", false, th, v -> { prefs.setTurnCameraReturnSec(Math.min(15, prefs.turnCameraReturnSec() + 1)); redo.run(); }), weight(c));
-        root.addView(tc);
+        gCam.addView(tc);
 
-        section(c, root, th, "Ambient light by gear: " + (prefs.ambientGear() ? "on" : "off")
+        section(c, gScreen, th, "Ambient light by gear: " + (prefs.ambientGear() ? "on" : "off")
                 + " · style " + Ambient.STYLES[prefs.ambientStyle()]);
         LinearLayout am = row(c);
         am.addView(Ui.chip(c, prefs.ambientGear() ? "On" : "Off", prefs.ambientGear(), th, v -> { prefs.setAmbientGear(!prefs.ambientGear()); if (prefs.ambientGear()) Ambient.get(c).applyCurrentGear(); redo.run(); }), weight(c));
@@ -84,13 +87,13 @@ public final class SettingsDialog {
             final int st = i;
             am.addView(Ui.chip(c, Ambient.STYLES[i], prefs.ambientStyle() == i, th, v -> { prefs.setAmbientStyle(st); redo.run(); }), weight(c));
         }
-        root.addView(am);
-        root.addView(Ui.text(c, "Same colours as BYD's own ambient bar. Slide a bar: the light follows. Try plays the gear's colour with the style.\nLast: "
+        gScreen.addView(am);
+        gScreen.addView(Ui.text(c, "Same colours as BYD's own ambient bar. Slide a bar: the light follows. Try plays the gear's colour with the style.\nLast: "
                 + Ambient.get(c).report + "\nLast gear change: " + Ambient.get(c).gearReport, 12, th.muted, false));
         // Live: which colour number the car has now. Pick a colour in BYD's own ambient menu,
         // then open this to see its number (so the bar can be matched to BYD's colours).
         final TextView now = Ui.text(c, "Car's colour now: …", 13, th.text, true);
-        root.addView(now);
+        gScreen.addView(now);
         new Thread(() -> {
             Object v = CarData.get(c).ambient("getIALColor", 1);
             now.post(() -> now.setText("Car's colour now: " + v));
@@ -114,10 +117,10 @@ public final class SettingsDialog {
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
                         android.widget.Toast.makeText(c, Ambient.get(c).report, android.widget.Toast.LENGTH_LONG).show(), 1500);
             }), new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
-            root.addView(gr);
+            gScreen.addView(gr);
         }
 
-        section(c, root, th, "Ambient light when the screen turns red (above " + prefs.autoSportKmh() + " km/h): "
+        section(c, gScreen, th, "Ambient light when the screen turns red (above " + prefs.autoSportKmh() + " km/h): "
                 + (prefs.ambientOver() ? "on" : "off") + " · blinks, then holds the colour");
         LinearLayout ao = row(c);
         ao.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -127,9 +130,9 @@ public final class SettingsDialog {
                 new LinearLayout.LayoutParams(0, Ui.dp(c, 48), 1f));
         ao.addView(Ui.chip(c, "Try", false, th, v -> Ambient.get(c).apply(prefs.ambientOverColour(), 2)),
                 new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
-        root.addView(ao);
+        gScreen.addView(ao);
 
-        section(c, root, th, "Ambient light when a door is open: " + (prefs.ambientDoor() ? "on" : "off")
+        section(c, gScreen, th, "Ambient light when a door is open: " + (prefs.ambientDoor() ? "on" : "off")
                 + " · blinks like over-speed, back to normal when all doors are closed");
         LinearLayout ad = row(c);
         ad.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -139,26 +142,26 @@ public final class SettingsDialog {
                 new LinearLayout.LayoutParams(0, Ui.dp(c, 48), 1f));
         ad.addView(Ui.chip(c, "Try", false, th, v -> Ambient.get(c).apply(prefs.ambientDoorColour(), 2)),
                 new LinearLayout.LayoutParams(Ui.dp(c, 72), -2));
-        root.addView(ad);
+        gScreen.addView(ad);
 
-        section(c, root, th, "Left / Right camera picture");
+        section(c, gCam, th, "Left / Right camera picture");
         LinearLayout sc = row(c);
         sc.addView(Ui.chip(c, "Close-up of the side", prefs.sideCloseUp(), th, v -> { prefs.setSideCloseUp(true); redo.run(); }), weight(c));
         sc.addView(Ui.chip(c, "Whole picture", !prefs.sideCloseUp(), th, v -> { prefs.setSideCloseUp(false); redo.run(); }), weight(c));
-        root.addView(sc);
-        section(c, root, th, "Side camera view height (close-up)");
+        gCam.addView(sc);
+        section(c, gCam, th, "Side camera view height (close-up)");
         LinearLayout su = row(c);
         String[] ul = {"Low", "Middle", "High"};
         for (int u = 0; u < 3; u++) {
             final int uu = u;
             su.addView(Ui.chip(c, ul[u], prefs.sideCamUp() == u, th, v -> { prefs.setSideCamUp(uu); redo.run(); }), weight(c));
         }
-        root.addView(su);
+        gCam.addView(su);
 
         // graph moving average (user, 2026-11-12): real time or over 100–500 m, separately for each line
         for (int which = 0; which < 2; which++) {
             final boolean spd = which == 0;
-            section(c, root, th, spd ? "Graph: speed line average" : "Graph: power line average");
+            section(c, gGraph, th, spd ? "Graph: speed line average" : "Graph: power line average");
             LinearLayout sm = row(c);
             int cur = spd ? prefs.smoothSpeed() : prefs.smoothPower();
             for (int m : new int[]{0, 100, 200, 300, 400, 500}) {
@@ -167,21 +170,21 @@ public final class SettingsDialog {
                     redo.run();
                 }), weight(c));
             }
-            root.addView(sm);
+            gGraph.addView(sm);
         }
 
-        section(c, root, th, "Song video (🎬 on Now playing): " + (prefs.videoWhileDriving() ? "also while driving, for the passenger" : "only in P"));
+        section(c, gMusic, th, "Song video (🎬 on Now playing): " + (prefs.videoWhileDriving() ? "also while driving, for the passenger" : "only in P"));
         LinearLayout vd = row(c);
         vd.addView(Ui.chip(c, "While driving too", prefs.videoWhileDriving(), th, v -> {
             prefs.setVideoWhileDriving(true);
             android.widget.Toast.makeText(c, "Passenger only: the driver must not watch", android.widget.Toast.LENGTH_LONG).show();
             redo.run(); }), weight(c));
         vd.addView(Ui.chip(c, "Only in P", !prefs.videoWhileDriving(), th, v -> { prefs.setVideoWhileDriving(false); redo.run(); }), weight(c));
-        root.addView(vd);
+        gMusic.addView(vd);
 
         // "Hey Natee chat": voice chat with Gemini (user, 2026-11-21). Reads the car; changes comfort things only (CarControl).
         String key = prefs.aiKey();
-        section(c, root, th, "AI chat (Gemini) · say \"" + prefs.wakeWord() + "\" or press the wheel mic: " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
+        section(c, gVoice, th, "AI chat (Gemini) · say \"" + prefs.wakeWord() + "\" or press the wheel mic: " + (prefs.aiChat() ? (key.isEmpty() ? "on, needs your API key" : "on") : "off"));
         LinearLayout ai = row(c);
         ai.addView(Ui.chip(c, "On", prefs.aiChat(), th, v -> { prefs.setAiChat(true); AiChat.sync(c); redo.run(); }), weight(c));
         ai.addView(Ui.chip(c, "Off", !prefs.aiChat(), th, v -> { prefs.setAiChat(false); AiChat.sync(c); redo.run(); }), weight(c));
@@ -194,7 +197,7 @@ public final class SettingsDialog {
                     .setPositiveButton("Save", (d, i) -> { prefs.setAiKey(e.getText().toString()); redo.run(); })
                     .setNegativeButton("Cancel", null).show();
         }), weight(c));
-        root.addView(ai);
+        gVoice.addView(ai);
         // the assistant's name = the wake word: two words (Air 2026-11-23)
         LinearLayout an = row(c);
         an.addView(Ui.chip(c, (prefs.aiDisplay().isEmpty() ? "Name / wake word: " + prefs.wakeWord() : "Name: " + prefs.aiDisplay() + " · wake word: " + prefs.wakeWord()) + " ›", false, th, v -> {
@@ -235,17 +238,17 @@ public final class SettingsDialog {
                     })
                     .setNegativeButton("Cancel", null).show();
         }), weight(c));
-        root.addView(an);
+        gVoice.addView(an);
         LinearLayout al = row(c);
         for (String[] l : new String[][]{{"auto", "Thai + English"}, {"en", "English"}, {"th", "Thai"}}) {
             al.addView(Ui.chip(c, l[1], prefs.aiLang().equals(l[0]), th, v -> { prefs.setAiLang(l[0]); redo.run(); }), weight(c));
         }
-        root.addView(al);
+        gVoice.addView(al);
         LinearLayout av = row(c);
         for (String[] vo : new String[][]{{"Aoede", "Female · calm"}, {"Kore", "Female · bright"}, {"Charon", "Male · deep"}, {"Puck", "Male · lively"}}) {
             av.addView(Ui.chip(c, vo[1], prefs.aiVoice().equals(vo[0]), th, v -> { prefs.setAiVoice(vo[0]); redo.run(); }), weight(c));
         }
-        root.addView(av);
+        gVoice.addView(av);
         // the steering wheel's mic button (user, 2026-11-22): switch the key watcher on, then see what the button sends
         LinearLayout aw = row(c);
         int chosenKey = KeyWatch.store(c).getInt("chosen", -1);
@@ -253,12 +256,12 @@ public final class SettingsDialog {
         aw.addView(Ui.chip(c, "Find car controls ›", false, th, v -> findControls(c)), weight(c));
         boolean permOk = AiChat.micAllowed(c) && AiChat.overlayAllowed(c);
         aw.addView(Ui.chip(c, permOk ? "Permissions: OK" : "Fix permissions ›", false, th, v -> fixPerms(c)), weight(c));
-        root.addView(aw);
+        gVoice.addView(aw);
         // their own row, so the labels aren't cut off (Air 2026-11-23: couldn't find the button)
         LinearLayout aw2 = row(c);
         aw2.addView(Ui.chip(c, "Switch BYD voice assistant off / on ›", false, th, v -> bydVoice(c)), weight(c));
         aw2.addView(Ui.chip(c, "Wheel mic button: " + (KeyWatch.isOn(c) ? "on" : "OFF, tap to fix") + " · test ›", false, th, v -> wheelTest(c)), weight(c));
-        root.addView(aw2);
+        gVoice.addView(aw2);
         LinearLayout aw3 = row(c);
         android.content.SharedPreferences airDirP = c.getSharedPreferences("air_dir", Context.MODE_PRIVATE);
         aw3.addView(Ui.chip(c, "Air direction test ›" + (airDirP.getAll().isEmpty() ? " (not done yet)" : " (" + airDirP.getAll().size() + " of 5 known)"), false, th, v -> airDirTest(c, 1, -1)), weight(c));
@@ -281,16 +284,16 @@ public final class SettingsDialog {
             sv2.addView(t);
             new AlertDialog.Builder(c).setTitle("Last voice actions (send a photo to Claude)").setView(sv2).setPositiveButton("Close", null).show();
         }), weight(c));
-        root.addView(aw3);
+        gVoice.addView(aw3);
 
-        section(c, root, th, "Tyre pressure unit");
+        section(c, gGraph, th, "Tyre pressure unit");
         LinearLayout tu = row(c);
         for (String[] u : new String[][]{{"psi", "PSI"}, {"bar", "bar"}, {"kpa", "kPa"}}) {
             tu.addView(Ui.chip(c, u[1], prefs.tyreUnit().equals(u[0]), th, v -> { prefs.setTyreUnit(u[0]); redo.run(); }), weight(c));
         }
-        root.addView(tu);
+        gGraph.addView(tu);
 
-        section(c, root, th, "Launcher & windows");
+        section(c, gLauncher, th, "Launcher & windows");
         LinearLayout lw = row(c);
         lw.addView(Ui.chip(c, "⇄ Swap left and right", false, th, v -> { prefs.setInfoLeft(!prefs.infoLeft()); redo.run(); }), weight(c));
         // BYD keeps asking "Select a Home app": set NATEE as the Home app through the car's ADB
@@ -302,25 +305,25 @@ public final class SettingsDialog {
                 c.startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             }
         }), weight(c));
-        root.addView(lw);
+        gLauncher.addView(lw);
 
         // DRL button showed OFF always (2026-11-12): learn which reading follows the DRL switch
-        section(c, root, th, "DRL button: " + (Prefs.drlKey(c).isEmpty() ? "reading not found yet" : "using " + Prefs.drlKey(c).replaceAll(".*\\|(get)?", "").replaceAll("\\|-1$", "")));
+        section(c, gDev, th, "DRL button: " + (Prefs.drlKey(c).isEmpty() ? "reading not found yet" : "using " + Prefs.drlKey(c).replaceAll(".*\\|(get)?", "").replaceAll("\\|-1$", "")));
         LinearLayout dl = row(c);
         dl.addView(Ui.chip(c, "Find DRL reading", false, th, v -> findDrl(c, th, redo)), weight(c));
-        root.addView(dl);
+        gDev.addView(dl);
 
         // cabin / battery / 12 V cards show "–": list the car's readings to find the right ones (user, 2026-11-13)
-        section(c, root, th, "Cabin · Battery · 12 V cards");
+        section(c, gDev, th, "Cabin · Battery · 12 V cards");
         LinearLayout fr = row(c);
         fr.addView(Ui.chip(c, "Find readings", false, th, v -> findReadings(c, th)), weight(c));
-        root.addView(fr);
+        gDev.addView(fr);
 
         // trip distance and energy are checked against the car's own counters (user, 2026-11-14)
-        section(c, root, th, "Trip numbers · check against the car");
-        root.addView(Ui.text(c, TripEnergy.get(c).checkInfo(), 13, th.muted, false));
+        section(c, gDev, th, "Trip numbers · check against the car");
+        gDev.addView(Ui.text(c, TripEnergy.get(c).checkInfo(), 13, th.muted, false));
 
-        section(c, root, th, "Problems");
+        section(c, gDev, th, "Problems");
         LinearLayout pb = row(c);
         pb.addView(Ui.chip(c, "Show crash log", false, th, v -> new Thread(() -> {
             String out;
@@ -348,14 +351,14 @@ public final class SettingsDialog {
                     .setNegativeButton("Clear all", (d, i) -> { ProblemLog.clear(c); redo.run(); })
                     .setPositiveButton("Close", null).show();
         }), weight(c));
-        root.addView(pb);
+        gDev.addView(pb);
 
-        section(c, root, th, "About");
+        section(c, gAbout, th, "About");
         String ver = "?";
         try { ver = c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName; } catch (Exception ignored) {}
         TextView about = Ui.text(c, "NATEE Launcher v" + ver + " · github.com/airodynamic07/ADAS-Atto3\n"
                 + "Camera and car-data methods from OverDrive (MIT).", 13, th.muted, false);
-        root.addView(about);
+        gAbout.addView(about);
         LinearLayout up = row(c);
         int avail = LauncherActivity.updateAvailable;
         up.addView(Ui.chip(c, avail > 0 ? "⬆ Update available: build " + avail + " · install ›" : "⟳ Check for updates", avail > 0, th, v -> {
@@ -386,7 +389,56 @@ public final class SettingsDialog {
                 new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> android.widget.Toast.makeText(c, r, android.widget.Toast.LENGTH_LONG).show());
             }).start();
         }), weight(c));
-        root.addView(up);
+        gAbout.addView(up);
+
+        // problems and the car-reading finders are developer tools; the side-camera height belongs with the cameras
+        Object[][] groups = {
+                {"screen", "🎨  Screen & lights", "theme colour, screen colour by gear, Auto Sport, car ambient light", gScreen},
+                {"voice", "🎙  Voice assistant", "on/off, key, voice, name and wake word, wheel mic, tests", gVoice},
+                {"cam", "📷  Cameras", "turn-signal camera, side picture", gCam},
+                {"graph", "📈  Graphs & units", "bottom graph averages, tyre pressure unit", gGraph},
+                {"music", "🎵  Music & video", "song video while driving", gMusic},
+                {"launcher", "🏠  Launcher", "swap left and right, Home app", gLauncher},
+                {"about", "ℹ️  About & updates", "version, check for updates", gAbout},
+                {"dev", "🛠  Developer", "readings finders, trip check, crash log, reports (not needed day to day)", gDev}};
+        android.content.SharedPreferences ui = c.getSharedPreferences("settings_ui", Context.MODE_PRIVATE);
+        String open = ui.getString("open", "");
+        final java.util.List<View> bodies = new java.util.ArrayList<>();
+        final java.util.List<TextView> arrows = new java.util.ArrayList<>();
+        for (Object[] gdef : groups) {
+            final String id = (String) gdef[0];
+            final LinearLayout body = (LinearLayout) gdef[3];
+            LinearLayout card = new LinearLayout(c);
+            card.setOrientation(LinearLayout.VERTICAL);
+            boolean dev = id.equals("dev");
+            card.setBackground(Ui.round(th.card, dev ? 0xFF8A6A1C : th.line, 12, c));
+            LinearLayout hd = new LinearLayout(c);
+            hd.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            hd.setPadding(Ui.dp(c, 14), Ui.dp(c, 12), Ui.dp(c, 14), Ui.dp(c, 12));
+            LinearLayout tt = new LinearLayout(c);
+            tt.setOrientation(LinearLayout.VERTICAL);
+            tt.addView(Ui.text(c, (String) gdef[1], 17, dev ? 0xFFFFCF6E : th.text, true));
+            tt.addView(Ui.text(c, (String) gdef[2], 12, th.muted, false));
+            hd.addView(tt, new LinearLayout.LayoutParams(0, -2, 1f));
+            final TextView arrow = Ui.text(c, id.equals(open) ? "▴" : "▾", 18, th.muted, true);
+            hd.addView(arrow);
+            body.setPadding(Ui.dp(c, 14), 0, Ui.dp(c, 14), Ui.dp(c, 12));
+            body.setVisibility(id.equals(open) ? View.VISIBLE : View.GONE);
+            bodies.add(body); arrows.add(arrow);
+            hd.setOnClickListener(v -> {
+                boolean show = body.getVisibility() != View.VISIBLE;
+                for (View b : bodies) b.setVisibility(View.GONE);
+                for (TextView a : arrows) a.setText("▾");
+                body.setVisibility(show ? View.VISIBLE : View.GONE);
+                arrow.setText(show ? "▴" : "▾");
+                ui.edit().putString("open", show ? id : "").apply();
+            });
+            card.addView(hd);
+            card.addView(body);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.bottomMargin = Ui.dp(c, 8);
+            root.addView(card, lp);
+        }
 
         dlg[0] = new AlertDialog.Builder(c).setTitle("Settings").setView(sv).setPositiveButton("Close", null)
                 .setOnDismissListener(d -> { if (!redoing[0]) host.settingsClosed(); }).show();
@@ -757,6 +809,8 @@ public final class SettingsDialog {
     }
 
     private static LinearLayout row(Context c) { return new LinearLayout(c); }
+
+    private static LinearLayout grp(Context c) { LinearLayout l = new LinearLayout(c); l.setOrientation(LinearLayout.VERTICAL); return l; }
 
     private static LinearLayout.LayoutParams weight(Context c) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1f);
