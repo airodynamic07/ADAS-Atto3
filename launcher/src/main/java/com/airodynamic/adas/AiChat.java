@@ -70,6 +70,14 @@ public final class AiChat extends Service {
         prefs = new Prefs(this);
         control = new CarControl(this);
         alive = true;
+        // (Air 2026-11-28: Engine Sound silent) the music volume was left turned down when the launcher closed mid-chat: put it back
+        try {
+            android.content.SharedPreferences dk = getSharedPreferences("ai_duck", MODE_PRIVATE);
+            int sv = dk.getInt("saved", -1), dv = dk.getInt("ducked", -1);
+            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+            if (sv > 0 && am.getStreamVolume(AudioManager.STREAM_MUSIC) == dv) am.setStreamVolume(AudioManager.STREAM_MUSIC, sv, 0);
+            dk.edit().clear().apply();
+        } catch (Throwable ignored) { }
         new Thread(() -> { if (!micAllowed(this) || !overlayAllowed(this)) fixPermissions(this); }).start();
         main.postDelayed(watchCheck, 6000);   // a moment after start, so Android can connect the watcher by itself first
         // the car waking up (screen on again, or the launcher started): start the wheel button watcher afresh
@@ -890,6 +898,8 @@ public final class AiChat extends Service {
             voiceGain = Math.max(1f, Math.min(6f, g));
             am.setStreamVolume(AudioManager.STREAM_MUSIC, half, 0);
             savedVol = cur; duckedVol = half;
+            // kept on disk too: if the launcher closes while the music is down, it goes back up at the next start
+            getSharedPreferences("ai_duck", MODE_PRIVATE).edit().putInt("saved", cur).putInt("ducked", half).commit();
         } catch (Throwable ignored) { }
     }
     private void duckOff() {
@@ -899,6 +909,7 @@ public final class AiChat extends Service {
             if (savedVol > 0 && am.getStreamVolume(AudioManager.STREAM_MUSIC) == duckedVol) am.setStreamVolume(AudioManager.STREAM_MUSIC, savedVol, 0);
         } catch (Throwable ignored) { }
         savedVol = -1; duckedVol = -1; voiceGain = 1f;
+        getSharedPreferences("ai_duck", MODE_PRIVATE).edit().clear().apply();
     }
     /** 16-bit little-endian PCM made louder, gently limited so it never crackles */
     private static void louder(byte[] a, float g) {
