@@ -744,7 +744,8 @@ public final class AiChat extends Service {
         if (micThread != null && micThread.isAlive()) { setState("connected"); if (pendingTalk) { pendingTalk = false; startTalk(); } return; }   // reconnected
         setState("connected");
         lastActive = System.currentTimeMillis();
-        int ob = Math.max(AudioTrack.getMinBufferSize(OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT), OUT_RATE);
+        // (Air 2026-11-28: her voice sounded hoarse / crackly) a bigger buffer, so a busy head unit never runs it dry
+        int ob = Math.max(AudioTrack.getMinBufferSize(OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT) * 4, OUT_RATE * 2);
         // (Air 2026-11-26 crash log: the car's sound service had crashed, "play() called on uninitialized AudioTrack" took the
         // whole launcher down) a speaker that couldn't be opened is said on screen instead, never a crash
         try {
@@ -779,7 +780,7 @@ public final class AiChat extends Service {
                     if (a == null) { if (speaking) { speaking = false; lastActive = System.currentTimeMillis(); main.post(this::answerDone); } continue; }
                     if (!speaking) { speaking = true; main.post(() -> { main.removeCallbacks(hideLater); if (!talking) look(C_ANSWER, "answering…"); }); }
                     AudioTrack t = track;
-                    if (t != null) { if (!ownVoiceStream && voiceGain > 1.01f) louder(a, voiceGain); t.write(a, 0, a.length); }
+                    if (t != null) { if (!ownVoiceStream && voiceGain > 1.01f) louder(a, Math.min(1.6f, voiceGain)); t.write(a, 0, a.length); }   // (2026-11-28) the big boost made her voice crackle
                 } catch (InterruptedException e) { return; } catch (Throwable ignored) { }
             }
         }, "natee-play");
